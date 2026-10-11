@@ -442,6 +442,120 @@ Neither `N=1328` nor approximately 25 ms is a hard-coded latency target or a
 host-independent guarantee. These are observed adaptive results. Queued lead
 at callback entry is not end-to-end hardware/speaker latency.
 
+## 14. Native ALSA pacing
+
+ALSA uses the same exact pre-synthesis admission hook and producer-owned
+`audio_controller.h`, but not the callback FIFO/notification protocol.
+`sound/alsa_pacing.h` supplies owner-thread queue accounting; `alsasound.c`
+owns the native PCM buffer, readiness and lifecycle. No extra thread or FIFO
+is introduced. The default requests an approximately 5 ms service period while
+retaining the legacy frame-sized buffer capacity. Explicit `buffer`/`frames`
+options retain their old period/count negotiation semantics.
+
+For valid RUNNING playback, synchronized availability gives `Q=C-A`.
+Ordinary admission requires `Q+B<=N`; exceptional/incompatible production uses
+`Q+B<=C`. Native readiness is configured for `A_needed=C-N+B` (or `B` for
+capacity-only admission). Wakeups/timeouts only lead to another predicate check.
+Plugins that return immediate readiness are rate-limited rather than spun on.
+
+The ALSA period is an **empirical service/reporting quantum**, not an immutable
+callback demand envelope. The initial model reuses `S`, `H` and `K` with the
+negotiated period as `D_model`. This needs device/plugin qualification; it is
+not a universal physical-latency or underrun-prevention guarantee. Geometry
+that cannot fund the minimum stays at capacity.
+
+For a complete write within a stable accounting epoch:
+
+```text
+consumed    = Q_before + B - Q_after
+Q_effective = Q_after - B
+```
+
+Charging all observed write-interval consumption before an instantaneous refill
+provides a conservative equivalent pre-refill queue. A nonnegative, consistent
+`Q_effective` and the measured `Q_after` feed the existing controller. Here,
+qualified accounting replaces callback non-overlap: hardware may consume during
+the write. Negative equivalents cannot fund descent; inconsistent accounting
+switches to capacity-only playback. Progress is counted from actual accepted
+writes and queue changes, not repeated idle observations.
+
+Status `avail_max` is used only as negative interval evidence on native `hw`
+PCMs. Despite the generic API documentation, ALSA's `ioplug` implementation does
+not reset this counter on each status call. Cumulative maxima must not produce
+perpetual low-water warnings. Wrapper/plugin paths therefore omit this optional
+signal and retain queue/write accounting. Reported minima are not continuously
+sampled physical minima, including on hardware.
+
+Startup explicitly prefills real PCM and starts playback; prepared streams never
+wait for consumption. A batch that would exceed remaining prefill space starts
+the already populated stream before waiting. Positive partial writes advance
+only the accepted prefix. Underrun/prepare and suspend/resume invalidate evidence
+and reservations; discarded accepted PCM is not replayed. The unaccepted tail
+continues through recovery, but that transaction cannot qualify as clean.
+Fatal device errors disable output locally, rather than entering the common
+reserve caller's assertion-style abort path. Pause/reinit does not retain evidence.
+
+ALSA device options retain `buffer`, `frames`, `avail` and `verbose`, and add:
+
+- `target=N`: fixed ordinary target in complete PCM frames.
+- `target=0`: capacity-only control mode.
+- No target option: adaptive mode.
+
+Put options before the PCM name, for example `--sound-device=target=2200,pulse`.
+The initial `avail` setting does not override the admission readiness predicate.
+`FUSE_ALSA_TRACE=/path/file.csv` opts into a producer-only diagnostic trace,
+bounded to 65,536 publication records per initialization. Reinit replaces the
+trace; it is a development aid, not a session-wide recorder.
+
+`check-alsa-pacing` covers the portable observation/controller mapping.
+`check-alsasound`, available in ALSA builds, exercises the actual backend with
+real null-PCM initialization and deterministic transfer/state faults. Linux SDL
+audio forced to its ALSA driver is the experimental control; verify the PCM
+endpoint and negotiated geometry, not merely the presence of SDL support.
+VM results qualify guest software behaviour, not physical speaker latency.
+
+An initial bounded Linux ARM64 container check, before reducing the default
+service period, used ALSA 1.2.8, SDL 2.26.5 and
+an isolated PulseAudio null sink. Both native ALSA and SDL's forced ALSA driver
+used the `pulse` PCM. The native PCM negotiated mono 44.1 kHz, `C=2639`,
+period 879 and `B_ord=221`:
+
+| Mode | Completed machine frames | Final ordinary target |
+|---|---:|---:|
+| Native adaptive | 2000 | 2088 |
+| Native fixed | 450 | 2200 |
+| Native capacity | 450 | 2639 |
+| SDL over ALSA | 450 | Existing SDL policy |
+
+All four authoritative automation results terminated normally by frame count.
+The final native traces recorded zero xruns/suspends, incomplete publications,
+negative equivalent queues and pre-write admission violations. Adaptive mode
+reached the model minimum `1099 + 989 = 2088`, not a hard-coded target. The three
+450-frame runs ended with identical CPU/machine state. Deterministic backend tests
+check accepted PCM identity separately; these live runs do not establish audible
+quality, physical latency, or batch-device qualification. Traces are opt-in and
+reset on sound reinitialization, so their counters describe the recorded lifetime.
+
+With the decoupled default, a subsequent 6,500-frame run on the same isolated
+ALSA `pulse` endpoint retained `C=2639` and negotiated period 219 (about 5 ms).
+The model minimum was 686 frames; the controller learned an additional reserve
+and settled at **898 frames (about 20.4 ms)**, accepted in NORMAL with floor 459.
+The final recorded lifetime contained 25,997 complete publications, zero xruns,
+suspends, negative equivalent queues and admission violations. This is a learned
+queue target, not an end-to-end latency measurement or a forced minimum.
+
+Fixed-target 900, capacity-only, explicit legacy `frames=3`, and SDL-over-ALSA
+450-frame controls also terminated normally with identical CPU/machine state.
+The explicit legacy control still negotiated period 879; the small default did
+not reinterpret its options. Backend tests check that storage exceeds three
+small periods and admits whole-frame exceptions. The controller's `H`/`K` and
+callback backends were not changed.
+
+References: [ALSA PCM](https://www.alsa-project.org/alsa-doc/alsa-lib/pcm.html),
+[kernel timestamps](https://www.kernel.org/doc/html/latest/sound/designs/timestamping.html),
+[batch-device guidance](https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/alsa.html#alsa-buffer-properties),
+and [ioplug implementation](https://github.com/alsa-project/alsa-lib/blob/master/src/pcm/pcm_ioplug.c).
+
 ## Modification checklist and regression map
 
 Before changing callback audio pacing, preserve:
@@ -467,6 +581,7 @@ Use the focused targets available in the configured build:
 | Controller funding, probes, reserve retention and observations | `check-audio-pacing`; `unittests/audiopacingtest.c` |
 | SPSC transport and whole-frame boundaries | `check-sfifo`, `check-pcm-fifo` |
 | Actual backend callback/admission integration | `check-coreaudio`, `check-sdl2sound` |
+| Native ALSA accounting, adaptation, partial writes, prefill and recovery | `check-alsa-pacing`, `check-alsasound` |
 | Pre-park/parked progress, stale/coalesced notification, insufficient/spurious wakes, expiry, writer waits and joined reinit | `check-sdl2-wakeup` and shared `unittests/audio-wakeup-cases.h`, also exercised by the backend tests |
 
 For synchronization changes, include focused threaded/TSan coverage of the

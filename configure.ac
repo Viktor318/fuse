@@ -655,7 +655,7 @@ case $audio_driver in
   sdl)
     SOUND_LIBADD='sound/sdl2sound.$(OBJEXT)' SOUND_LIBS='' sound_fifo=yes
     AC_DEFINE([SOUND_PCM_ADMISSION], 1,
-              [Defined for exact callback PCM production admission])
+              [Defined for exact PCM production admission])
     use_sdl=$sdl_available
     ;;
   directsound)
@@ -667,6 +667,8 @@ case $audio_driver in
     ;;
   alsa)
     SOUND_LIBADD='sound/alsasound.$(OBJEXT)' SOUND_LIBS='-lasound'
+    AC_DEFINE([SOUND_PCM_ADMISSION], 1,
+              [Defined for exact PCM production admission])
     ;;
   libao)
     SOUND_LIBADD='sound/aosound.$(OBJEXT)' SOUND_LIBS='-lao'
@@ -683,7 +685,7 @@ case $audio_driver in
   coreaudio)
     SOUND_LIBADD='sound/coreaudiosound.$(OBJEXT)' SOUND_LIBS='-framework CoreAudio -framework AudioUnit' sound_fifo=yes
     AC_DEFINE([SOUND_PCM_ADMISSION], 1,
-              [Defined for exact callback PCM production admission])
+              [Defined for exact PCM production admission])
     ;;
   wii)
     SOUND_LIBADD='sound/wiisound.$(OBJEXT)' SOUND_LIBS='' sound_fifo=yes
@@ -698,7 +700,9 @@ case $audio_driver in
 esac
 
 AM_CONDITIONAL(HAVE_PCM_ADMISSION,
-  test "$audio_driver" = sdl || test "$audio_driver" = coreaudio)
+  test "$audio_driver" = sdl || test "$audio_driver" = coreaudio ||
+  test "$audio_driver" = alsa)
+AM_CONDITIONAL(HAVE_ALSA_AUDIO, test "$audio_driver" = alsa)
 
 if test "$sound_fifo" = yes; then
   AC_MSG_CHECKING([whether C11 FIFO atomics are usable])

@@ -89,8 +89,25 @@ endif
 check-audio-pacing: unittests/audiopacingtest
 	$(top_builddir)/unittests/audiopacingtest
 
+noinst_PROGRAMS += unittests/alsapacingtest
+unittests_alsapacingtest_SOURCES = unittests/alsapacingtest.c
+unittests_alsapacingtest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_alsapacingtest_LDADD =
+check-alsa-pacing: unittests/alsapacingtest
+	$(top_builddir)/unittests/alsapacingtest
+
 AUDIO_CHECK_TARGETS = check-sfifo check-pcm-fifo check-blip-preview \
-                     check-sound-partition check-audio-pacing
+                     check-sound-partition check-audio-pacing check-alsa-pacing
+
+if HAVE_ALSA_AUDIO
+noinst_PROGRAMS += unittests/alsasoundtest
+unittests_alsasoundtest_SOURCES = unittests/alsasoundtest.c
+unittests_alsasoundtest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_alsasoundtest_LDADD = -lasound
+check-alsasound: unittests/alsasoundtest
+	$(top_builddir)/unittests/alsasoundtest
+AUDIO_CHECK_TARGETS += check-alsasound
+endif
 
 if HAVE_PCM_ADMISSION
 noinst_PROGRAMS += unittests/soundadmissiontest

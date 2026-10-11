@@ -172,17 +172,36 @@ noinst_PROGRAMS += unittests/scalerexpandtest
 if ENABLE_AUTOMATION
 # Compile-time interval variants share the real execution/event engine. These
 # executables are test artifacts, not installed runtime configuration paths.
-AUDIO_TEST_INTERVALS = 0 35000 17500 8750 997 1
-AUDIO_TEST_BINARIES = $(addprefix unittests/fuse-audio-,$(AUDIO_TEST_INTERVALS))
-AUDIO_TEST_OBJECTS = $(addsuffix .$(OBJEXT),$(addprefix unittests/audio-cut-,$(AUDIO_TEST_INTERVALS)))
+AUDIO_TEST_BINARIES = unittests/fuse-audio-0 unittests/fuse-audio-35000 \
+                     unittests/fuse-audio-17500 unittests/fuse-audio-8750 \
+                     unittests/fuse-audio-997 unittests/fuse-audio-1
+AUDIO_TEST_OBJECTS = unittests/audio-cut-0.$(OBJEXT) \
+                    unittests/audio-cut-35000.$(OBJEXT) \
+                    unittests/audio-cut-17500.$(OBJEXT) \
+                    unittests/audio-cut-8750.$(OBJEXT) \
+                    unittests/audio-cut-997.$(OBJEXT) \
+                    unittests/audio-cut-1.$(OBJEXT)
 CLEANFILES += $(AUDIO_TEST_BINARIES) $(AUDIO_TEST_OBJECTS)
-.SECONDARY: $(AUDIO_TEST_OBJECTS)
 
-unittests/audio-cut-%.$(OBJEXT): $(srcdir)/sound.c $(fuse_OBJECTS)
-	$(AM_V_CC)$(COMPILE) -DFUSE_SOUND_TEST_INTERVAL=$* -c -o $@ $(srcdir)/sound.c
+$(AUDIO_TEST_OBJECTS): $(srcdir)/sound.c $(fuse_OBJECTS)
+	$(AM_V_CC)interval=$@; interval=$${interval#unittests/audio-cut-}; \
+	  interval=$${interval%.$(OBJEXT)}; \
+	  $(COMPILE) -DFUSE_SOUND_TEST_INTERVAL=$$interval -c -o $@ $(srcdir)/sound.c
 
-unittests/fuse-audio-%: unittests/audio-cut-%.$(OBJEXT) $(fuse_OBJECTS) $(fuse_DEPENDENCIES)
-	$(AM_V_CCLD)$(fuse_LINK) $(filter-out sound.$(OBJEXT),$(fuse_OBJECTS)) unittests/audio-cut-$*.$(OBJEXT) $(fuse_LDADD) $(LIBS)
+unittests/fuse-audio-0: unittests/audio-cut-0.$(OBJEXT)
+unittests/fuse-audio-35000: unittests/audio-cut-35000.$(OBJEXT)
+unittests/fuse-audio-17500: unittests/audio-cut-17500.$(OBJEXT)
+unittests/fuse-audio-8750: unittests/audio-cut-8750.$(OBJEXT)
+unittests/fuse-audio-997: unittests/audio-cut-997.$(OBJEXT)
+unittests/fuse-audio-1: unittests/audio-cut-1.$(OBJEXT)
+
+$(AUDIO_TEST_BINARIES): $(fuse_OBJECTS) $(fuse_DEPENDENCIES)
+	$(AM_V_CCLD)objects=; for object in $(fuse_OBJECTS); do \
+	  case $$object in sound.$(OBJEXT)) ;; \
+	    *) objects="$$objects $$object" ;; esac; \
+	  done; \
+	  interval=$@; interval=$${interval#unittests/fuse-audio-}; \
+	  $(fuse_LINK) $$objects unittests/audio-cut-$$interval.$(OBJEXT) $(fuse_LDADD) $(LIBS)
 
 check-sound-engine-equivalence: fuse$(EXEEXT) $(AUDIO_TEST_BINARIES)
 	python3 $(srcdir)/unittests/audio-frame-equivalence.py \

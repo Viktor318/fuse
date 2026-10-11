@@ -129,5 +129,3 @@ distclean-win32:
 	rm -f -- $(top_builddir)/$(package_win32)-setup.exe
 	rm -f -- $(top_builddir)/$(package_win32)-setup.exe.sha1
 
-.PHONY: install-win32 install-win32-strip dist-win32 dist-win32-dir \
-	dist-win32-zip dist-win32-7z dist-win32-exe distclean-win32

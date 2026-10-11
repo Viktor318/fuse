@@ -176,6 +176,28 @@ in which the one-shot result artifacts of a development automation scenario
 are written. Fuse does not create the directory.
 .RE
 .PP
+.B \-\-automation\-sample\-tstates
+.I count
+.RS
+Development option, available when Fuse is configured with the
+\(lq\-\-enable\-automation\(rq development flag. Delays the stop of a
+fixed-frame automation scenario until at least
+.I count
+T-states (1 to 5000) have elapsed inside the final frame, so the CPU can
+run past the frame interrupt before the stop state is captured. The
+scenario result records the sampled CPU state under
+.B state.cpu ,
+including
+.B pc
+and
+.B frame_tstate ,
+and Z80 instruction boundaries can overshoot
+.I count
+slightly. The screenshot is still the last completed display frame, and
+the option is not accepted for PC-condition, RZX completion or disk idle
+scenarios.
+.RE
+.PP
 .B \-\-automation\-success\-pc
 .I address
 .RS

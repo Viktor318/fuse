@@ -34,6 +34,57 @@ static long long clock_us;
 static snd_pcm_state_t transport_state;
 static int script[16], script_count, script_index, context = 1, resume_error;
 static libspectrum_signed_word capture[8192];
+/* Fail each configuration stage after acquiring a real null PCM. */
+enum config_fault { CONFIG_OK, CONFIG_OPEN, CONFIG_FORMAT, CONFIG_HARDWARE,
+                    CONFIG_SOFTWARE, CONFIG_QUERY };
+static enum config_fault config_fault;
+static unsigned int closes;
+static int fallback;
+
+static int
+mock_open( snd_pcm_t **pcm, const char *name, snd_pcm_stream_t stream,
+           int mode )
+{
+  if( config_fault == CONFIG_OPEN ) return -ENODEV;
+  if( fallback && !strcmp( name, "default" ) ) return -ENODEV;
+  if( fallback && !strcmp( name, "plughw:0,0" ) ) name = "null";
+  return snd_pcm_open( pcm, name, stream, mode );
+}
+
+static int
+mock_close( snd_pcm_t *pcm )
+{
+  closes++;
+  return snd_pcm_close( pcm );
+}
+
+static int
+mock_hw_any( snd_pcm_t *pcm, snd_pcm_hw_params_t *params )
+{
+  return config_fault == CONFIG_FORMAT ? -EINVAL :
+         snd_pcm_hw_params_any( pcm, params );
+}
+
+static int
+mock_hw_install( snd_pcm_t *pcm, snd_pcm_hw_params_t *params )
+{
+  return config_fault == CONFIG_HARDWARE ? -EINVAL :
+         snd_pcm_hw_params( pcm, params );
+}
+
+static int
+mock_sw_current( snd_pcm_t *pcm, snd_pcm_sw_params_t *params )
+{
+  return config_fault == CONFIG_SOFTWARE ? -EINVAL :
+         snd_pcm_sw_params_current( pcm, params );
+}
+
+static int
+mock_hw_current( snd_pcm_t *pcm, snd_pcm_hw_params_t *params )
+{
+  return config_fault == CONFIG_QUERY ? -EINVAL :
+         snd_pcm_hw_params_current( pcm, params );
+}
 static int mock_status( snd_pcm_t *, snd_pcm_status_t * );
 static snd_pcm_state_t mock_state( const snd_pcm_status_t * );
 static snd_pcm_uframes_t mock_avail( const snd_pcm_status_t * );
@@ -61,6 +112,12 @@ mock_resume( snd_pcm_t *p )
   return resume_error;
 }
 
+#define snd_pcm_open mock_open
+#define snd_pcm_close mock_close
+#define snd_pcm_hw_params_any mock_hw_any
+#define snd_pcm_hw_params mock_hw_install
+#define snd_pcm_sw_params_current mock_sw_current
+#define snd_pcm_hw_params_current mock_hw_current
 #define snd_pcm_status mock_status
 #define snd_pcm_status_get_state mock_state
 #define snd_pcm_status_get_avail mock_avail
@@ -70,6 +127,7 @@ mock_resume( snd_pcm_t *p )
 #define snd_pcm_start mock_start
 #define snd_pcm_prepare mock_prepare
 #define snd_pcm_resume mock_resume
+#include "sound/alsa_config.c"
 #include "sound/alsasound.c"
 
 static fuse_machine_info test_machine;
@@ -173,6 +231,50 @@ init( const char *device )
   CHECK( pacing.controller.capacity == exact_bsize );
 }
 
+static void
+test_configuration( void )
+{
+  int rate, stereo;
+  unsigned int closed;
+
+  init( "buffer=0,frames=0,avail=0,target=0,null" );
+  CHECK( exact_periodsize <= pacing.controller.allowance );
+  CHECK( pacing.mode == ALSA_PACING_CAPACITY );
+  init( "frames=2147483648,target=1400,target=0,avail=1,null" );
+  CHECK( exact_periodsize <= pacing.controller.allowance );
+  CHECK( pacing.mode == ALSA_PACING_CAPACITY );
+  init( "frames=12,buffer=2640,avail=1,target=1400, null" );
+  CHECK( exact_periodsize >= 219 && exact_periodsize <= 220 );
+  CHECK( pacing.mode == ALSA_PACING_FIXED && pacing.fixed_target == 1400 );
+  fallback = 1;
+  init( NULL );
+  CHECK( !strcmp( pcm_name, "plughw:0,0" ) );
+  fallback = 0;
+
+  for( config_fault = CONFIG_OPEN; config_fault <= CONFIG_QUERY;
+       config_fault++ ) {
+    sound_lowlevel_end();
+    rate = 44100; stereo = 1;
+    settings_current.sound = 1;
+    closed = closes;
+    CHECK( sound_lowlevel_init( "null", &rate, &stereo ) == 1 );
+    CHECK( !pcm_handle );
+    CHECK( closes == closed + ( config_fault != CONFIG_OPEN ) );
+    /* Software setup historically leaves the sound setting to its caller. */
+    CHECK( settings_current.sound == ( config_fault == CONFIG_SOFTWARE ) );
+    /* A failure must release the reentrancy guard as well as the PCM. */
+    {
+      enum config_fault fault = config_fault;
+      config_fault = CONFIG_OK;
+      init( "null" );
+      config_fault = fault;
+    }
+  }
+  config_fault = CONFIG_OK;
+  sound_lowlevel_end();
+  puts( "ALSA options, fallback and configuration cleanup passed" );
+}
+
 int
 main( void )
 {
@@ -180,6 +282,7 @@ main( void )
   unsigned int i, epoch;
   test_machine.timings.tstates_per_frame = 69888;
   for( i = 0; i < 1920; i++ ) samples[i] = i;
+  test_configuration();
   init( "null" );
   CHECK( exact_periodsize <= pacing.controller.allowance );
   CHECK( exact_bsize >= 2 * pacing.startup_bound );

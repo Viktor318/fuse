@@ -25,7 +25,7 @@ fuse_SOURCES += sound/ay_engine.c sound/blipbuffer.c sound/dc_filter.c \
                 sound/speaker_filter.c sound/tv_filter.c sound/ula_filter.c
 
 EXTRA_fuse_SOURCES += \
-                      sound/alsasound.c \
+                      sound/alsasound.c sound/alsa_config.c \
                       sound/aosound.c \
                       sound/coreaudiosound.c \
                       sound/dxsound.c \
@@ -42,6 +42,7 @@ EXTRA_fuse_SOURCES += \
 noinst_HEADERS += \
                   sound/ay_engine.h \
                   sound/alsa_pacing.h \
+                  sound/alsa_config.h \
                   sound/audio_timeline.h \
                   sound/audio_controller.h \
                   sound/audio_pacing.h \

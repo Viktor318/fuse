@@ -666,7 +666,7 @@ case $audio_driver in
     SOUND_LIBADD='sound/win32sound.$(OBJEXT)' SOUND_LIBS='-lwinmm'
     ;;
   alsa)
-    SOUND_LIBADD='sound/alsasound.$(OBJEXT)' SOUND_LIBS='-lasound'
+    SOUND_LIBADD='sound/alsasound.$(OBJEXT) sound/alsa_config.$(OBJEXT)' SOUND_LIBS='-lasound'
     AC_DEFINE([SOUND_PCM_ADMISSION], 1,
               [Defined for exact PCM production admission])
     ;;

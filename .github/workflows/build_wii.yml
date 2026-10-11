@@ -4,6 +4,10 @@ run-name: Build Fuse App for WII / ${{ github.actor }} /
 # Executed upon each commit pushed, merge commit in PR
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   libspectrum:
     # Reuse libspectrum's build wokflow and artefact

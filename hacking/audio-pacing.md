@@ -571,12 +571,15 @@ Before changing callback audio pacing, preserve:
 - Owner-thread lifecycle, callback quiescence and failed-disposal retention.
 - RZX/frame-only/discontinuity behavior and speed-dependent pitch.
 
+The legacy-renderer oracle and exhaustive migration matrix were retired after
+qualification. Ongoing tests exercise the current renderer's contracts.
+
 Use the focused targets available in the configured build:
 
 | Concern | Targets / source |
 |---|---|
 | Chronology, overshoot, ties, frame crossing, RZX, reinit | `check-sound-scheduler`; `unittests/soundpartitiontest.c` |
-| Irregular partitions, sample rates, source/filter/raw/movie state | `check-sound-partition` |
+| Discontinuity partition invariance, sample rates and physical admission | `check-sound-renderer` |
 | Fixed-point preview and admission-before-mutation equivalence | `check-blip-preview`, `check-sound-admission` |
 | Controller funding, probes, reserve retention and observations | `check-audio-pacing`; `unittests/audiopacingtest.c` |
 | SPSC transport and whole-frame boundaries | `check-sfifo`, `check-pcm-fifo` |

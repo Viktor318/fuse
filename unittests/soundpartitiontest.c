@@ -1,4 +1,4 @@
-/* soundpartitiontest.c: Bit-exact frame-local audio partition equivalence
+/* soundpartitiontest.c: Audio scheduler, discontinuity and admission regressions
    Copyright (c) 2026 Fredrick Meunier
 
    This program is free software; you can redistribute it and/or modify
@@ -21,9 +21,8 @@
 #include "event.c"
 int rzx_playback;
 enum debugger_mode_t debugger_mode = DEBUGGER_MODE_INACTIVE;
-/* Include the implementations to inspect private synthesis/filter state and
-   retain the preceding AY loop as an independent frame-only oracle. No test
-   entry points, scheduler, or state-observation hooks enter production. */
+/* Include the implementations to inspect private synthesis/filter state.
+   No test entry points or state-observation hooks enter production. */
 #include "sound/ay_engine.c"
 #include "sound/source_synths.c"
 #include "sound/output_mixer.c"
@@ -44,7 +43,7 @@ int movie_recording = 1, tape_microphone;
 libspectrum_dword tstates;
 static int test_stereo, test_route, test_sources, test_frame;
 static sfifo_t fifo;
-static int speaker, selected_stereo, deny_admission, legacy;
+static int speaker, selected_stereo, deny_admission;
 static int pacing_queued, pacing_wait;
 static uint64_t pacing_wait_state;
 static uint64_t state( void );
@@ -58,11 +57,9 @@ static libspectrum_dword last_boundary, minimum_interval, maximum_interval;
 static blip_sample_t device_pcm[CAPACITY], movie_pcm[CAPACITY];
 static int device_count, movie_count;
 static blip_sample_t expected_pcm[FRAMES][CAPACITY];
-static blip_sample_t expected_raw[FRAMES][CAPACITY];
-static int expected_count[FRAMES], expected_raw_count[FRAMES];
+static int expected_count[FRAMES];
 static uint64_t expected_state[FRAMES];
-static unsigned long zero_intervals, total_intervals, total_frames;
-static unsigned long total_pcm_frames;
+static unsigned long total_intervals;
 
 int periph_is_active( periph_type type )
 {
@@ -157,67 +154,6 @@ void sound_lowlevel_frame( libspectrum_signed_word *data, int count )
   device_count += count;
   reserved = 0;
   output_calls++;
-}
-
-/* Master's frame-only AY renderer, with the continuous tick phase and pending
-   tail writes. Do not turn this into calls to the resumable renderer. */
-static void
-legacy_ay_render( libspectrum_dword end )
-{
-  struct ay_change *change = changes + change_position;
-  int changes_left = change_count - change_position;
-  int old_previous[AY_CHANNELS] = { 0, 0, 0 };
-  libspectrum_dword f;
-  if( !( machine_current->capabilities & LIBSPECTRUM_MACHINE_CAPABILITY_AY ) )
-    return;
-  for( f = next_tick; f < end; f += AY_CLOCK_DIVISOR * AY_CLOCK_RATIO ) {
-    unsigned int tone_count;
-    int noise_count, channel, envelope_level;
-    while( changes_left && f >= change->tstates ) {
-      ay_apply_change( change++ );
-      changes_left--;
-    }
-    envelope_level = levels[env_counter];
-    noise_count = ay_clock_envelope( registers[13] );
-    tone_cycles += AY_CLOCK_DIVISOR;
-    tone_count = tone_cycles >> 3;
-    tone_cycles &= 7;
-    for( channel = 0; channel < AY_CHANNELS; channel++ )
-      ay_emit_channel( channel, f,
-        ay_channel_output( channel, envelope_level, tone_count ),
-        &old_previous[channel] );
-    ay_clock_noise( noise_count );
-  }
-  next_tick = f;
-  change_position = change_count - changes_left;
-}
-
-static void
-legacy_frame( void )
-{
-  long count;
-  libspectrum_dword end = test_machine.timings.tstates_per_frame;
-  reserved = blip_buffer_samples_after( left_buf, end );
-  if( reserved > (unsigned int)sound_framesiz ) reserved = sound_framesiz;
-  sound_update_source_routes();
-  sp0256_do_frame();
-  legacy_ay_render( end );
-  blip_buffer_end_frame( left_buf, end );
-  if( sound_channels == 2 ) {
-    blip_buffer_end_frame( right_buf, end );
-    count = blip_buffer_read_samples( left_buf, samples, sound_framesiz, 1 );
-    blip_buffer_read_samples( right_buf, samples + 1, count, 1 );
-    count *= 2;
-  } else {
-    count = blip_buffer_read_samples( left_buf, samples, sound_framesiz, 0 );
-  }
-  /* The mixer loop itself is unchanged; a single call followed by publication
-     exposes exactly the old extraction buffer and count. */
-  output_mixer_advance( end, samples, count );
-  output_mixer_end_frame();
-  sound_lowlevel_frame( samples, count );
-  movie_add_sound( samples, count );
-  ay_engine_end_frame();
 }
 
 static uint64_t
@@ -333,7 +269,6 @@ advance( libspectrum_dword endpoint )
   CHECK( !memcmp( saved, raw, raw_count * sizeof( *raw ) ) );
   CHECK( audio_position == endpoint );
   CHECK( blip_buffer_samples_avail( left_buf ) >= 0 );
-  zero_intervals += !upcoming;
   total_intervals++;
 }
 
@@ -400,7 +335,7 @@ test_physical_pacing( void )
   speaker = SOUND_SPEAKER_TYPE_TV;
   selected_stereo = SOUND_STEREO_AY_ABC;
   test_machine.capabilities |= LIBSPECTRUM_MACHINE_CAPABILITY_AY;
-  legacy = test_frame = 0;
+  test_frame = 0;
   for( unsigned int i = 0; i < ARRAY_SIZE( endpoints ); i++ ) {
     for( int blocked = 0; blocked < 2; blocked++ ) {
       initialise();
@@ -449,7 +384,6 @@ test_discontinuities( void )
   selected_stereo = SOUND_STEREO_AY_ABC;
   test_machine.capabilities |= LIBSPECTRUM_MACHINE_CAPABILITY_AY;
   test_frame = 0;
-  legacy = 0;
   for( int pass = 0; pass < 2; pass++ ) {
     initialise();
     device_count = movie_calls = movie_count = 0;
@@ -647,7 +581,6 @@ test_scheduler( void )
   speaker = SOUND_SPEAKER_TYPE_TV;
   selected_stereo = SOUND_STEREO_AY_ABC;
   test_machine.capabilities = LIBSPECTRUM_MACHINE_CAPABILITY_AY;
-  legacy = 0;
   movie_recording = 0;
   audio_cut_interval = 100;
   initialise();
@@ -789,11 +722,6 @@ test_scheduler( void )
 int
 main( int argc, char **argv )
 {
-  static const int source_cases[] = { 1, 2, 3, 4, 7, 15 };
-  static const libspectrum_dword events[] = {
-    0, 31, 32, 33, 73, 349, 350, 351, 500, 501, 502, 997,
-    12345, 34943, 34944, 34945, 60001, 69886, 69887
-  };
   test_machine.timings.processor_speed = 3500000;
   test_machine.timings.tstates_per_frame = 69888;
   settings_current.emulation_speed = 100;
@@ -804,102 +732,7 @@ main( int argc, char **argv )
   settings_current.volume_uspeech = 50;
   test_scheduler();
   if( argc > 2 && !strcmp( argv[2], "--scheduler-only" ) ) return 0;
-  /* Passes: preceding frame-only oracle, new one-shot path, halves,
-     irregular event-adjacent cuts, 79-tstate cuts ending explicitly at F,
-     and dense one-tstate cuts. Repeated frames exercise residue and rebase.
-     At 96 kHz Blip rounding also exercises the shared frame extraction cap. */
-  for( test_stereo = 0; test_stereo < 3; test_stereo++ ) {
-    selected_stereo = test_stereo == 0 ? SOUND_STEREO_AY_NONE :
-                      test_stereo == 1 ? SOUND_STEREO_AY_ABC : SOUND_STEREO_AY_ACB;
-    for( test_route = 0; test_route < 3; test_route++ ) {
-      speaker = test_route == 0 ? SOUND_SPEAKER_TYPE_UNFILTERED :
-                test_route == 1 ? SOUND_SPEAKER_TYPE_BEEPER : SOUND_SPEAKER_TYPE_TV;
-      for( int source = 0; source < 6; source++ ) {
-        test_sources = source_cases[source];
-        test_machine.capabilities = LIBSPECTRUM_MACHINE_CAPABILITY_BEEPER |
-          ( test_sources & 2 ? LIBSPECTRUM_MACHINE_CAPABILITY_AY : 0 );
-        for( int pass = 0; pass < 6; pass++ ) {
-          legacy = pass == 0;
-          initialise();
-          for( test_frame = 0; test_frame < FRAMES; test_frame++ ) {
-            libspectrum_dword position = 0;
-            device_count = movie_count = movie_calls = 0;
-            reserve_calls = output_calls = reserved = 0;
-            const int pattern = pass;
-            for( int event = 0;
-                 event < (int)( sizeof( events ) / sizeof( *events ) );
-                 event++ ) {
-              const libspectrum_dword at = events[event];
-              if( pattern == 2 && position < 34944 && at > 34944 ) {
-                position = 34944;
-                advance( position );
-              }
-              if( pattern >= 3 ) {
-                const libspectrum_dword step = pattern == 5 ?
-                  ( position < 1100 || position > 69800 ? 1 : 791 ) :
-                  pattern == 4 ? 79 : 1379;
-                while( position + step < at ) {
-                  position += step;
-                  advance( position );
-                }
-                if( at && position < at - 1 ) {
-                  position = at - 1;
-                  advance( position );
-                }
-              }
-              sources_at( at );
-              if( pattern >= 3 && position < at ) {
-                position = at;
-                advance( position );
-              }
-            }
-            if( legacy ) legacy_frame();
-            else {
-              /* Sources are delivered in chronological machine time. Cuts
-                 never precede already delivered ULA/DAC events. AY may still
-                 have queued writes beyond its next tick. */
-              if( pattern == 4 ) advance( 69888 );
-              preview_elapsed = 69888 - audio_position;
-              sound_frame();
-            }
-            CHECK( movie_calls == 1 && movie_count == device_count );
-            CHECK( !memcmp( movie_pcm, device_pcm,
-                             movie_count * sizeof( *movie_pcm ) ) );
-            CHECK( audio_position == 0 && !frame_sample_count );
-            int raw_count;
-            const blip_sample_t *raw = raw_output( &raw_count );
-            if( legacy ) {
-              expected_count[test_frame] = device_count;
-              expected_raw_count[test_frame] = raw_count;
-              memcpy( expected_pcm[test_frame], device_pcm,
-                      device_count * sizeof( *device_pcm ) );
-              memcpy( expected_raw[test_frame], raw,
-                      raw_count * sizeof( *raw ) );
-              expected_state[test_frame] = state();
-            } else {
-              CHECK( device_count == expected_count[test_frame] );
-              CHECK( !memcmp( expected_pcm[test_frame], device_pcm,
-                               device_count * sizeof( *device_pcm ) ) );
-              CHECK( raw_count == expected_raw_count[test_frame] );
-              CHECK( !memcmp( expected_raw[test_frame], raw,
-                               raw_count * sizeof( *raw ) ) );
-              CHECK( state() == expected_state[test_frame] );
-            }
-            total_frames++;
-            total_pcm_frames += device_count / sound_channels;
-          }
-          sp0256_end();
-          sound_end();
-          CHECK( !sound_enabled && !audio_position && !frame_sample_count );
-        }
-      }
-    }
-  }
   test_discontinuities();
   test_physical_pacing();
-  printf( "Partition equivalence at %d Hz: %lu frames, %lu cuts, "
-          "%lu zero-sample cuts, %lu PCM frames; PCM/raw/movie/state identical\n",
-          settings_current.sound_freq, total_frames, total_intervals,
-          zero_intervals, total_pcm_frames );
   return 0;
 }

@@ -73,7 +73,8 @@ EXTRA_DIST += unittests/audio-frame-equivalence.py
 check-sound-scheduler: unittests/soundpartitiontest
 	$(top_builddir)/unittests/soundpartitiontest 48000 --scheduler-only
 
-check-sound-partition: unittests/soundpartitiontest
+# Focused scheduler, discontinuity and physical admission regressions.
+check-sound-renderer: unittests/soundpartitiontest
 	$(top_builddir)/unittests/soundpartitiontest
 	$(top_builddir)/unittests/soundpartitiontest 44100
 	$(top_builddir)/unittests/soundpartitiontest 96000
@@ -97,7 +98,7 @@ check-alsa-pacing: unittests/alsapacingtest
 	$(top_builddir)/unittests/alsapacingtest
 
 AUDIO_CHECK_TARGETS = check-sfifo check-pcm-fifo check-blip-preview \
-                     check-sound-partition check-audio-pacing check-alsa-pacing
+                     check-sound-renderer check-audio-pacing check-alsa-pacing
 
 if HAVE_ALSA_AUDIO
 noinst_PROGRAMS += unittests/alsasoundtest

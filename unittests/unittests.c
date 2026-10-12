@@ -80,6 +80,7 @@
 #include "bitmap.h"
 #include "rectangle.h"
 #include "compat.h"
+#include "event.h"
 #include "rzx.h"
 #include "spectrum.h"
 #include "screenshot.h"
@@ -4005,6 +4006,164 @@ screenshot_scr_roundtrip_test( void )
   return r;
 }
 
+/* Event queue tests */
+
+/* Fired-event log for the event queue tests */
+static int event_test_fired;
+static libspectrum_dword event_test_tstates[ 8 ];
+static int event_test_type[ 8 ];
+static void *event_test_user_data[ 8 ];
+
+static void
+log_event( libspectrum_dword fired_tstates, int type, void *user_data )
+{
+  event_test_tstates[ event_test_fired ] = fired_tstates;
+  event_test_type[ event_test_fired ] = type;
+  event_test_user_data[ event_test_fired ] = user_data;
+  event_test_fired++;
+}
+
+/* Rescheduling handler: fires at fired_tstates, then queues itself again
+   0x10 T-states later */
+static void
+reschedule_fn( libspectrum_dword fired_tstates, int type, void *user_data )
+{
+  log_event( fired_tstates, type, user_data );
+  event_add( fired_tstates + 0x10, type );
+}
+
+static int
+expect( int index, libspectrum_dword fired_tstates, int type, void *user_data )
+{
+  if( index >= event_test_fired ) return 1;
+  if( event_test_tstates[ index ] != fired_tstates ) return 1;
+  if( event_test_type[ index ] != type ) return 1;
+  if( event_test_user_data[ index ] != user_data ) return 1;
+  return 0;
+}
+
+static int
+event_queue_test( void )
+{
+  libspectrum_dword saved_tstates = tstates;
+  libspectrum_dword saved_tstates_per_frame;
+  int type_q, type_p, type_r, type_a, type_d, type_h, type_i, type_j,
+    type_resched, error = 0;
+
+  /* Clear whatever the emulator itself queued; the main loop is done by
+     the time the unit tests run */
+  event_reset();
+
+  /* --- Test 1: the comparator orders by unsigned T-state, not by signed
+     subtraction (event.c pins this with the overflow-safe form) --- */
+  type_q = event_register( log_event, "unittest-q" );
+  type_p = event_register( log_event, "unittest-p" );
+  type_r = event_register( log_event, "unittest-r" );
+  if( type_q < 0 || type_p <= type_q || type_r <= type_p ) error++;
+  if( strcmp( event_name( type_q ), "unittest-q" ) ) error++;
+
+  event_add( 0x00000100, type_q );
+  event_add( 0xe0000000, type_p );
+  event_add( 0x40000000, type_r );
+
+  if( event_next_event != 0x00000100 ) error++;
+
+  tstates = 0xe0000001;
+  if( event_do_events() ) error++;
+  if( event_test_fired != 3 ) error++;
+  if( expect( 0, 0x00000100, type_q, NULL ) ) error++;
+  if( expect( 1, 0x40000000, type_r, NULL ) ) error++;
+  if( expect( 2, 0xe0000000, type_p, NULL ) ) error++;
+
+  /* --- Test 2: equal T-states fire in registration order --- */
+  event_test_fired = 0;
+  type_a = event_register( log_event, "unittest-a" );
+  type_d = event_register( log_event, "unittest-d" );
+  event_add( 0x80, type_a );
+  event_add( 0x80, type_d );
+  if( event_next_event != 0x80 ) error++;
+
+  tstates = 0x80;
+  if( event_do_events() ) error++;
+  if( event_test_fired != 2 ) error++;
+  if( expect( 0, 0x80, type_a, NULL ) ) error++;
+  if( expect( 1, 0x80, type_d, NULL ) ) error++;
+
+  /* --- Test 3: event_frame() reduces every entry and recomputes the next
+     event time --- */
+  event_test_fired = 0;
+  event_add( 0x50, type_a );
+  event_add( 0x60, type_d );
+  event_frame( 0x20 );
+  if( event_next_event != 0x30 ) error++;
+
+  tstates = 0x45;
+  if( event_do_events() ) error++;
+  if( event_test_fired != 2 ) error++;
+  if( expect( 0, 0x30, type_a, NULL ) ) error++;
+  if( expect( 1, 0x40, type_d, NULL ) ) error++;
+
+  /* --- Test 4: event_remove_type() turns matching events null, and null
+     events are dispatched silently --- */
+  event_test_fired = 0;
+  type_h = event_register( log_event, "unittest-h" );
+  type_i = event_register( log_event, "unittest-i" );
+  event_add( 0x30, type_h );
+  event_add( 0x40, type_h );
+  event_add( 0x50, type_i );
+  event_remove_type( type_h );
+
+  tstates = 0x60;
+  if( event_do_events() ) error++;
+  if( event_test_fired != 1 ) error++;
+  if( expect( 0, 0x50, type_i, NULL ) ) error++;
+  if( event_next_event != 0xffffffff ) error++;
+
+  /* --- Test 5: event_remove_type_user_data() nulls only matching
+     user data --- */
+  event_test_fired = 0;
+  type_j = event_register( log_event, "unittest-j" );
+  event_add_with_data( 0x30, type_j, (void *) 1 );
+  event_add_with_data( 0x40, type_j, (void *) 2 );
+  event_remove_type_user_data( type_j, (void *) 1 );
+
+  tstates = 0x50;
+  if( event_do_events() ) error++;
+  if( event_test_fired != 1 ) error++;
+  if( expect( 0, 0x40, type_j, (void *) 2 ) ) error++;
+
+  /* --- Test 6: a callback may queue another event, and the dispatch loop
+     picks it up in the same call --- */
+  event_test_fired = 0;
+  type_resched = event_register( reschedule_fn, "unittest-resched" );
+  event_add( 0x100, type_resched );
+
+  tstates = 0x115;
+  if( event_do_events() ) error++;
+  if( event_test_fired != 2 ) error++;
+  if( expect( 0, 0x100, type_resched, NULL ) ) error++;
+  if( expect( 1, 0x110, type_resched, NULL ) ) error++;
+
+  /* --- Test 7: event_force_events() jumps to the next event (RZX
+     playback path) --- */
+  event_reset();
+  event_test_fired = 0;
+  saved_tstates_per_frame = machine_current->timings.tstates_per_frame;
+  machine_current->timings.tstates_per_frame = 0x200;
+  event_add( 0x50, type_i );
+  event_force_events();
+  if( event_test_fired != 1 ) error++;
+  if( expect( 0, 0x50, type_i, NULL ) ) error++;
+  machine_current->timings.tstates_per_frame = saved_tstates_per_frame;
+
+  /* Leave the queue exactly as the emulator left it: empty */
+  event_reset();
+  tstates = saved_tstates;
+
+  if( error ) printf( "event_queue_test failed\n" );
+  return error;
+}
+
 int
 unittests_run( void )
 {
@@ -4076,6 +4235,7 @@ unittests_run( void )
   r += disk_write_blank_disk_cpc_save_test();
   r += disk_write_open_udi_roundtrip_test();
   r += screenshot_scr_roundtrip_test();
+  r += event_queue_test();
 #ifdef ENABLE_AUTOMATION
   r += automation_audio_artifacts_test();
 #endif /* ENABLE_AUTOMATION */

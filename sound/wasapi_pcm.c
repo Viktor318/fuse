@@ -14,13 +14,9 @@
 
 #include "wasapi_pcm.h"
 
-int
-wasapi_format_validate( const struct wasapi_format *f )
+static int
+encoding_validate( const struct wasapi_format *f )
 {
-  unsigned int bits = 0;
-  uint32_t mask;
-  if( !f || f->rate < 8000 || f->rate > 384000 || !f->channels ||
-      f->channels > 8 ) return -EINVAL;
   if( f->encoding == WASAPI_FLOAT ) {
     if( f->container_bits != 32 || f->valid_bits != 32 ||
         sizeof( float ) != 4 || FLT_RADIX != 2 || FLT_MANT_DIG != 24 )
@@ -30,9 +26,14 @@ wasapi_format_validate( const struct wasapi_format *f )
           f->container_bits != 32 ) || f->valid_bits < 16 ||
         f->valid_bits > f->container_bits ) return -EINVAL;
   } else return -EINVAL;
-  if( f->block_align != f->channels * ( f->container_bits / 8 ) )
-    return -EINVAL;
-  mask = f->mask;
+  return 0;
+}
+
+static int
+channel_mask_validate( const struct wasapi_format *f )
+{
+  unsigned int bits = 0;
+  uint32_t mask = f->mask;
   if( !mask ) return f->channels <= 2 ? 0 : -EINVAL;
   /* Windows speaker bits through TOP_BACK_RIGHT; reserved bits are ambiguous. */
   if( mask & ~UINT32_C(0x3ffff) ) return -EINVAL;
@@ -40,6 +41,17 @@ wasapi_format_validate( const struct wasapi_format *f )
   if( bits != f->channels ) return -EINVAL;
   if( f->channels == 1 ) return f->mask == WASAPI_FRONT_CENTER ? 0 : -EINVAL;
   return ( f->mask & 3 ) == 3 ? 0 : -EINVAL;
+}
+
+int
+wasapi_format_validate( const struct wasapi_format *f )
+{
+  if( !f || f->rate < 8000 || f->rate > 384000 || !f->channels ||
+      f->channels > 8 ) return -EINVAL;
+  if( encoding_validate( f ) ) return -EINVAL;
+  if( f->block_align != f->channels * ( f->container_bits / 8 ) )
+    return -EINVAL;
+  return channel_mask_validate( f );
 }
 
 int
@@ -117,42 +129,74 @@ pack( unsigned char *out, const struct wasapi_format *f, int sample )
     out[byte] = value >> ( byte * 8 );
 }
 
+struct speaker_indices { unsigned int left, right; };
+
+static struct speaker_indices
+front_speakers( const struct wasapi_format *f )
+{
+  struct speaker_indices speakers = { 0, 1 };
+  unsigned int index = 0, bit;
+  if( !f->mask || f->channels <= 1 ) return speakers;
+  for( bit = 0; bit < 18; bit++ ) {
+    if( !( f->mask & ( 1u << bit ) ) ) continue;
+    if( ( 1u << bit ) == WASAPI_FRONT_LEFT ) speakers.left = index;
+    if( ( 1u << bit ) == WASAPI_FRONT_RIGHT ) speakers.right = index;
+    index++;
+  }
+  return speakers;
+}
+
+/* Format, geometry and pointers have been validated by wasapi_convert. */
+static void
+convert_frame( const struct wasapi_format *f, unsigned int channels,
+               int quantize, const struct speaker_indices *speakers,
+               const int16_t *input, unsigned char *output )
+{
+  unsigned int channel;
+  int l = input[0];
+  int r = channels == 2 ? input[1] : l;
+  if( f->channels == 1 ) {
+    int sum = l + r;
+    l = sum >= 0 ? ( sum + 1 ) / 2 : ( sum - 1 ) / 2;
+  }
+  l = quantized( l, quantize );
+  r = quantized( r, quantize );
+  for( channel = 0; channel < f->channels; channel++ ) {
+    int sample = f->channels == 1 || channel == speakers->left ? l :
+                 channel == speakers->right ? r : 0;
+    pack( output + channel * ( f->container_bits / 8 ), f, sample );
+  }
+}
+
 int
 wasapi_convert( const struct wasapi_format *f, unsigned int channels,
                 int quantize, const int16_t *input, unsigned int frames,
                 unsigned char *output )
 {
-  unsigned int frame, channel, left = 0, right = 1;
+  unsigned int frame;
+  struct speaker_indices speakers;
   if( wasapi_format_validate( f ) || ( channels != 1 && channels != 2 ) ||
       ( frames && ( !input || !output ) ) ||
       frames > SIZE_MAX / f->block_align ||
       frames > SIZE_MAX / channels / sizeof( *input ) ) return -EINVAL;
-  if( f->mask && f->channels > 1 ) {
-    uint32_t mask = f->mask;
-    unsigned int index = 0, bit;
-    for( bit = 0; bit < 18; bit++ ) {
-      if( !( mask & ( 1u << bit ) ) ) continue;
-      if( ( 1u << bit ) == WASAPI_FRONT_LEFT ) left = index;
-      if( ( 1u << bit ) == WASAPI_FRONT_RIGHT ) right = index;
-      index++;
-    }
-  }
-  for( frame = 0; frame < frames; frame++ ) {
-    int l = input[(size_t)frame * channels];
-    int r = channels == 2 ? input[(size_t)frame * channels + 1] : l;
-    if( f->channels == 1 ) {
-      int sum = l + r;
-      l = sum >= 0 ? ( sum + 1 ) / 2 : ( sum - 1 ) / 2;
-    }
-    l = quantized( l, quantize );
-    r = quantized( r, quantize );
-    for( channel = 0; channel < f->channels; channel++ ) {
-      int sample = f->channels == 1 || channel == left ? l :
-                   channel == right ? r : 0;
-      pack( output + (size_t)frame * f->block_align +
-            channel * ( f->container_bits / 8 ), f, sample );
-    }
-  }
+  speakers = front_speakers( f );
+  for( frame = 0; frame < frames; frame++ )
+    convert_frame( f, channels, quantize, &speakers,
+                   input + (size_t)frame * channels,
+                   output + (size_t)frame * f->block_align );
+  return 0;
+}
+
+static int
+service_validate( const struct wasapi_service *s,
+                  const struct wasapi_packet_ops *ops )
+{
+  if( !s || !ops || !ops->padding || !ops->acquire || !ops->release ||
+      !s->fifo || !s->scratch || !s->capacity ||
+      ( s->channels != 1 && s->channels != 2 ) ||
+      s->capacity > INT_MAX / ( s->channels * sizeof( int16_t ) ) ||
+      wasapi_format_validate( &s->format ) ||
+      s->capacity > SIZE_MAX / s->format.block_align ) return WASAPI_PACKET_FAILURE;
   return 0;
 }
 
@@ -165,12 +209,7 @@ wasapi_service_packet( struct wasapi_service *s,
   int delivered;
   int32_t result;
   unsigned char *packet = NULL;
-  if( !s || !ops || !ops->padding || !ops->acquire || !ops->release ||
-      !s->fifo || !s->scratch || !s->capacity ||
-      ( s->channels != 1 && s->channels != 2 ) ||
-      s->capacity > INT_MAX / ( s->channels * sizeof( int16_t ) ) ||
-      wasapi_format_validate( &s->format ) ||
-      s->capacity > SIZE_MAX / s->format.block_align ) return WASAPI_PACKET_FAILURE;
+  if( service_validate( s, ops ) ) return WASAPI_PACKET_FAILURE;
   result = ops->padding( native, &padding );
   if( result < 0 ) return result;
   if( padding > s->capacity ) return WASAPI_PACKET_FAILURE;

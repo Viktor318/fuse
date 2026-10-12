@@ -143,11 +143,81 @@ healthy( void )
   return 1;
 }
 
+/* Stopped worker: the producer initializes FIFO/policy before attachment.
+   Failures leave partial state for sound_lowlevel_init to retire centrally. */
+static int
+fifo_pacing_init( unsigned int speed, uint64_t *startup,
+                  unsigned int *capacity, const char **operation )
+{
+  unsigned int bytes;
+  uint64_t allowance;
+  *startup = speed ? (uint64_t)geometry.format.rate *
+             machine_current->timings.tstates_per_frame / speed + 1 : 0;
+  allowance = speed ? (uint64_t)geometry.format.rate *
+              sound_audio_interval_tstates( speed ) / speed + 1 : 0;
+  *operation = "allocate whole-frame FIFO";
+  if( *startup > UINT_MAX || allowance > UINT_MAX ||
+      wasapi_fifo_bytes( *startup, geometry.capacity, allowance, width, &bytes ) ||
+      sfifo_init( &sound_fifo, bytes ) ) return 1;
+  *capacity = pcm_fifo_capacity( &sound_fifo, width );
+  *operation = "initialize admission geometry";
+  if( *capacity < *startup ||
+      *capacity < *startup + 2 * (uint64_t)geometry.capacity + 2 ||
+      audio_pacing_init_rate( &pacing, &sound_fifo, width, geometry.format.rate,
+        speed, machine_current->timings.tstates_per_frame, geometry.capacity ) ||
+      audio_progress_init( &progress ) ) return 1;
+  progress_initialized = 1;
+  atomic_init( &native_negative, false );
+  *operation = "initialize native evidence";
+  return !atomic_is_lock_free( &native_negative );
+}
+
+static int
+service_prepare( unsigned int channels, uint64_t startup,
+                  unsigned int capacity, const char **operation )
+{
+  uint64_t goal;
+  memset( &service, 0, sizeof( service ) );
+  service.fifo = &sound_fifo;
+  service.format = geometry.format;
+  service.capacity = geometry.capacity;
+  service.channels = channels;
+  service.quantize = settings_current.sound_force_8bit;
+  service.scratch = malloc( (size_t)geometry.capacity * width );
+  service.begin = begin; service.finish = finish; service.negative = negative;
+  *operation = "allocate packet scratch";
+  if( !service.scratch ) return 1;
+  goal = startup + geometry.capacity + pacing.controller.step;
+  /* Ensure a stopped stream never requires consumption to finish prefill. A
+     full next machine-frame batch must still fit while Q is below the goal. */
+  *operation = "prefill geometry";
+  if( goal > capacity || goal + startup - 1 > capacity ) return 1;
+  prefill_goal = goal;
+  return 0;
+}
+
+static void
+report_startup( int requested_rate, unsigned int capacity )
+{
+  ui_error_console( UI_ERROR_INFO,
+            "WASAPI: %d requested/%u negotiated Hz, "
+            "%u input/%u endpoint channels; "
+            "%s period-frames=%u, low-period result=0x%08lx, "
+            "native capacity=%u, FIFO capacity=%u%s. "
+            "Default endpoint pinned until reinitialization",
+            requested_rate, geometry.format.rate,
+            service.channels, geometry.format.channels,
+            geometry.client3 ? "client3 selected" : "compatibility reported-default",
+            geometry.period, (unsigned long)(uint32_t)geometry.low_period_error,
+            geometry.capacity, capacity,
+            service.quantize ? "; 8-bit output quantization" : "" );
+}
+
 int
 sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
 {
-  unsigned int bytes, capacity, prefill;
-  uint64_t startup, allowance, goal;
+  unsigned int capacity, channels;
+  uint64_t startup;
   unsigned int speed = sound_get_effective_processor_speed();
   int32_t error;
   const char *operation = NULL;
@@ -170,53 +240,15 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
     return 1;
   }
   /* Preserve the AY stereo enum; endpoint channels never alter AY ordering. */
-  width = ( *stereoptr ? 2 : 1 ) * sizeof( int16_t );
-  startup = speed ? (uint64_t)geometry.format.rate *
-            machine_current->timings.tstates_per_frame / speed + 1 : 0;
-  allowance = speed ? (uint64_t)geometry.format.rate *
-              sound_audio_interval_tstates( speed ) / speed + 1 : 0;
-  if( startup > UINT_MAX || allowance > UINT_MAX ||
-      wasapi_fifo_bytes( startup, geometry.capacity, allowance, width, &bytes ) ||
-      sfifo_init( &sound_fifo, bytes ) ) {
-    retire( "allocate whole-frame FIFO", WASAPI_PACKET_FAILURE );
+  channels = *stereoptr ? 2 : 1;
+  width = channels * sizeof( int16_t );
+  if( fifo_pacing_init( speed, &startup, &capacity, &operation ) ||
+      service_prepare( channels, startup, capacity, &operation ) ) {
+    retire( operation, WASAPI_PACKET_FAILURE );
     return 1;
   }
-  capacity = pcm_fifo_capacity( &sound_fifo, width );
-  if( capacity < startup || capacity < startup + 2 * (uint64_t)geometry.capacity + 2 ||
-      audio_pacing_init_rate( &pacing, &sound_fifo, width, geometry.format.rate,
-        speed, machine_current->timings.tstates_per_frame, geometry.capacity ) ||
-      audio_progress_init( &progress ) ) {
-    retire( "initialize admission geometry", WASAPI_PACKET_FAILURE );
-    return 1;
-  }
-  progress_initialized = 1;
-  atomic_init( &native_negative, false );
-  if( !atomic_is_lock_free( &native_negative ) ) {
-    retire( "initialize native evidence", WASAPI_PACKET_FAILURE );
-    return 1;
-  }
-  memset( &service, 0, sizeof( service ) );
-  service.fifo = &sound_fifo;
-  service.format = geometry.format;
-  service.capacity = geometry.capacity;
-  service.channels = *stereoptr ? 2 : 1;
-  service.quantize = settings_current.sound_force_8bit;
-  service.scratch = malloc( (size_t)geometry.capacity * width );
-  service.begin = begin; service.finish = finish; service.negative = negative;
-  if( !service.scratch ) {
-    retire( "allocate packet scratch", WASAPI_PACKET_FAILURE );
-    return 1;
-  }
-  goal = startup + geometry.capacity + pacing.controller.step;
-  /* Ensure a stopped stream never requires consumption to finish prefill. A
-     full next machine-frame batch must still fit while Q is below the goal. */
-  if( goal > capacity || goal + startup - 1 > capacity ) {
-    retire( "prefill geometry", WASAPI_PACKET_FAILURE );
-    return 1;
-  }
-  prefill_goal = prefill = goal;
   wasapi_native_set_notify( native, notify, NULL );
-  error = wasapi_native_attach( native, &service, prefill );
+  error = wasapi_native_attach( native, &service, prefill_goal );
   if( error < 0 ) {
     retire( "attach FIFO transport", error );
     return 1;
@@ -224,18 +256,7 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   *freqptr = geometry.format.rate;
   last_progress = audio_progress_snapshot( &progress );
   stall_deadline = compat_wait_until( 2000 );
-  ui_error_console( UI_ERROR_INFO,
-            "WASAPI: %d requested/%u negotiated Hz, "
-            "%u input/%u endpoint channels; "
-            "%s period-frames=%u, low-period result=0x%08lx, "
-            "native capacity=%u, FIFO capacity=%u%s. "
-            "Default endpoint pinned until reinitialization",
-            requested_rate, geometry.format.rate,
-            service.channels, geometry.format.channels,
-            geometry.client3 ? "client3 selected" : "compatibility reported-default",
-            geometry.period, (unsigned long)(uint32_t)geometry.low_period_error,
-            geometry.capacity, capacity,
-            service.quantize ? "; 8-bit output quantization" : "" );
+  report_startup( requested_rate, capacity );
   return 0;
 }
 

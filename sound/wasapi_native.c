@@ -213,59 +213,82 @@ native_release( void *opaque, unsigned int frames, int silent )
   return FAILED( error ) ? failure( n, "ReleaseBuffer", error ) : error;
 }
 
-static DWORD WINAPI
-worker( void *opaque )
+static int
+service_wait( struct wasapi_native *n, const HANDLE *events )
 {
-  struct wasapi_native *n = opaque;
+  DWORD status = wait_events( n, events, 3, 100 );
+  if( status == WAIT_OBJECT_0 ) {
+    if( WaitForSingleObject( n->stop, 0 ) != WAIT_OBJECT_0 )
+      failure( n, "unexpected consumer exit", E_ABORT );
+    return 0;
+  }
+  if( status == WAIT_FAILED ) {
+    failure( n, "worker wait", HRESULT_FROM_WIN32( GetLastError() ) );
+    return 0;
+  }
+  if( status != WAIT_TIMEOUT && status != WAIT_OBJECT_0 + 1 &&
+      status != WAIT_OBJECT_0 + 2 ) {
+    failure( n, "unexpected wait status", E_FAIL );
+    return 0;
+  }
+  return 1;
+}
+
+static int
+service_ready( struct wasapi_native *n, int running )
+{
+  int used;
+  /* The atomic handshake publishes service/observer geometry; a watchdog
+     return must not race producer initialization or rely on an event token. */
+  if( !atomic_load( &n->attached ) ) return 0;
+  if( running ) return 1;
+  used = pcm_fifo_consumer_used( n->service->fifo,
+                                 n->service->channels * sizeof( int16_t ) );
+  if( used < 0 ) {
+    failure( n, "prefill FIFO", E_FAIL );
+    return -1;
+  }
+  return (unsigned int)used >= n->prefill;
+}
+
+static HRESULT
+stream_start( struct wasapi_native *n )
+{
+  DWORD task = 0;
+  HRESULT result;
+  n->mmcss = AvSetMmThreadCharacteristicsW( L"Audio", &task );
+  n->geometry.mmcss = n->mmcss != NULL;
+  if( !ResetEvent( n->audio ) )
+    return failure( n, "reset start event", HRESULT_FROM_WIN32( GetLastError() ) );
+  result = IAudioClient_Start( n->client );
+  if( FAILED( result ) ) return failure( n, "start stream", result );
+  atomic_store( &n->started, 1 );
+  if( n->notify ) n->notify( n->observer );
+  return result;
+}
+
+static void
+service_loop( struct wasapi_native *n )
+{
   const struct wasapi_packet_ops ops = { native_padding, native_acquire, native_release };
   HANDLE events[3] = { n->stop, n->data, n->audio };
-  HRESULT result = CoInitializeEx( NULL, COINIT_APARTMENTTHREADED );
-  int com_initialized = SUCCEEDED( result );
-  if( FAILED( result ) ) failure( n, "initialize STA", result );
-  else result = negotiate( n );
-  if( !SetEvent( n->ready ) ) failure( n, "negotiation wake", HRESULT_FROM_WIN32( GetLastError() ) );
-  if( FAILED( result ) || atomic_load( &n->error ) ) goto done;
-  for( ;; ) {
-    DWORD status = wait_events( n, events, 3, 100 );
+  while( service_wait( n, events ) ) {
     int running = atomic_load( &n->started );
-    if( status == WAIT_OBJECT_0 ) {
-      if( WaitForSingleObject( n->stop, 0 ) != WAIT_OBJECT_0 )
-        failure( n, "unexpected consumer exit", E_ABORT );
-      break;
-    }
-    if( status == WAIT_FAILED ) {
-      failure( n, "worker wait", HRESULT_FROM_WIN32( GetLastError() ) ); break;
-    }
-    if( status != WAIT_TIMEOUT && status != WAIT_OBJECT_0 + 1 &&
-        status != WAIT_OBJECT_0 + 2 ) {
-      failure( n, "unexpected wait status", E_FAIL ); break;
-    }
-    /* The atomic handshake publishes service/observer geometry; a watchdog
-       return must not race producer initialization or rely on an event token. */
-    if( !atomic_load( &n->attached ) ) continue;
-    if( !running ) {
-      int used = pcm_fifo_consumer_used( n->service->fifo,
-                           n->service->channels * sizeof( int16_t ) );
-      if( used < 0 ) { failure( n, "prefill FIFO", E_FAIL ); break; }
-      if( (unsigned int)used < n->prefill ) continue;
-    }
+    int ready = service_ready( n, running );
+    HRESULT result;
+    if( ready < 0 ) break;
+    if( !ready ) continue;
     if( WaitForSingleObject( n->stop, 0 ) == WAIT_OBJECT_0 ) break;
     result = wasapi_service_packet( n->service, &ops, n, running );
     if( FAILED( result ) ) { failure( n, "render packet", result ); break; }
-    if( !running ) {
-      DWORD task = 0;
-      n->mmcss = AvSetMmThreadCharacteristicsW( L"Audio", &task );
-      n->geometry.mmcss = n->mmcss != NULL;
-      if( !ResetEvent( n->audio ) ) {
-        failure( n, "reset start event", HRESULT_FROM_WIN32( GetLastError() ) ); break;
-      }
-      result = IAudioClient_Start( n->client );
-      if( FAILED( result ) ) { failure( n, "start stream", result ); break; }
-      atomic_store( &n->started, 1 );
-      if( n->notify ) n->notify( n->observer );
-    }
+    if( !running && FAILED( stream_start( n ) ) ) break;
   }
-done:
+}
+
+static void
+stream_release( struct wasapi_native *n )
+{
+  HRESULT result;
   if( n->initialized ) {
     result = IAudioClient_Stop( n->client );
     if( FAILED( result ) ) failure( n, "stop stream", result );
@@ -277,8 +300,29 @@ done:
   if( n->mix ) CoTaskMemFree( n->mix );
   if( n->mmcss && !AvRevertMmThreadCharacteristics( n->mmcss ) )
     failure( n, "revert MMCSS", HRESULT_FROM_WIN32( GetLastError() ) );
+}
+
+static DWORD
+worker_run( struct wasapi_native *n )
+{
+  HRESULT result = CoInitializeEx( NULL, COINIT_APARTMENTTHREADED );
+  int com_initialized = SUCCEEDED( result );
+  if( FAILED( result ) ) failure( n, "initialize STA", result );
+  else result = negotiate( n );
+  if( !SetEvent( n->ready ) )
+    failure( n, "negotiation wake", HRESULT_FROM_WIN32( GetLastError() ) );
+  if( SUCCEEDED( result ) && !atomic_load( &n->error ) ) service_loop( n );
+  stream_release( n );
   if( com_initialized ) CoUninitialize();
   return 0;
+}
+
+/* Keep the Windows calling convention at the entry boundary. The ordinary
+   helpers above also make the worker's control flow visible to C metrics. */
+static DWORD WINAPI
+worker( void *opaque )
+{
+  return worker_run( opaque );
 }
 
 static int32_t
@@ -289,26 +333,20 @@ open_failed( struct wasapi_native *n, struct wasapi_native **output, HRESULT err
   return error;
 }
 
-int32_t
-wasapi_native_open( struct wasapi_native **output, struct wasapi_geometry *geometry,
-                    const char **operation )
+static HRESULT
+state_init( struct wasapi_native *n )
 {
-  struct wasapi_native *n = calloc( 1, sizeof( *n ) );
-  HRESULT result;
-  DWORD status;
-  *output = NULL;
-  if( operation ) *operation = NULL;
-  if( !n ) {
-    if( operation ) *operation = "allocate lifetime";
-    return E_OUTOFMEMORY;
-  }
   atomic_init( &n->error, 0 ); atomic_init( &n->started, 0 );
   atomic_init( &n->attached, 0 );
   if( !atomic_is_lock_free( &n->error ) || !atomic_is_lock_free( &n->started ) ||
-      !atomic_is_lock_free( &n->attached ) ) {
-    if( operation ) *operation = "initialize lock-free state";
-    free( n ); return E_NOTIMPL;
-  }
+      !atomic_is_lock_free( &n->attached ) ) return E_NOTIMPL;
+  return S_OK;
+}
+
+static HRESULT
+events_create( struct wasapi_native *n, const char **operation )
+{
+  HRESULT result;
   n->stop = CreateEvent( NULL, TRUE, FALSE, NULL );
   if( n->stop ) n->ready = CreateEvent( NULL, FALSE, FALSE, NULL );
   if( n->ready ) n->data = CreateEvent( NULL, FALSE, FALSE, NULL );
@@ -319,24 +357,51 @@ wasapi_native_open( struct wasapi_native **output, struct wasapi_geometry *geome
     if( operation ) *operation = !n->stop ? "create stop event" :
                                 !n->ready ? "create ready event" :
                                 !n->data ? "create data event" : "create audio event";
-    return open_failed( n, output, result );
+    return result;
   }
+  return S_OK;
+}
+
+static HRESULT
+negotiation_wait( struct wasapi_native *n, const char **operation )
+{
+  HANDLE events[2] = { n->ready, n->thread };
+  DWORD status = WaitForMultipleObjects( 2, events, FALSE, 10000 );
+  HRESULT result = atomic_load( &n->error );
+  if( result < 0 && operation ) *operation = n->operation;
+  if( status != WAIT_OBJECT_0 && !result ) {
+    result = E_FAIL;
+    if( operation ) *operation = "negotiation wait";
+  }
+  return result;
+}
+
+int32_t
+wasapi_native_open( struct wasapi_native **output, struct wasapi_geometry *geometry,
+                    const char **operation )
+{
+  struct wasapi_native *n = calloc( 1, sizeof( *n ) );
+  HRESULT result;
+  *output = NULL;
+  if( operation ) *operation = NULL;
+  if( !n ) {
+    if( operation ) *operation = "allocate lifetime";
+    return E_OUTOFMEMORY;
+  }
+  result = state_init( n );
+  if( FAILED( result ) ) {
+    if( operation ) *operation = "initialize lock-free state";
+    free( n ); return result;
+  }
+  result = events_create( n, operation );
+  if( FAILED( result ) ) return open_failed( n, output, result );
   n->thread = CreateThread( NULL, 0, worker, n, 0, NULL );
   if( !n->thread ) {
     if( operation ) *operation = "create consumer";
     result = HRESULT_FROM_WIN32( GetLastError() );
     return open_failed( n, output, result );
   }
-  {
-    HANDLE events[2] = { n->ready, n->thread };
-    status = WaitForMultipleObjects( 2, events, FALSE, 10000 );
-  }
-  result = atomic_load( &n->error );
-  if( result < 0 && operation ) *operation = n->operation;
-  if( status != WAIT_OBJECT_0 && !result ) {
-    result = E_FAIL;
-    if( operation ) *operation = "negotiation wait";
-  }
+  result = negotiation_wait( n, operation );
   if( FAILED( result ) ) return open_failed( n, output, result );
   *geometry = n->geometry;
   *output = n;

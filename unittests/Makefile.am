@@ -28,8 +28,8 @@ unittests_widgetutf8test_SOURCES = unittests/widgetutf8test.c ui/widget/utf8.c
 unittests_widgetutf8test_LDADD =
 noinst_HEADERS += ui/widget/utf8.h
 
-check-widget-utf8: unittests/widgetutf8test
-	$(top_builddir)/unittests/widgetutf8test
+check-widget-utf8: unittests/widgetutf8test$(EXEEXT)
+	$(top_builddir)/unittests/widgetutf8test$(EXEEXT)
 
 noinst_PROGRAMS += unittests/sfifotest
 unittests_sfifotest_SOURCES = unittests/sfifotest.c sound/sfifo.c
@@ -40,8 +40,8 @@ unittests_sfifotest_CPPFLAGS += -DSFIFO_TEST_THREADS
 unittests_sfifotest_LDADD += $(PTHREAD_LIBS)
 endif
 
-check-sfifo: unittests/sfifotest
-	$(top_builddir)/unittests/sfifotest
+check-sfifo: unittests/sfifotest$(EXEEXT)
+	$(top_builddir)/unittests/sfifotest$(EXEEXT)
 
 noinst_PROGRAMS += unittests/pcm_fifotest
 unittests_pcm_fifotest_SOURCES = unittests/pcm_fifotest.c sound/sfifo.c
@@ -51,15 +51,15 @@ if HAVE_PTHREAD
 unittests_pcm_fifotest_LDADD += $(PTHREAD_LIBS)
 endif
 
-check-pcm-fifo: unittests/pcm_fifotest
-	$(top_builddir)/unittests/pcm_fifotest
+check-pcm-fifo: unittests/pcm_fifotest$(EXEEXT)
+	$(top_builddir)/unittests/pcm_fifotest$(EXEEXT)
 
 noinst_PROGRAMS += unittests/blippreviewtest
 unittests_blippreviewtest_SOURCES = unittests/blippreviewtest.c sound/blipbuffer.c
 unittests_blippreviewtest_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_blippreviewtest_LDADD = -lm
-check-blip-preview: unittests/blippreviewtest
-	$(top_builddir)/unittests/blippreviewtest
+check-blip-preview: unittests/blippreviewtest$(EXEEXT)
+	$(top_builddir)/unittests/blippreviewtest$(EXEEXT)
 
 noinst_PROGRAMS += unittests/soundpartitiontest
 unittests_soundpartitiontest_SOURCES = unittests/soundpartitiontest.c \
@@ -68,16 +68,18 @@ unittests_soundpartitiontest_SOURCES = unittests/soundpartitiontest.c \
         sound/speaker_filter.c sound/tv_filter.c sound/ula_filter.c
 unittests_soundpartitiontest_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_soundpartitiontest_LDADD = $(LIBSPECTRUM_LIBS) $(GLIB_LIBS) -lm
-EXTRA_DIST += unittests/audio-frame-equivalence.py
+EXTRA_DIST += unittests/audio-frame-equivalence.py \
+              unittests/wasapitoolchaintest.c unittests/win32audiowaittest.c \
+              hacking/wasapi-toolchain-check.sh
 
-check-sound-scheduler: unittests/soundpartitiontest
-	$(top_builddir)/unittests/soundpartitiontest 48000 --scheduler-only
+check-sound-scheduler: unittests/soundpartitiontest$(EXEEXT)
+	$(top_builddir)/unittests/soundpartitiontest$(EXEEXT) 48000 --scheduler-only
 
 # Focused scheduler, discontinuity and physical admission regressions.
-check-sound-renderer: unittests/soundpartitiontest
-	$(top_builddir)/unittests/soundpartitiontest
-	$(top_builddir)/unittests/soundpartitiontest 44100
-	$(top_builddir)/unittests/soundpartitiontest 96000
+check-sound-renderer: unittests/soundpartitiontest$(EXEEXT)
+	$(top_builddir)/unittests/soundpartitiontest$(EXEEXT)
+	$(top_builddir)/unittests/soundpartitiontest$(EXEEXT) 44100
+	$(top_builddir)/unittests/soundpartitiontest$(EXEEXT) 96000
 
 noinst_PROGRAMS += unittests/audiopacingtest
 unittests_audiopacingtest_SOURCES = unittests/audiopacingtest.c sound/sfifo.c
@@ -87,26 +89,78 @@ if HAVE_PTHREAD
 unittests_audiopacingtest_CPPFLAGS += -DHAVE_PTHREAD
 unittests_audiopacingtest_LDADD += $(PTHREAD_LIBS)
 endif
-check-audio-pacing: unittests/audiopacingtest
-	$(top_builddir)/unittests/audiopacingtest
+check-audio-pacing: unittests/audiopacingtest$(EXEEXT)
+	$(top_builddir)/unittests/audiopacingtest$(EXEEXT)
+
+noinst_PROGRAMS += unittests/wasapipcmtest
+unittests_wasapipcmtest_SOURCES = unittests/wasapipcmtest.c \
+                                sound/wasapi_pcm.c sound/sfifo.c
+unittests_wasapipcmtest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_wasapipcmtest_LDADD =
+check-wasapi-pcm: unittests/wasapipcmtest$(EXEEXT)
+	$(top_builddir)/unittests/wasapipcmtest$(EXEEXT)
+
+if HAVE_WASAPI_AUDIO
+# Link the actual STA worker, and execute endpoint-independent native checks.
+unittests_wasapipcmtest_SOURCES += sound/wasapi_native.c
+unittests_wasapipcmtest_LDADD += -lole32 -lavrt -luuid -luser32
+noinst_PROGRAMS += unittests/wasapitoolchaintest unittests/win32audiowaittest
+unittests_wasapitoolchaintest_SOURCES = unittests/wasapitoolchaintest.c
+unittests_wasapitoolchaintest_LDADD = -lole32 -lavrt -luuid
+unittests_win32audiowaittest_SOURCES = unittests/win32audiowaittest.c \
+                                    compat/win32/wait.c
+unittests_win32audiowaittest_LDADD =
+check-wasapi-native: unittests/wasapitoolchaintest$(EXEEXT) \
+                     unittests/win32audiowaittest$(EXEEXT)
+	$(top_builddir)/unittests/wasapitoolchaintest$(EXEEXT)
+	$(top_builddir)/unittests/win32audiowaittest$(EXEEXT)
+endif
+
+if HAVE_PCM_ADMISSION
+noinst_PROGRAMS += unittests/wasapisoundtest
+unittests_wasapisoundtest_SOURCES = unittests/wasapisoundtest.c \
+                                  sound/wasapi_pcm.c sound/sfifo.c \
+                                  $(COMPAT_WAIT_SOURCES)
+unittests_wasapisoundtest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_wasapisoundtest_LDADD =
+check-wasapi-sound: unittests/wasapisoundtest$(EXEEXT)
+	$(top_builddir)/unittests/wasapisoundtest$(EXEEXT)
+endif
+
+if HAVE_AUDIO_TEST_THREADS
+noinst_PROGRAMS += unittests/wasapithreadtest
+unittests_wasapithreadtest_SOURCES = unittests/wasapithreadtest.c \
+                                   sound/wasapi_pcm.c sound/sfifo.c
+unittests_wasapithreadtest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_wasapithreadtest_LDADD = $(PTHREAD_LIBS)
+check-wasapi-thread: unittests/wasapithreadtest$(EXEEXT)
+	$(top_builddir)/unittests/wasapithreadtest$(EXEEXT)
+endif
 
 noinst_PROGRAMS += unittests/alsapacingtest
 unittests_alsapacingtest_SOURCES = unittests/alsapacingtest.c
 unittests_alsapacingtest_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_alsapacingtest_LDADD =
-check-alsa-pacing: unittests/alsapacingtest
-	$(top_builddir)/unittests/alsapacingtest
+check-alsa-pacing: unittests/alsapacingtest$(EXEEXT)
+	$(top_builddir)/unittests/alsapacingtest$(EXEEXT)
 
 AUDIO_CHECK_TARGETS = check-sfifo check-pcm-fifo check-blip-preview \
-                     check-sound-renderer check-audio-pacing check-alsa-pacing
+                     check-sound-renderer check-audio-pacing check-alsa-pacing \
+                     check-wasapi-pcm
+if HAVE_WASAPI_AUDIO
+AUDIO_CHECK_TARGETS += check-wasapi-native
+endif
+if HAVE_AUDIO_TEST_THREADS
+AUDIO_CHECK_TARGETS += check-wasapi-thread
+endif
 
 if HAVE_ALSA_AUDIO
 noinst_PROGRAMS += unittests/alsasoundtest
 unittests_alsasoundtest_SOURCES = unittests/alsasoundtest.c
 unittests_alsasoundtest_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_alsasoundtest_LDADD = -lasound
-check-alsasound: unittests/alsasoundtest
-	$(top_builddir)/unittests/alsasoundtest
+check-alsasound: unittests/alsasoundtest$(EXEEXT)
+	$(top_builddir)/unittests/alsasoundtest$(EXEEXT)
 AUDIO_CHECK_TARGETS += check-alsasound
 endif
 
@@ -119,10 +173,10 @@ unittests_soundadmissiontest_SOURCES = unittests/soundadmissiontest.c \
         sound/speaker_filter.c sound/tv_filter.c sound/ula_filter.c
 unittests_soundadmissiontest_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_soundadmissiontest_LDADD = $(LIBSPECTRUM_LIBS) $(GLIB_LIBS) -lm
-check-sound-admission: unittests/soundadmissiontest
-	$(top_builddir)/unittests/soundadmissiontest
+check-sound-admission: unittests/soundadmissiontest$(EXEEXT)
+	$(top_builddir)/unittests/soundadmissiontest$(EXEEXT)
 
-AUDIO_CHECK_TARGETS += check-sound-admission
+AUDIO_CHECK_TARGETS += check-sound-admission check-wasapi-sound
 endif
 
 noinst_HEADERS += unittests/audio-wakeup-cases.h
@@ -137,8 +191,8 @@ if HAVE_PTHREAD
 unittests_sdl2soundtest_CPPFLAGS += -DSDL2_TEST_THREADS
 unittests_sdl2soundtest_LDADD += $(PTHREAD_LIBS)
 endif
-check-sdl2sound: unittests/sdl2soundtest
-	$(top_builddir)/unittests/sdl2soundtest
+check-sdl2sound: unittests/sdl2soundtest$(EXEEXT)
+	$(top_builddir)/unittests/sdl2soundtest$(EXEEXT)
 AUDIO_CHECK_TARGETS += check-sdl2sound
 
 noinst_PROGRAMS += unittests/sdl2wakeuptest
@@ -150,8 +204,8 @@ if HAVE_PTHREAD
 unittests_sdl2wakeuptest_CPPFLAGS += -DSDL2_TEST_THREADS
 unittests_sdl2wakeuptest_LDADD += $(PTHREAD_LIBS)
 endif
-check-sdl2-wakeup: unittests/sdl2wakeuptest
-	$(top_builddir)/unittests/sdl2wakeuptest
+check-sdl2-wakeup: unittests/sdl2wakeuptest$(EXEEXT)
+	$(top_builddir)/unittests/sdl2wakeuptest$(EXEEXT)
 AUDIO_CHECK_TARGETS += check-sdl2-wakeup
 endif
 
@@ -167,8 +221,8 @@ unittests_coreaudiofilltest_CPPFLAGS += -DCOREAUDIO_TEST_THREADS
 unittests_coreaudiofilltest_LDADD += $(PTHREAD_LIBS)
 endif
 
-check-coreaudio: unittests/coreaudiofilltest
-	$(top_builddir)/unittests/coreaudiofilltest
+check-coreaudio: unittests/coreaudiofilltest$(EXEEXT)
+	$(top_builddir)/unittests/coreaudiofilltest$(EXEEXT)
 
 AUDIO_CHECK_TARGETS += check-coreaudio
 endif
@@ -284,3 +338,5 @@ unittests_scalerexpandtest_LDADD = $(LIBSPECTRUM_LIBS) \
 unittests_scalerexpandtest_CPPFLAGS = $(AM_CPPFLAGS)
 
 endif
+
+check-audio: $(AUDIO_CHECK_TARGETS)

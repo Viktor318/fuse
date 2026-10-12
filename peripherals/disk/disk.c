@@ -1033,14 +1033,19 @@ open_udi( buffer_t *buffer, disk_t *d )
   crc = ~(libspectrum_dword) 0;
 
   /* check file length */
-  eof = buff[4] + 256 * buff[5] + 65536 * buff[6] + 16777216 * buff[7];
+  eof = (libspectrum_dword) buff[4] |
+        (libspectrum_dword) buff[5] << 8 |
+        (libspectrum_dword) buff[6] << 16 |
+        (libspectrum_dword) buff[7] << 24;
   if( eof != buffer->file.length - 4 )
     return d->status = DISK_OPEN;
   /* check CRC32 */
   for( i = 0; i < eof; i++ )
     crc = crc_udi( crc, buff[i] );
-  if( crc != buff[eof] + 256 * buff[eof + 1] + 65536 * buff[eof + 2] +
-						16777216 * buff[eof + 3] )
+  if( crc != ( (libspectrum_dword) buff[eof] |
+               (libspectrum_dword) buff[eof + 1] << 8 |
+               (libspectrum_dword) buff[eof + 2] << 16 |
+               (libspectrum_dword) buff[eof + 3] << 24 ) )
     return d->status = DISK_OPEN;
 
   d->sides = buff[10] + 1;

@@ -202,18 +202,24 @@ jobs:
         run: |
           cd ${GITHUB_WORKSPACE}/${LIBSPECTRUM_DIR}
 
-          echo "Building and running tests .."
-          make check
+          echo "Building and running tests with live progress .."
+          make test/test.exe
 
-      - name: (13) Verbose check tests (on failure)
-        if: failure() && steps.run-tests.outcome != 'success'
-        run: |
-          cd ${GITHUB_WORKSPACE}/${LIBSPECTRUM_DIR}
+          # Bypass any Libtool launcher, retaining the source working directory
+          # so that relative test fixture paths continue to work.
+          if test -f test/.libs/lt-test.exe; then
+            test_executable=test/.libs/lt-test.exe
+          elif test -f test/.libs/test.exe; then
+            test_executable=test/.libs/test.exe
+          else
+            # Static test builds produce the real executable here.
+            test_executable=test/test.exe
+          fi
+          export PATH="$PWD/.libs:$PWD:/usr/local/i686-w64-mingw32/bin:${CYGWIN_LIBDIR}:$PATH"
+          echo "Launching $test_executable directly .."
+          "$test_executable"
 
-          echo "Listing all tests individually .."
-          test/test.exe
-
-      - name: (14) Pack installed library files
+      - name: (13) Pack installed library files
         run: |
           cd ${GITHUB_WORKSPACE}/${LIBSPECTRUM_DIR}
 
@@ -221,13 +227,13 @@ jobs:
           libspectrum-installed-windows.tar \
           -C /usr/local/i686-w64-mingw32/ .
 
-      - name: (15) Upload generated tar file
+      - name: (14) Upload generated tar file
         uses: actions/upload-artifact@v7
         with:
           name: libspectrum-installed-windows-${{ inputs.key }}
           path: |
             ${{ env.LIBSPECTRUM_DIR }}/libspectrum-installed-windows.tar
 
-      - name: (16) Finish
+      - name: (15) Finish
         run: |
           echo "Finishing with status ${{ job.status }}."

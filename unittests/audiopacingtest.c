@@ -348,6 +348,11 @@ thread_tests( void )
   sfifo_close( &c.fifo );
 }
 #endif
+#ifdef main
+/* SDL headers redefine main on Windows, but this test needs a normal entry point. */
+#undef main
+#endif
+
 int main( void )
 {
   cadence_tests(); controller_tests(); adapter_tests(); convergence_tests();

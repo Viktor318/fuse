@@ -103,6 +103,12 @@ wake_consume( unsigned int frames )
 #define AUDIO_WAKE_THREADS
 #endif
 #include "audio-wakeup-cases.h"
+
+#ifdef main
+/* SDL headers redefine main on Windows, but this test needs a normal entry point. */
+#undef main
+#endif
+
 int
 main( void )
 {

@@ -204,6 +204,11 @@ stress( unsigned int width, int fit )
 }
 #endif
 
+#ifdef main
+/* SDL headers redefine main on Windows, but this test needs a normal entry point. */
+#undef main
+#endif
+
 int
 main( void )
 {

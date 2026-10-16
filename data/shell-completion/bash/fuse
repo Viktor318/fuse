@@ -253,7 +253,7 @@ _fuse()
             --no-plus3-detect-speedlock --no-plusd --no-printer
             --no-raw-s-net --no-recreated-spectrum --no-rs232-handshake
             --no-rzx-autosaves --no-simpleide --no-slt --no-sound
-            --no-sound-force-8bit --no-speccyboot --no-specdrum
+            --no-speccyboot --no-specdrum
             --no-spectranet --no-spectranet-disable --no-statusbar
             --no-traps --no-ttx2000s --no-unittests
             --no-usource --no-uspeech --no-writable-roms
@@ -281,7 +281,7 @@ _fuse()
             --rs232-handshake --rs232-rx --rs232-tx
             --rzx-autosaves --separation
             --simpleide --simpleide-masterfile --simpleide-slavefile --slt
-            --snapshot --snet --sound --sound-device --sound-force-8bit
+            --snapshot --snet --sound --sound-device
             --sound-freq --speaker-type --speccyboot --speccyboot-tap
             --specdrum --spectranet --spectranet-disable --speed
             --statusbar --tape

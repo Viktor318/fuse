@@ -597,7 +597,6 @@ static void fuse_show_help( void )
    "--kempston             Emulate the Kempston joystick on QAOP<space>.\n"
    "--loading-sound        Emulate the sound of tapes loading.\n"
    "--sound                Produce sound.\n"
-   "--sound-force-8bit     Generate 8-bit sound even if 16-bit is available.\n"
    "--slt                  Turn SLT traps on.\n"
    "--traps                Turn tape traps on.\n\n"
    "Other options:\n\n"

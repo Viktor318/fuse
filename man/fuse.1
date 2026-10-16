@@ -1555,6 +1555,15 @@ you can use
 to disable). Same as the Sound Options dialog's
 .I "Sound enabled"
 option.
+.PP
+To prevent some audio devices from cutting off tones after short silent
+passages, Fuse replaces exact-zero final audio samples with balanced,
+randomly oriented pairs of +1 and -1 in 16-bit PCM. Nonzero samples are
+unchanged, and the inserted noise has no accumulating DC bias. This affects
+both playback and recordings, independently of speaker type. It may keep a
+connected device unmuted, exposing its existing background hiss. It does not
+keep an audio stream running when playback stops, and may not prevent muting
+on devices with higher signal thresholds.
 .RE
 .PP
 .B \-d

@@ -49,6 +49,7 @@
 #include "sound/blipbuffer.h"
 #include "sound/output_mixer.h"
 #include "sound/source_synths.h"
+#include "sound/silence_noise.h"
 
 /* Do we have any of our sound devices available? */
 
@@ -62,6 +63,7 @@ int sound_stereo_ay = SOUND_STEREO_AY_NONE; /* local copy of settings_current.st
 int sound_framesiz;
 
 static int sound_channels;
+static sound_silence_noise silence_noise;
 
 /* The main buffers contain sources which bypass speaker processing. */
 Blip_Buffer *left_buf = NULL;
@@ -157,6 +159,7 @@ sound_init( const char *device )
   }
 
   sound_channels = sound_stereo_ay != SOUND_STEREO_AY_NONE ? 2 : 1;
+  sound_silence_noise_reset( &silence_noise );
   hz = ( float )sound_get_effective_processor_speed() /
                 machine_current->timings.tstates_per_frame;
   sound_framesiz = ( float )settings_current.sound_freq / hz + 1;
@@ -385,6 +388,9 @@ sound_advance_to( libspectrum_dword endpoint )
 
   if( count != frames * sound_channels ) fuse_abort();
   output_mixer_advance( elapsed, samples, count );
+  /* Keep short digital silences from triggering aggressive DAC auto-muting.
+     Apply to the final PCM, including recordings, not the speaker model. */
+  sound_silence_noise_apply( &silence_noise, samples, count, sound_channels );
   memcpy( frame_samples + frame_sample_count, samples,
           count * sizeof( *samples ) );
   frame_sample_count += count;

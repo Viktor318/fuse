@@ -97,7 +97,14 @@ unittests_alsapacingtest_LDADD =
 check-alsa-pacing: unittests/alsapacingtest
 	$(top_builddir)/unittests/alsapacingtest
 
-AUDIO_CHECK_TARGETS = check-sfifo check-pcm-fifo check-blip-preview \
+noinst_PROGRAMS += unittests/silencenoisetest
+unittests_silencenoisetest_SOURCES = unittests/silencenoisetest.c
+unittests_silencenoisetest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_silencenoisetest_LDADD =
+check-silence-noise: unittests/silencenoisetest
+	$(top_builddir)/unittests/silencenoisetest
+
+AUDIO_CHECK_TARGETS = check-silence-noise check-sfifo check-pcm-fifo check-blip-preview \
                      check-sound-renderer check-audio-pacing check-alsa-pacing
 
 if HAVE_ALSA_AUDIO

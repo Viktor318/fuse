@@ -58,6 +58,24 @@ the host cannot satisfy target checks. The explicit
 itself for the native host. `emconfigure` may nevertheless report
 `cross_compiling=no` because configure test programs can execute through Node.
 
+## Prepare the sources
+
+Install native build tools: a C compiler, make, Autoconf, Automake, Libtool,
+pkg-config, Perl, Flex, Bison, and Python 3. These run on the build host; do not
+install native SDL or libspectrum libraries to satisfy WebAssembly checks.
+
+For Git checkouts, generate the build machinery in both source trees. Run the
+following from their common parent directory:
+
+```sh
+(cd libspectrum && ./autogen.sh)
+(cd fuse && ./autogen.sh)
+```
+
+Release tarballs already contain the generated configure scripts. Use clean
+source trees and separate build directories; do not reuse native build outputs
+or objects compiled with a different SDK or threading configuration.
+
 ## Build libspectrum
 
 ```sh
@@ -227,6 +245,42 @@ Replacing the main loop with a browser-specific UI architecture is intentionally
 deferred.
 
 ## Testing
+
+### Clean container build
+
+The `emscripten/emsdk:6.0.12` image provides the pinned SDK but not all native
+build prerequisites. Create a build image using this Dockerfile:
+
+```dockerfile
+FROM emscripten/emsdk:6.0.12
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential autoconf automake libtool pkg-config perl flex bison python3 \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+Save it as `Dockerfile.emscripten` in the directory containing clean, adjacent
+`fuse` and `libspectrum` source trees, then build and run it:
+
+```sh
+docker build -f Dockerfile.emscripten -t fuse-emscripten:6.0.12 .
+docker run --rm -it -v "$PWD:/src" -w /src fuse-emscripten:6.0.12 bash
+```
+
+Run the source preparation and build commands above inside the container.
+The SDK is already active, so skip the emsdk installation steps. Use a separate
+copy of the source trees for each validation path; generated build files are
+written into the source trees as well as the build directories.
+
+Validate the publication script separately in another clean directory:
+
+```sh
+bash fuse/.github/scripts/build_emscripten.sh /src
+```
+
+A successful build must produce non-empty `fuse.html`, `fuse.js`, `fuse.wasm`,
+and `fuse.data` under `build/wasm/fuse`. Container builds check prerequisites
+and target-library isolation, not browser playback. Serve the artifacts over
+HTTP and test them in browsers as well.
 
 Browser checks should cover tape playback, Widget UI entry and exit, background
 playback, audio suspension/resumption, and sound-disabled operation. Browser

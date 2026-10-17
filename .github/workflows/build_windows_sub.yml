@@ -48,6 +48,10 @@ on:
         type: boolean
         required: false
         default: false
+      run_check:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   build:
@@ -446,6 +450,14 @@ jobs:
           #./coretest.exe
           echo "(skipped)"
           
+        shell: bash.exe --login --norc -eo pipefail -o igncr '{0}'
+
+      - name: (9b) Run unit tests
+        if: ${{ inputs.run_check }}
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          echo "Building and running tests .."
+          make check
         shell: bash.exe --login --norc -eo pipefail -o igncr '{0}'
 
       - name: (10) Create distribution file(s)

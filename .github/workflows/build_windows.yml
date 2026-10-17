@@ -33,6 +33,7 @@ jobs:
       verify_ui: "win32"
       verify_libxml2: "yes"
       verify_audio: "directsound"
+      run_check: true
 
   # Win32 / 2
   win32-ui-no-libxml2:
@@ -46,6 +47,7 @@ jobs:
       verify_ui: "win32"
       verify_libxml2: "no"
       verify_audio: "directsound"
+      run_check: true
 
   # Win32 / 3
   win32-ui-win32-sound:
@@ -59,6 +61,7 @@ jobs:
       verify_ui: "win32"
       verify_libxml2: "no"
       verify_audio: "win32sound"
+      run_check: true
 
   # Win32 / 4
   win32-ui-null-sound:
@@ -72,6 +75,7 @@ jobs:
       verify_ui: "win32"
       verify_libxml2: "no"
       verify_audio: "null"
+      run_check: true
 
   # SDL 2 UI + Sound
   sdl2-ui-sdl2-sound:
@@ -86,3 +90,4 @@ jobs:
       verify_libxml2: "no"
       verify_audio: "sdl"
       verify_other: "Using SDL: 2"
+      run_check: true

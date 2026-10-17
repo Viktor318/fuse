@@ -15,7 +15,9 @@ This builds all test binaries and runs them in sequence:
 
   unittests/displaytest
       Display write/dirty tests covering Sinclair, Timex, and
-      Pentagon screen modes.
+      Pentagon screen modes. Regression tests verify that refreshes
+      preserve stored image data for movie recording while forcing
+      unchanged screen and border chunks to redraw once.
 
   unittests/palcompositetest
       PAL composite scaler tests: pixel-format conversions (16-bit

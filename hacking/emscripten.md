@@ -1,47 +1,34 @@
 # Building Fuse for Emscripten
 
-Fuse can be built as a single-threaded WebAssembly application using the SDL 2
-Widget UI. This target deliberately provides the existing Fuse interface in a
-browser canvas; it does not provide browser file pickers, persistent storage,
-networking, or a JavaScript control API.
+You can build Fuse as a single-threaded WebAssembly application with the SDL 2
+Widget UI. This build shows the Fuse interface in a browser canvas.
+It does not include these features:
+
+- A browser file picker.
+- Storage that keeps data after you reload the page.
+- Network access.
+- A JavaScript control API.
 
 ## C11 atomics and threads
 
-Fuse's SDL sound FIFO uses lock-free C11 atomic unsigned integer indices with
-acquire/release ordering. Current Emscripten supports these operations without
-`-pthread` in a single-threaded build; they do not require shared WebAssembly
-memory or a pthread runtime. The FIFO unit tests pass in this configuration
-(the pthread stress test is skipped). Fuse's optional network thread is disabled
-for this target.
+Fuse and libspectrum use C11 atomic operations. These operations do not require
+threads in this build. Emscripten supports them without `-pthread` or shared
+WebAssembly memory. Fuse's network thread is disabled.
 
-When configured with `--with-fake-glib`, libspectrum uses three `atomic_flag`
-objects: one each for the global free lists in `myglib/ghash.c` and
-`myglib/gslist.c`, operated on by `atomic_lock()` and `atomic_unlock()` in
-`myglib/glock.c`. The only operations are
-`atomic_flag_test_and_set_explicit(..., memory_order_acquire)` and
-`atomic_flag_clear_explicit(..., memory_order_release)`. The locks make those
-global allocators safe if libspectrum is called from multiple native threads;
-they do not imply that Fuse needs threads at runtime.
+The libspectrum option `--with-fake-glib` enables internal memory allocation
+locks. These locks use `atomic_flag` operations with acquire/release ordering.
+They do not require a worker thread.
 
-Current Emscripten supports those operations in both configurations. In a
-normal single-threaded build Clang lowers them without requiring shared
-WebAssembly memory or a pthread runtime. With `-pthread`, it emits operations
-for shared memory and adds the worker/pthread runtime. The libspectrum
-configure link test checks the exact operations above and succeeds without
-`-pthread`. A clean libspectrum and Fuse build also compiles and links without
-it. Consequently this target does not use `-pthread`; enabling it would add a
-runtime requirement for `SharedArrayBuffer` and cross-origin isolation without
-providing a Fuse feature that needs a worker thread.
-
-Do not disable `stdatomic.h` for Emscripten. The historical
-`HAVE_STDATOMIC_H && !defined(__EMSCRIPTEN__)` workaround is obsolete.
+Do not add `-pthread`. It enables shared memory and a pthread runtime.
+The browser then requires `SharedArrayBuffer` and cross-origin isolation.
+This Fuse build does not need these features.
 
 ## Tested toolchain
 
 The local build and publication workflow target Emscripten 6.0.12.
 
-To use the workflow's SDK version, install and activate it with emsdk (replace
-the directory with your preferred location):
+Install and activate the SDK with emsdk. Run these commands in the directory
+where you want to install emsdk:
 
 ```sh
 git clone https://github.com/emscripten-core/emsdk.git
@@ -51,32 +38,44 @@ cd emsdk
 . ./emsdk_env.sh
 ```
 
-The commands assume clean, adjacent `libspectrum` and `fuse` source trees.
-They use separate build and installation directories so native libraries from
-the host cannot satisfy target checks. The explicit
-`--host=wasm32-unknown-emscripten` is required so libtool does not configure
-itself for the native host. `emconfigure` may nevertheless report
-`cross_compiling=no` because configure test programs can execute through Node.
+Put clean `libspectrum` and `fuse` source directories in the same parent
+directory. Use separate directories for build files and installed libraries.
+This keeps host libraries separate from WebAssembly libraries.
+
+Keep `--host=wasm32-unknown-emscripten` in the commands. This option selects
+WebAssembly instead of the host system for Libtool.
+
+The message `cross_compiling=no` is not an error. Node can run the configure
+test programs.
 
 ## Prepare the sources
 
-Install native build tools: a C compiler, make, Autoconf, Automake, Libtool,
-pkg-config, Perl, Flex, Bison, and Python 3. These run on the build host; do not
-install native SDL or libspectrum libraries to satisfy WebAssembly checks.
+Install these tools on the build host:
 
-For Git checkouts, generate the build machinery in both source trees. Run the
-following from their common parent directory:
+- A C compiler and make.
+- Autoconf, Automake, and Libtool.
+- pkg-config and Perl.
+- Flex and Bison.
+- Python 3.
+
+Do not use host SDL or libspectrum libraries for the WebAssembly build.
+
+For Git source directories, generate the configure scripts in both directories.
+Run these commands from their parent directory:
 
 ```sh
 (cd libspectrum && ./autogen.sh)
 (cd fuse && ./autogen.sh)
 ```
 
-Release tarballs already contain the generated configure scripts. Use clean
-source trees and separate build directories; do not reuse native build outputs
-or objects compiled with a different SDK or threading configuration.
+Release archives already contain the configure scripts.
+
+Use clean source directories and separate build directories. Do not reuse host
+build files. Do not reuse object files from a different SDK or threading mode.
 
 ## Build libspectrum
+
+Start in the parent directory that contains `libspectrum` and `fuse`.
 
 ```sh
 mkdir -p build/wasm/libspectrum build/wasm/prefix
@@ -96,7 +95,8 @@ emmake make install
 
 ## Build Fuse
 
-From the directory containing the two source trees:
+Return to the parent directory that contains `libspectrum` and `fuse`.
+Then run these commands:
 
 ```sh
 mkdir -p build/wasm/fuse
@@ -122,134 +122,152 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" \
 emmake make -j4
 ```
 
-Serve the build directory over HTTP rather than opening the HTML file directly:
+Start an HTTP server in the Fuse build directory. Do not open the HTML file
+with a `file://` URL.
 
 ```sh
 python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000/fuse.html`. Click the canvas to allow browser
-audio playback; press F1 to open the Widget menu. Audio may remain suspended
-until a user gesture.
+1. Open `http://localhost:8000/fuse.html` in a browser.
+2. Click the canvas to enable audio.
+3. Press F1 to open the Widget menu.
 
-No cross-origin isolation headers are needed for this single-threaded build.
-Do not add `-pthread` or `-sSHARED_MEMORY=1` to work around audio wait errors:
-the cooperative backend does not need them. When switching from a threaded
-experiment, rebuild both libspectrum and Fuse in clean build directories.
+The browser can keep audio stopped until you click the page.
 
-The build produces these publication-ready files:
+This single-threaded build does not require cross-origin isolation headers.
+
+The build produces these files. Keep them together when you publish the build:
 
 - `fuse.html`
 - `fuse.js`
 - `fuse.wasm`
 - `fuse.data`
 
-`fuse.data` contains the ROMs and UI resources installed by the normal Fuse
-build. It contains no demonstration tape and no special configuration file, so
-Fuse starts with its ordinary defaults.
+`fuse.data` contains the ROMs and UI files from the normal Fuse build.
+It does not contain a demonstration tape or a special configuration file.
+Fuse starts with its default settings.
 
 ## Manually publishing to GitHub Pages
 
-`.github/workflows/build_emscripten_pages.yml` builds and publishes this target
-only when manually dispatched. There are no push, tag, or scheduled triggers.
+Use `.github/workflows/build_emscripten_pages.yml` to build and publish the web
+version. You must start this workflow manually. A push, tag, or schedule does
+not start it.
 
 Before the first run:
 
 1. In the GitHub repository's **Settings → Pages**, select **GitHub Actions** as
    the build/deployment source.
-2. Ensure repository rules allow the workflow's `GITHUB_TOKEN` to push to
-   `gh-pages`. The workflow requests `contents: write` for its build job.
-3. Ensure the `github-pages` environment permits deployments from the branch
-   on which you run the workflow. Run the workflow from the default branch
-   containing these scripts; the source selections are separate inputs.
+2. Set the repository rules to let the workflow's `GITHUB_TOKEN` push to
+   `gh-pages`. The build job requests `contents: write` permission.
+3. Set the `github-pages` environment to permit deployment from the default
+   branch. Run the workflow from that branch. Use the workflow inputs to
+   select the source versions.
 
 In **Actions → Build and publish Fuse for the web → Run workflow**, select:
 
 - `fuse_ref=master` and `libspectrum_ref=master` to replace the current
   development build at `master/`.
-- Two explicit tags to add a release at
-  `releases/<fuse-tag>/<libspectrum-tag>/`. These are tags, not arbitrary branch
-  names or commit IDs. Mixing `master` with a tag is rejected. Tag names are
-  encoded as individual directory components if necessary.
+- Two tags to add a release at `releases/<fuse-tag>/<libspectrum-tag>/`.
+  Do not use branch names or commit IDs for a release.
+  Do not combine `master` with a tag. The workflow rejects this combination.
+  The workflow encodes tag names for use in directory names when necessary.
 
-Fuse is checked out from the repository running the workflow; libspectrum is
-checked out from `fuse-emulator/libspectrum`. Both selected sources must already
-support the documented Emscripten build. This does not backfill older releases
-or apply compatibility patches. The SDK is pinned to Emscripten 6.0.12.
+The workflow gets Fuse from the repository where it runs.
+It gets libspectrum from `fuse-emulator/libspectrum`.
+Both source versions must support these build instructions.
+The workflow does not change old releases or apply patches.
+It uses Emscripten 6.0.12.
 
-The workflow maintains the entire published tree on `gh-pages`, then uploads
-that tree as a Pages artifact and deploys it. This branch is storage, not the
-Pages build source: keep Pages configured for GitHub Actions. Existing releases
-are preserved; publishing an already present tag pair fails rather than
-replacing it. Do not use this branch for unrelated site content. Workflows are
-serialized using the `emscripten-pages` concurrency group; any other publishers
-must use the same group. GitHub concurrency keeps at most one pending run, so
-queue additional manual requests only after earlier runs have started.
+The workflow stores all published files on `gh-pages`.
+It uploads those files as a Pages artifact and deploys that artifact.
+Keep Pages configured to use GitHub Actions, not the `gh-pages` branch.
+Do not store unrelated site content on this branch.
 
-The site's root index lists builds. Each build includes the four application
-files (with `fuse.html` copied to `index.html`), source commit SHAs, SDK version,
-build timestamp, and licence/ROM notices. Assets remain alongside their HTML
-file and use relative URLs, including under a repository Pages subpath.
-There are no browser file pickers or persistent settings added by publication.
+The workflow keeps existing releases. It fails if you try to publish the same
+tag pair again. It does not replace that release.
 
-A successful history push followed by a failed Pages deployment can leave the
-stored tree newer than the live site. Re-run the failed deployment job, not the
-whole immutable release build. Pages storage and bandwidth limits still apply
-as the release archive grows. Review bundled ROM redistribution notices before
-making the site public.
+The `emscripten-pages` concurrency group permits one active publication job.
+Other publication workflows must use the same group.
+GitHub keeps no more than one pending run in this group.
+Wait until the previous run starts before you request another run.
 
-The shared build script can also build clean adjacent checkouts locally:
+The site's main index lists the builds. Each build includes:
+
+- The four application files, with `fuse.html` copied to `index.html`.
+- The source commit IDs and SDK version.
+- The build date and time.
+- The licence and ROM notices.
+
+The application files stay in the same directory as the HTML file.
+They use relative URLs, including when Pages uses a repository subdirectory.
+Publication does not add a file picker or storage for settings.
+
+A Pages deployment can fail after the workflow pushes files to `gh-pages`.
+The stored files can then be newer than the public site.
+Run the failed deployment job again. Do not run the full release build again.
+
+GitHub Pages limits storage and bandwidth. These limits also apply to the
+release archive. Read the ROM redistribution notices before you make the site
+public.
+
+You can also use the shared build script on your computer.
+First, activate the SDK with `. emsdk_env.sh`.
+Put clean `fuse` and `libspectrum` source directories in `SOURCE_ROOT`.
 
 ```sh
-# With emsdk_env.sh already sourced, and SOURCE_ROOT containing fuse/ and libspectrum/:
+# Run from SOURCE_ROOT, which contains fuse/ and libspectrum/.
 bash fuse/.github/scripts/build_emscripten.sh /absolute/path/to/SOURCE_ROOT
 ```
 
-Offline publication tests (no SDK required):
+To test the publication code, run this command from the Fuse source directory.
+These tests do not require the SDK.
 
 ```sh
 python3 .github/scripts/test_publish_emscripten.py
 ```
 
-## Deliberately disabled facilities
+## Disabled features
 
-- POSIX threads and sockets: browser networking is outside this milestone, and
-  Fuse has no remaining web-target runtime need for a thread.
-- Hardware joystick access: browser gamepad integration is not included yet;
-  keyboard input remains available.
+- POSIX threads and sockets. This build does not include network access.
+- Hardware joystick access. Use the keyboard instead.
 - libxml2 settings, bzip2 compression, libgcrypt, libaudiofile, libpng, and
-  desktop integration: omitted to keep the initial target self-contained and
-  free of accidental native dependencies. Zlib remains enabled because it is
-  required for compressed snapshot data. Fuse uses its built-in/default
-  settings and SDL 2 audio and display paths.
-- Internal unit tests: these are a non-interactive developer facility built
-  only with Fuse's null UI. `make check` on an interactive-UI build reports
-  that a null-UI build is required.
+  desktop integration. These features are not required for this build.
+  Zlib stays enabled for compressed snapshot data.
+  Fuse uses its default settings and SDL 2 audio and display code.
+- Internal unit tests. These tests require Fuse's null UI.
+  With an interactive UI, `make check` reports that a null-UI build is required.
 
 ## Audio pacing and browser scheduling
 
-The Emscripten target uses Asyncify because Fuse and the Widget UI retain their
-blocking main loop and delay calls. Audio producer waits use the cooperative
-`compat/emscripten/wait.c` backend: a short `emscripten_sleep()` yields to browser
-audio and input callbacks before the existing FIFO/admission predicates are
-checked again. The callback never sleeps, and timeout does not grant permission
-to overwrite queued PCM. Native builds retain their native wait/wake backends;
-the web build requires neither POSIX semaphores nor pthreads.
+Fuse and the Widget UI use blocking loops and delay calls.
+Asyncify lets these calls give control back to the browser.
 
-Browser timers may be throttled in background tabs. Audio may also be suspended
-until a user gesture; while waiting for consumption, the producer continues to
-yield so the browser can deliver that gesture. This does not promise emulation
-progress while audio consumption is suspended.
+The audio producer uses `compat/emscripten/wait.c` when it must wait.
+A short `emscripten_sleep()` call lets browser audio and input callbacks run.
+The producer then checks the audio buffer and admission conditions again.
+The audio callback never sleeps.
+A timeout does not permit the producer to overwrite queued PCM data.
 
-Replacing the main loop with a browser-specific UI architecture is intentionally
-deferred.
+Host builds keep their existing wait/wake code.
+The web build does not require POSIX semaphores or pthreads.
+
+Browsers can slow timers in background tabs.
+They can also stop audio until you click the page.
+The producer gives control back to the browser while it waits for audio.
+This lets the browser process your input.
+Emulation can stop while the browser does not consume audio.
+
+This build keeps the existing main loop. It does not use a browser-specific
+main loop.
 
 ## Testing
 
 ### Clean container build
 
-The `emscripten/emsdk:6.0.12` image provides the pinned SDK but not all native
-build prerequisites. Create a build image using this Dockerfile:
+The `emscripten/emsdk:6.0.12` image contains the SDK.
+It does not contain all required host build tools.
+Use this Dockerfile to add them:
 
 ```dockerfile
 FROM emscripten/emsdk:6.0.12
@@ -258,37 +276,57 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-Save it as `Dockerfile.emscripten` in the directory containing clean, adjacent
-`fuse` and `libspectrum` source trees, then build and run it:
+Save the file as `Dockerfile.emscripten` in the parent directory of clean
+`fuse` and `libspectrum` source directories.
+Run these commands from that parent directory:
 
 ```sh
 docker build -f Dockerfile.emscripten -t fuse-emscripten:6.0.12 .
 docker run --rm -it -v "$PWD:/src" -w /src fuse-emscripten:6.0.12 bash
 ```
 
-Run the source preparation and build commands above inside the container.
-The SDK is already active, so skip the emsdk installation steps. Use a separate
-copy of the source trees for each validation path; generated build files are
-written into the source trees as well as the build directories.
+In the container, run the source preparation and build commands above.
+Do not run the emsdk installation steps. The SDK is already active.
 
-Validate the publication script separately in another clean directory:
+Use separate copies of the sources to test each build method.
+The build writes files into the source directories and the build directories.
+
+To test the publication script, start another container with clean source
+copies. Run this command from `/src`:
 
 ```sh
 bash fuse/.github/scripts/build_emscripten.sh /src
 ```
 
-A successful build must produce non-empty `fuse.html`, `fuse.js`, `fuse.wasm`,
-and `fuse.data` under `build/wasm/fuse`. Container builds check prerequisites
-and target-library isolation, not browser playback. Serve the artifacts over
-HTTP and test them in browsers as well.
+Make sure that these files exist under `build/wasm/fuse` and are not empty:
 
-Browser checks should cover tape playback, Widget UI entry and exit, background
-playback, audio suspension/resumption, and sound-disabled operation. Browser
-timer throttling and audio policies vary, so check responsiveness as well as
-audible continuity.
+- `fuse.html`
+- `fuse.js`
+- `fuse.wasm`
+- `fuse.data`
 
-A focused cooperative wait regression can run under Node (from a configured
-Fuse source directory, with the SDK active):
+Container builds check the required tools and library selection.
+They do not test browser playback.
+Use an HTTP server to test the files in browsers.
+
+### Browser tests
+
+Check that the interface responds and audio has no unwanted breaks.
+Test these conditions:
+
+- Play a tape.
+- Open and close the Widget UI.
+- Switch to another application while playback continues.
+- Stop and restart browser audio.
+- Run with sound disabled.
+
+Browser timer limits and audio rules can differ between browsers.
+
+### Cooperative wait test
+
+This test runs under Node.
+First, activate the SDK and configure Fuse.
+Then run these commands from the Fuse source directory:
 
 ```sh
 emcc -O2 -sASYNCIFY -I. compat/emscripten/wait.c \
@@ -296,6 +334,6 @@ emcc -O2 -sASYNCIFY -I. compat/emscripten/wait.c \
 node /tmp/emscriptenwaittest.js
 ```
 
-It checks deadlines, already-published progress, and that a scheduled JavaScript
-callback can publish progress while the producer is waiting. It tests the wait
-mechanism, not SDL audio playback or audible quality.
+The test checks timeouts and progress notifications.
+It also checks that a JavaScript callback can run while the producer waits.
+It does not test SDL audio playback or sound quality.

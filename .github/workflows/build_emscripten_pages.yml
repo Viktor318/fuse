@@ -31,7 +31,7 @@ jobs:
     env:
       FUSE_REF: ${{ inputs.fuse_ref }}
       LIBSPECTRUM_REF: ${{ inputs.libspectrum_ref }}
-      EMSCRIPTEN_VERSION: 6.0.9
+      EMSCRIPTEN_VERSION: 6.0.12
     steps:
       - uses: actions/checkout@v4
 

@@ -38,14 +38,16 @@ Do not disable `stdatomic.h` for Emscripten. The historical
 
 ## Tested toolchain
 
-The procedure below was tested with Emscripten 6.0.9-git. Install and activate
-that version with emsdk (replace the directory with your preferred location):
+The local build and publication workflow target Emscripten 6.0.12.
+
+To use the workflow's SDK version, install and activate it with emsdk (replace
+the directory with your preferred location):
 
 ```sh
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-./emsdk install 6.0.9
-./emsdk activate 6.0.9
+./emsdk install 6.0.12
+./emsdk activate 6.0.12
 . ./emsdk_env.sh
 ```
 
@@ -108,7 +110,14 @@ Serve the build directory over HTTP rather than opening the HTML file directly:
 python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000/fuse.html`.
+Then open `http://localhost:8000/fuse.html`. Click the canvas to allow browser
+audio playback; press F1 to open the Widget menu. Audio may remain suspended
+until a user gesture.
+
+No cross-origin isolation headers are needed for this single-threaded build.
+Do not add `-pthread` or `-sSHARED_MEMORY=1` to work around audio wait errors:
+the cooperative backend does not need them. When switching from a threaded
+experiment, rebuild both libspectrum and Fuse in clean build directories.
 
 The build produces these publication-ready files:
 
@@ -148,7 +157,7 @@ In **Actions → Build and publish Fuse for the web → Run workflow**, select:
 Fuse is checked out from the repository running the workflow; libspectrum is
 checked out from `fuse-emulator/libspectrum`. Both selected sources must already
 support the documented Emscripten build. This does not backfill older releases
-or apply compatibility patches. The SDK is pinned to Emscripten 6.0.9.
+or apply compatibility patches. The SDK is pinned to Emscripten 6.0.12.
 
 The workflow maintains the entire published tree on `gh-pages`, then uploads
 that tree as a Pages artifact and deploys it. This branch is storage, not the
@@ -199,6 +208,40 @@ python3 .github/scripts/test_publish_emscripten.py
   only with Fuse's null UI. `make check` on an interactive-UI build reports
   that a null-UI build is required.
 
+## Audio pacing and browser scheduling
+
 The Emscripten target uses Asyncify because Fuse and the Widget UI retain their
-blocking main loop and delay calls. Replacing that loop with a browser-specific
-UI architecture is intentionally deferred.
+blocking main loop and delay calls. Audio producer waits use the cooperative
+`compat/emscripten/wait.c` backend: a short `emscripten_sleep()` yields to browser
+audio and input callbacks before the existing FIFO/admission predicates are
+checked again. The callback never sleeps, and timeout does not grant permission
+to overwrite queued PCM. Native builds retain their native wait/wake backends;
+the web build requires neither POSIX semaphores nor pthreads.
+
+Browser timers may be throttled in background tabs. Audio may also be suspended
+until a user gesture; while waiting for consumption, the producer continues to
+yield so the browser can deliver that gesture. This does not promise emulation
+progress while audio consumption is suspended.
+
+Replacing the main loop with a browser-specific UI architecture is intentionally
+deferred.
+
+## Testing
+
+Browser checks should cover tape playback, Widget UI entry and exit, background
+playback, audio suspension/resumption, and sound-disabled operation. Browser
+timer throttling and audio policies vary, so check responsiveness as well as
+audible continuity.
+
+A focused cooperative wait regression can run under Node (from a configured
+Fuse source directory, with the SDK active):
+
+```sh
+emcc -O2 -sASYNCIFY -I. compat/emscripten/wait.c \
+  unittests/emscriptenwaittest.c -o /tmp/emscriptenwaittest.js
+node /tmp/emscriptenwaittest.js
+```
+
+It checks deadlines, already-published progress, and that a scheduled JavaScript
+callback can publish progress while the producer is waiting. It tests the wait
+mechanism, not SDL audio playback or audible quality.

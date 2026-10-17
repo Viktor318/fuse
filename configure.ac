@@ -966,8 +966,10 @@ case "$host_os" in
 esac
 AM_CONDITIONAL(COMPAT_DARWIN, test "$compat_darwin" = yes)
 
-dnl Native notification support used by callback audio.
-if test "$audio_driver" = sdl || test "$audio_driver" = coreaudio; then
+dnl Native notification support used by callback audio. The single-threaded
+dnl web target uses cooperative Asyncify waits, not POSIX semaphores.
+if test "$ac_cv_c_emscripten" != yes &&
+   { test "$audio_driver" = sdl || test "$audio_driver" = coreaudio; }; then
   case "$host_os" in
     darwin*)
       AC_CHECK_HEADER([os/os_sync_wait_on_address.h], [],

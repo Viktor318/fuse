@@ -23,6 +23,9 @@
 fuse_SOURCES += unittests/helpers.c
 noinst_HEADERS += unittests/helpers.h
 
+# SDK-specific cooperative wait test; see hacking/emscripten.md for Node usage.
+EXTRA_DIST += unittests/emscriptenwaittest.c
+
 noinst_PROGRAMS += unittests/widgetutf8test
 unittests_widgetutf8test_SOURCES = unittests/widgetutf8test.c ui/widget/utf8.c
 unittests_widgetutf8test_LDADD =

@@ -1,4 +1,4 @@
-/* wait.h: single-waiter native notification and deadline compatibility
+/* wait.h: single-waiter notification and deadline compatibility
    Copyright (c) 2026 Fredrick Meunier
 
    This program is free software; you can redistribute it and/or modify
@@ -21,11 +21,13 @@
 #include <stdatomic.h>
 
 typedef struct compat_wait_t compat_wait_t;
-/* Opaque native-clock value; meaningful only to this implementation. */
+/* Opaque clock value; use only with this API's deadline operations. */
 typedef uint64_t compat_wait_deadline;
 
-/* Address waits atomically compare-and-park. Semaphore waits retain a token
-   instead; the caller must arrange its own final predicate/generation check.
+/* When nonzero, park must not miss progress published between the caller's
+   final generation check and waiting on the address. When zero, wake retains
+   a notification until consumed or discarded; the caller must arrange its own
+   final predicate/generation check after preparing to receive notifications.
    One waiter and serialized notifications are required. The address must be
    four-byte aligned and remain alive until waiters/notifiers are quiescent. */
 extern const int compat_wait_uses_address;
@@ -39,7 +41,9 @@ int compat_wait_expired( compat_wait_deadline end );
    address waits. Never call after the final predicate check. */
 int compat_wait_discard( compat_wait_t *wait );
 /* Return 0 or positive errno. Wake does not allocate, park, or acquire an
-   application mutex. Kernel implementations need not be hard realtime. */
+   application mutex; it is not required to provide hard realtime guarantees.
+   Park may return spuriously. Callers must recheck their progress/admission
+   predicate after every return; a timeout does not grant admission. */
 int compat_wait_wake( compat_wait_t *wait, _Atomic uint32_t *address );
 int compat_wait_park( compat_wait_t *wait, _Atomic uint32_t *address,
                       uint32_t expected, compat_wait_deadline end );

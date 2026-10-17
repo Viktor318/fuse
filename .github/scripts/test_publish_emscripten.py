@@ -40,7 +40,7 @@ class PublicationTest(unittest.TestCase):
             (self.build / name).write_text(name)
 
     def publish(self, fuse="master", libspectrum="master"):
-        publisher.publish(self.sources, self.site, fuse, libspectrum, "6.0.9")
+        publisher.publish(self.sources, self.site, fuse, libspectrum, "6.0.12")
 
     def test_master_replaced_releases_preserved(self):
         self.publish("fuse-1.9.2", "libspectrum-1.5.0")

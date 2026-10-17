@@ -22,7 +22,10 @@
 
 noinst_HEADERS += compat/getopt.h compat/wait.h
 
-## Native single-waiter notification (also linked by backend unit tests).
+## Single-waiter notification (also linked by backend unit tests).
+if EMSCRIPTEN
+COMPAT_WAIT_SOURCES = compat/emscripten/wait.c
+else
 if COMPAT_DARWIN
 COMPAT_WAIT_SOURCES = compat/darwin/wait.c
 else
@@ -30,6 +33,7 @@ if COMPAT_WIN32
 COMPAT_WAIT_SOURCES = compat/win32/wait.c
 else
 COMPAT_WAIT_SOURCES = compat/unix/wait.c
+endif
 endif
 endif
 

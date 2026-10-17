@@ -17,6 +17,8 @@ extern int tape_autoplay;
 extern int tape_autoplay_blocked;
 extern int tape_stop_pending;
 extern int trap_resume_pending;
+extern int trap_pzx_ready;
+int tape_trap_pzx_data( libspectrum_tape_block *block );
 
 int tape_autoload( libspectrum_machine hardware );
 int tape_play( int autoplay );

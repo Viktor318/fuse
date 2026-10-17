@@ -422,6 +422,99 @@ trap_load_special_cases_unittest( const libspectrum_byte *valid,
 }
 
 static int
+pzx_trap_unittest( void )
+{
+  libspectrum_tape *saved_tape = tape, *test = libspectrum_tape_alloc();
+  libspectrum_tape_block *pilot, *data, *pause, *leading_pause;
+  libspectrum_tape_cursor *reference;
+  libspectrum_tape_edge expected, actual;
+  libspectrum_dword *lengths = libspectrum_new( libspectrum_dword, 3 );
+  size_t *repeats = libspectrum_new( size_t, 3 );
+  libspectrum_word *zero = libspectrum_new( libspectrum_word, 2 );
+  libspectrum_word *one = libspectrum_new( libspectrum_word, 2 );
+  libspectrum_byte *bytes = libspectrum_new( libspectrum_byte, 4 );
+  libspectrum_word saved_af = AF, saved_af_ = AF_, saved_bc = BC;
+  libspectrum_word saved_de = DE, saved_hl = HL, saved_ix = IX, saved_pc = PC;
+  int saved_traps = settings_current.tape_traps;
+  int saved_ready = trap_pzx_ready, saved_resume = trap_resume_pending;
+  int saved_mic = tape_microphone, error = 0;
+  libspectrum_byte saved_memory[2];
+
+  saved_memory[0] = readbyte_internal( 0x8000 );
+  saved_memory[1] = readbyte_internal( 0x8001 );
+  pilot = libspectrum_tape_block_alloc( LIBSPECTRUM_TAPE_BLOCK_PULSE_SEQUENCE );
+  data = libspectrum_tape_block_alloc( LIBSPECTRUM_TAPE_BLOCK_DATA_BLOCK );
+  pause = libspectrum_tape_block_alloc( LIBSPECTRUM_TAPE_BLOCK_PAUSE );
+  leading_pause = libspectrum_tape_block_alloc( LIBSPECTRUM_TAPE_BLOCK_PAUSE );
+  libspectrum_tape_block_set_pause_tstates( leading_pause, 1234 );
+  lengths[0] = 2168; lengths[1] = 667; lengths[2] = 735;
+  repeats[0] = 3223; repeats[1] = repeats[2] = 1;
+  libspectrum_tape_block_set_count( pilot, 3 );
+  libspectrum_tape_block_set_pulse_lengths( pilot, lengths );
+  libspectrum_tape_block_set_pulse_repeats( pilot, repeats );
+  zero[0] = zero[1] = 855;
+  one[0] = one[1] = 1710;
+  bytes[0] = 0xff; bytes[1] = 0x12; bytes[2] = 0x34; bytes[3] = 0xd9;
+  libspectrum_tape_block_set_data( data, bytes );
+  libspectrum_tape_block_set_data_length( data, 4 );
+  libspectrum_tape_block_set_bits_in_last_byte( data, 8 );
+  libspectrum_tape_block_set_bit0_pulse_count( data, 2 );
+  libspectrum_tape_block_set_bit1_pulse_count( data, 2 );
+  libspectrum_tape_block_set_bit0_pulses( data, zero );
+  libspectrum_tape_block_set_bit1_pulses( data, one );
+  libspectrum_tape_block_set_level( data, 1 );
+  libspectrum_tape_block_set_tail_length( data, 945 );
+  libspectrum_tape_block_set_pause_tstates( pause, 3500000 );
+  error |= !tape_trap_pzx_data( data ) || tape_trap_pzx_data( pilot ) ||
+           tape_trap_pzx_data( NULL );
+  libspectrum_tape_block_set_data_length( data, 1 );
+  error |= tape_trap_pzx_data( data );
+  libspectrum_tape_block_set_data_length( data, 4 );
+  libspectrum_tape_block_set_bits_in_last_byte( data, 7 );
+  error |= tape_trap_pzx_data( data );
+  libspectrum_tape_block_set_bits_in_last_byte( data, 8 );
+  zero[1] = 856;
+  error |= tape_trap_pzx_data( data );
+  zero[1] = 855;
+  libspectrum_tape_block_set_bit1_pulse_count( data, 1 );
+  error |= tape_trap_pzx_data( data );
+  libspectrum_tape_block_set_bit1_pulse_count( data, 2 );
+  libspectrum_tape_append_block( test, leading_pause );
+  libspectrum_tape_append_block( test, pilot );
+  libspectrum_tape_append_block( test, data );
+  libspectrum_tape_append_block( test, pause );
+  tape = test;
+  libspectrum_tape_nth_block( tape, 0 );
+  reference = libspectrum_tape_cursor_capture( tape );
+  for( size_t i = 0; i < 1 + 3225 + 64; i++ )
+    error |= libspectrum_tape_cursor_get_next_edge( &expected, reference );
+  error |= libspectrum_tape_cursor_get_next_edge( &expected, reference );
+  settings_current.tape_traps = 1;
+  trap_pzx_ready = trap_resume_pending = 0;
+  A_ = 0xff; F_ = FLAG_C; DE = 2; IX = 0x8000;
+  error |= tape_load_trap();
+  error |= DE != 0 || IX != 0x8002 || !( F & FLAG_C ) ||
+           readbyte_internal( 0x8000 ) != 0x12 ||
+           readbyte_internal( 0x8001 ) != 0x34 || !trap_resume_pending;
+  error |= libspectrum_tape_current_block( tape ) != data;
+  error |= libspectrum_tape_get_next_edge( &actual, tape );
+  error |= actual.tstates != expected.tstates || actual.level != expected.level ||
+           actual.flags != expected.flags;
+  libspectrum_tape_cursor_free( reference );
+  tape = saved_tape;
+  libspectrum_tape_free( test );
+  settings_current.tape_traps = saved_traps;
+  trap_pzx_ready = saved_ready; trap_resume_pending = saved_resume;
+  tape_microphone = saved_mic;
+  writebyte_internal( 0x8000, saved_memory[0] );
+  writebyte_internal( 0x8001, saved_memory[1] );
+  AF = saved_af; AF_ = saved_af_; BC = saved_bc;
+  DE = saved_de; HL = saved_hl; IX = saved_ix; PC = saved_pc;
+  if( error ) printf( "pzx_trap_unittest failed\n" );
+  return error;
+}
+
+static int
 trap_load_unittest( void )
 {
   static const libspectrum_byte valid[] = { 0xff, 0x12, 0x34, 0xd9 };
@@ -1095,6 +1188,7 @@ tape_unittest( void )
   if( !error ) error = check_pause_playback();
   if( !error ) error = tape_block_details_unittest();
   if( !error ) error = trap_load_unittest();
+  if( !error ) error = pzx_trap_unittest();
   if( !error ) error = tape_record_unittest();
   if( !error ) error = tape_record_lifecycle_unittest();
   if( !error ) error = tape_record_rzx_exclusion_unittest();

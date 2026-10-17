@@ -69,6 +69,8 @@ int tape_autoplay;
 
 /* Is playback positioned at a pause reached by a tape trap? */
 int trap_resume_pending;
+/* DATA1 also describes mid-byte playback; require a known block boundary. */
+int trap_pzx_ready;
 
 /* Has the tape reached a point which requires an explicit user action? */
 int tape_autoplay_blocked;
@@ -140,6 +142,7 @@ tape_init( void *context )
   tape_stop_pending = 0;
   tape_autoplay_blocked = 0;
   trap_resume_pending = 0;
+  trap_pzx_ready = 0;
 
   next_tape_edge_tstates = 0;
   
@@ -201,6 +204,7 @@ tape_read_buffer( unsigned char *buffer, size_t length, libspectrum_id_t type,
 
   tape_autoplay_blocked = 0;
   trap_resume_pending = 0;
+  trap_pzx_ready = 0;
   tape_modified = 0;
   tape_clock_remainder = 0;
   next_tape_edge_tstates = 0;
@@ -254,6 +258,7 @@ tape_close( void )
   if( error ) return error;
 
   tape_modified = 0;
+  trap_pzx_ready = 0;
   trap_resume_pending = 0;
   tape_clock_remainder = 0;
   next_tape_edge_tstates = 0;
@@ -289,6 +294,7 @@ tape_select_block( size_t n )
 int
 tape_select_block_no_update( size_t n )
 {
+  trap_pzx_ready = 0;
   trap_resume_pending = 0;
   tape_clock_remainder = 0;
   next_tape_edge_tstates = 0;
@@ -380,7 +386,11 @@ tape_play( int autoplay )
 
   /* Otherwise, start the tape going */
   tape_playing = 1;
+  trap_pzx_ready = 0;
   tape_autoplay = autoplay && !trap_resume_pending;
+  if( trap_resume_pending &&
+      tape_trap_pzx_data( libspectrum_tape_current_block( tape ) ) )
+    trap_resume_pending = 0;
   {
     libspectrum_tape_signal_level level;
     if( !libspectrum_tape_signal_level_get( &level, tape ) )
@@ -517,8 +527,10 @@ tape_handle_stop_request( const libspectrum_tape_edge *edge )
 int
 tape_should_stop_for_rom_block( libspectrum_tape_block *block )
 {
-  return tape_autoplay && settings_current.tape_traps && !rzx_recording &&
-         libspectrum_tape_block_type( block ) == LIBSPECTRUM_TAPE_BLOCK_ROM;
+  return tape_autoplay && settings_current.tape_traps &&
+         !rzx_recording && !rzx_playback &&
+         ( libspectrum_tape_block_type( block ) == LIBSPECTRUM_TAPE_BLOCK_ROM ||
+           tape_trap_pzx_data( block ) );
 }
 
 static int
@@ -539,6 +551,7 @@ tape_handle_block_end( const libspectrum_tape_edge *edge )
   block = libspectrum_tape_current_block( tape );
   if( tape_should_stop_for_rom_block( block ) ) {
     tape_stop();
+    trap_pzx_ready = tape_trap_pzx_data( block );
     return 1;
   }
   return 0;

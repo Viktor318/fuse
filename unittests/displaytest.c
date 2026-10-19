@@ -270,6 +270,7 @@ create_fake_machine( void )
 static void
 test_before( void )
 {
+  memory_current_screen = 0;
   memset( display_force_redraw, 0, sizeof( display_force_redraw ) );
   memset( RAM[0], 0, ARRAY_SIZE( RAM[0] ) );
   memset( display_last_screen, 0, sizeof( display_last_screen ) );

@@ -22,6 +22,9 @@
 #include "ui/ui.h"
 #include "utils.h"
 
+/* CRC32 checksum of a byte buffer, shared by automation.c and artifacts.c */
+unsigned long automation_checksum( const unsigned char *data, size_t length );
+
 typedef struct automation_condition { int present; libspectrum_word address;
                                       unsigned long ignore, hits;
 } automation_condition;

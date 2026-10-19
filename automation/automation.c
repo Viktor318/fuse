@@ -304,8 +304,8 @@ automation_exit_status( void )
          result.termination == AUTOMATION_TERMINATION_ERROR ? 1 : 0;
 }
 
-static uLong
-checksum( const unsigned char *data, size_t length )
+unsigned long
+automation_checksum( const unsigned char *data, size_t length )
 {
   uLong value = crc32( 0, Z_NULL, 0 );
   while( length ) {
@@ -326,7 +326,7 @@ automation_record_tape( const utils_file *file )
     return;
 
   tape_size = libspectrum_file_size( file );
-  tape_crc32 = checksum( libspectrum_file_data( file ), tape_size );
+  tape_crc32 = automation_checksum( libspectrum_file_data( file ), tape_size );
   tape_recorded = 1;
   name = libspectrum_file_name( file );
   libspectrum_free( tape_name );
@@ -338,7 +338,7 @@ record_file( const utils_file *file, uLong *crc, size_t *size, char **name )
 {
   const char *source = libspectrum_file_name( file );
   *size = libspectrum_file_size( file );
-  *crc = checksum( libspectrum_file_data( file ), *size );
+  *crc = automation_checksum( libspectrum_file_data( file ), *size );
   libspectrum_free( *name );
   *name = utils_safe_strdup( source );
 }
@@ -483,7 +483,7 @@ static void
 write_crc32( automation_json *json, const unsigned char *data, size_t length )
 {
   char text[9];
-  snprintf( text, sizeof( text ), "%08lx", checksum( data, length ) );
+  snprintf( text, sizeof( text ), "%08lx", automation_checksum( data, length ) );
   automation_json_string( json, "crc32", text );
 }
 

@@ -298,6 +298,11 @@ test_before( void )
 static void
 timex_test_before( libspectrum_byte scld_byte )
 {
+  /* The Sinclair tests read RAM[0] through display_write_if_dirty_sinclair(),
+     so they require memory_current_screen to be 0. It may have been left at 5
+     (or 7) by the timex/pentagon test_before helpers used in earlier tests
+     (e.g. refresh_redraws_unchanged_cells), so reset it here. */
+  memory_current_screen = 0;
   memset( display_force_redraw, 0, sizeof( display_force_redraw ) );
   memset( RAM[0], 0, ARRAY_SIZE( RAM[0] ) );
   memset( display_last_screen, 0, sizeof( display_last_screen ) );

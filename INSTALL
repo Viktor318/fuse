@@ -97,7 +97,7 @@ the lib's homepage for help.
 
 1) On Linux, first build libspectrum:
 
-./configure --host=i686-w64-mingw32 --without-libaudiofile --without-zlib \
+./configure --host=i686-w64-mingw32 --without-zlib \
             --without-libgcrypt --without-bzip2 --with-fake-glib --prefix=`pwd`
 make install
 
@@ -119,7 +119,7 @@ likely it is located in /usr/i686-w64-mingw32/lib/
 
 2) On Windows, using MSYS2 + Mingw-w64 toolchain, first build libspectrum:
 
-./configure --with-fake-glib --without-libaudiofile --without-libgcrypt \
+./configure --with-fake-glib --without-libgcrypt \
             --without-zlib --without-bzip2 --prefix=/usr/local
 make install
 
@@ -133,7 +133,7 @@ make
 3) On Windows, using Cygwin + Mingw-w64 toolchain, first build libspectrum:
 
 ./configure --build=i686-pc-cygwin --host=i686-w64-mingw32 --with-fake-glib \
-            --without-libaudiofile --without-libgcrypt --without-zlib \
+            --without-libgcrypt --without-zlib \
             --without-bzip2 --prefix=/usr/local/i686-w64-mingw32
 make install
 

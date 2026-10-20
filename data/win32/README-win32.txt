@@ -17,12 +17,9 @@ These binaries are built with the MinGW/Cygwin packages used by the current
 Windows CI workflow. Depending on the selected UI and enabled features, the
 package may include DLLs from these components:
 
-    audiofile
     bzip2
-    libFLAC
     libgcrypt
     libgpg-error
-    libOGG
     libpng
     libspectrum
     libstdc++

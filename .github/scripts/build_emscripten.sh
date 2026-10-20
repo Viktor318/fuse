@@ -14,7 +14,7 @@ emconfigure "$ROOT/libspectrum/configure" \
   --host=wasm32-unknown-emscripten --prefix="$PREFIX" \
   --disable-shared --enable-static \
   --with-zlib --without-bzip2 --without-libgcrypt \
-  --without-libaudiofile --with-wav-backend=none --with-fake-glib \
+  --with-wav-backend=pcm --with-fake-glib \
   CFLAGS='-O2' LDFLAGS='-sUSE_ZLIB'
 emmake make -j"$JOBS"
 emmake make install

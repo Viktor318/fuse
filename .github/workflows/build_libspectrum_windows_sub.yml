@@ -23,10 +23,6 @@ on:
         type: boolean
         required: false
         default: true
-      use_libaudiofile:
-        type: boolean
-        required: false
-        default: true
 
 jobs:
   build:
@@ -59,7 +55,6 @@ jobs:
           echo "Use lib zlib: ${{ inputs.use_zlib && 'yes' || 'no' }}"
           echo "Use lib bzip2: ${{ inputs.use_bzip2 && 'yes' || 'no' }}"
           echo "Use lib libgcrypt: ${{ inputs.use_libgcrypt && 'yes' || 'no' }}"
-          echo "Use lib libaudiofile: ${{ inputs.use_libaudiofile && 'yes' || 'no' }}"
 
       - name: (2) Clone libspectrum source
         run: |
@@ -97,7 +92,6 @@ jobs:
           work-vol: ${{ steps.cygwin-cache-path.outputs.work-vol }}
           platform: x86
           packages: |
-            audiofile
             autoconf
             automake
             bison
@@ -106,9 +100,7 @@ jobs:
             gcc-g++
             gettext-devel
             libtool
-            libaudiofile-devel
             make
-            mingw64-i686-audiofile
             mingw64-i686-bzip2
             mingw64-i686-gcc-core
             mingw64-i686-gcc-g++
@@ -148,7 +140,6 @@ jobs:
           ${{ inputs.use_zlib == false && '--without-zlib' || '' }} \
           ${{ inputs.use_bzip2 == false && '--without-bzip2' || '' }} \
           ${{ inputs.use_libgcrypt == false && '--without-libgcrypt' || '' }} \
-          ${{ inputs.use_libaudiofile == false && '--without-libaudiofile' || '' }} \
           | tee ./configure.out
 
       - name: (8) Verify output from configure
@@ -159,7 +150,6 @@ jobs:
           .github/scripts/in_config.sh "zlib support: ${{ inputs.use_zlib && 'yes' || 'no' }}"
           .github/scripts/in_config.sh "bzip2 support: ${{ inputs.use_bzip2 && 'yes' || 'no' }}"
           .github/scripts/in_config.sh "libgcrypt support: ${{ inputs.use_libgcrypt && 'yes' || 'no' }}"
-          .github/scripts/in_config.sh "libaudiofile support: ${{ inputs.use_libaudiofile && 'yes' || 'no' }}"
           .github/scripts/in_config.sh "Internal GLib replacement: yes"
 
       - name: (9) Make
@@ -190,9 +180,6 @@ jobs:
           ${{ inputs.use_zlib         && 'cp -f ${CYGWIN_LIBDIR}zlib1.dll .'          || ''}}
           ${{ inputs.use_bzip2        && 'cp -f ${CYGWIN_LIBDIR}libbz2-1.dll .'       || ''}}
           ${{ inputs.use_libgcrypt    && 'cp -f ${CYGWIN_LIBDIR}libgcrypt-20.dll .'   || ''}}
-          ${{ inputs.use_libaudiofile && 'cp -f ${CYGWIN_LIBDIR}libaudiofile-1.dll .' || ''}}
-          ${{ inputs.use_libaudiofile && 'cp -f ${CYGWIN_LIBDIR}libFLAC-8.dll .'      || ''}}
-          ${{ inputs.use_libaudiofile && 'cp -f ${CYGWIN_LIBDIR}libOGG-0.dll .'       || ''}}
 
           echo "Copying own dll.."
           cp -f .libs/libspectrum-*.dll .

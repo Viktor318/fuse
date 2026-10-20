@@ -86,7 +86,7 @@ emconfigure ../../../libspectrum/configure \
   --prefix="$(cd ../prefix && pwd)" \
   --disable-shared --enable-static \
   --with-zlib --without-bzip2 --without-libgcrypt \
-  --without-libaudiofile --with-wav-backend=none \
+  --with-wav-backend=pcm \
   --with-fake-glib \
   CFLAGS='-O2' LDFLAGS='-sUSE_ZLIB'
 emmake make -j4
@@ -231,7 +231,7 @@ python3 .github/scripts/test_publish_emscripten.py
 
 - POSIX threads and sockets. This build does not include network access.
 - Hardware joystick access. Use the keyboard instead.
-- libxml2 settings, bzip2 compression, libgcrypt, libaudiofile, libpng, and
+- libxml2 settings, bzip2 compression, libgcrypt, libpng, and
   desktop integration. These features are not required for this build.
   Zlib stays enabled for compressed snapshot data.
   Fuse uses its default settings and SDL 2 audio and display code.

@@ -152,7 +152,6 @@ jobs:
             mingw64-i686-win-iconv
             mingw64-i686-winpthreads
             mingw64-i686-zlib
-            mingw64-i686-audiofile
             pkg-config
             ${{ inputs.dependencies }}
 
@@ -324,11 +323,6 @@ jobs:
           # libgcrypt dlls
           cp ${CYGWIN_LIBDIR}libgcrypt-20.dll $DEST_DIR || true
           
-          # Audiofile dlls
-          cp ${CYGWIN_LIBDIR}libaudiofile-1.dll $DEST_DIR || true
-          cp ${CYGWIN_LIBDIR}libFLAC-8.dll $DEST_DIR || true
-          cp ${CYGWIN_LIBDIR}libOGG-0.dll $DEST_DIR || true
-          
           # LibXML2 dlls
           cp ${CYGWIN_LIBDIR}libxml2-2.dll $DEST_DIR || true
           cp ${CYGWIN_LIBDIR}iconv.dll $DEST_DIR || true
@@ -413,9 +407,6 @@ jobs:
           copy_notice_files mingw64-i686-libpng
           copy_notice_files mingw64-i686-zlib
           copy_notice_files mingw64-i686-bzip2
-          copy_notice_files mingw64-i686-audiofile
-          copy_notice_files mingw64-i686-flac
-          copy_notice_files mingw64-i686-libogg
           copy_notice_files mingw64-i686-libxml2
           copy_notice_files mingw64-i686-win-iconv
           copy_notice_files mingw64-i686-xz

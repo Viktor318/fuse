@@ -80,6 +80,7 @@ int automation_set_failure_pc_ignore( const char *text );
 
 int automation_validate_scenario( void );
 int automation_active( void );
+int automation_pc_check_active( void );
 void automation_arm( unsigned long frame_count );
 int automation_check_pc( libspectrum_word pc );
 int automation_frame_limit_reached( unsigned long frame_count );

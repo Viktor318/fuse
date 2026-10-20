@@ -232,6 +232,16 @@ automation_active( void )
   return scenario.output_directory != NULL;
 }
 
+/* Whether the PC-boundary automation check needs to run. When no success or
+   failure PC is configured (e.g. a pure frame-count or RZX-completion run),
+   automation_check_pc() would only be called per-opcode and immediately
+   return, so gating it off avoids that per-opcode call overhead. */
+int
+automation_pc_check_active( void )
+{
+  return scenario.success.present || scenario.failure.present;
+}
+
 void
 automation_arm( unsigned long frame_count )
 {

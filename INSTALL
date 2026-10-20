@@ -13,11 +13,15 @@ There are now some options you can give to configure; `configure
 
 --with-fb		Use the framebuffer interface, rather than GTK.
 --with-sdl		Use the SDL2 interface, rather than GTK.
+--with-null-ui		Use the null user interface (headless builds and CI).
 --without-gtk		Use the plain Xlib interface.
 
 If glib is installed on your system, Fuse will use this for a couple
 of things; however, it isn't necessary as libspectrum provides
 replacements for all the routines used by Fuse.
+
+The `--enable-automation` option enables the development automation
+interface used by the CI unit-test runs; it requires zlib.
 
 Another useful option is `--with-local-prefix=DIRECTORY' which allows
 you to specify that you have some of the libraries needed by Fuse in

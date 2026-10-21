@@ -99,6 +99,9 @@ int sound_normal_producer_context( void ) { return 1; }
 int ui_error( ui_error_level level, const char *message, ... )
 { (void)level; (void)message; return 0; }
 
+int ui_error_console( ui_error_level level, const char *message, ... )
+{ (void)level; (void)message; return 0; }
+
 static void
 transfers( unsigned int width )
 {
@@ -193,6 +196,11 @@ static void wake_consume( unsigned int frames )
 #define AUDIO_WAKE_THREADS
 #endif
 #include "audio-wakeup-cases.h"
+
+#ifdef main
+/* SDL headers redefine main on Windows, but this test needs a normal entry point. */
+#undef main
+#endif
 
 int main( int argc, char **argv )
 {

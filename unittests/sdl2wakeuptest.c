@@ -34,6 +34,7 @@
                                    #x ); exit( 1 ); \
                         } } while( 0 )
 static SDL_AudioCallback callback;
+static unsigned int output_errors, injected_timeouts;
 static int wake_before_wait( audio_progress_deadline );
 static SDL_AudioDeviceID
 mock_open( const char *name, int capture, const SDL_AudioSpec *want,
@@ -48,6 +49,10 @@ static int
 mock_wait( struct audio_progress *p, uint32_t generation,
            audio_progress_deadline end )
 {
+  if( injected_timeouts ) {
+    injected_timeouts--;
+    return ETIMEDOUT;
+  }
   if( wake_before_wait( end ) ) return 0;
   return audio_progress_wait( p, generation, end );
 }
@@ -84,7 +89,13 @@ sound_normal_producer_context( void )
 int
 ui_error( ui_error_level level, const char *message, ... )
 {
-  (void)level; (void)message; return 0;
+  (void)level; (void)message; output_errors++; return 0;
+}
+
+int
+ui_error_console( ui_error_level level, const char *message, ... )
+{
+  (void)level; (void)message; output_errors++; return 0;
 }
 
 static void
@@ -103,11 +114,81 @@ wake_consume( unsigned int frames )
 #define AUDIO_WAKE_THREADS
 #endif
 #include "audio-wakeup-cases.h"
+static void
+stalled_consumer( void )
+{
+  libspectrum_signed_word sample = 123;
+  unsigned int errors = output_errors;
+
+  /* Native 10 ms timeouts are not themselves fatal. */
+  wake_fixture( 2047, 2047 );
+  wake_deadline_valid = -1;
+  injected_timeouts = 3;
+  wake_steps[0] = 1; wake_count = 1;
+  settings_current.sound = 1;
+  sound_lowlevel_frame( &sample, 1 );
+  CHECK( !audio_failed && settings_current.sound && output_errors == errors );
+  sound_lowlevel_end();
+
+  /* No callback at all: admission must return without granting capacity or
+     closing the device. Subsequent production is inert, even if re-enabled. */
+  wake_fixture( 2047, 2047 );
+  wake_deadline_valid = -1;
+  settings_current.sound = 1;
+  compat_wait_deadline deadline = compat_wait_until( 4000 );
+  CHECK( !sound_lowlevel_reserve( 240 ) );
+  CHECK( !compat_wait_expired( deadline ) );
+  CHECK( audio_failed && !settings_current.sound );
+  CHECK( output_errors == ++errors && audio_device );
+  CHECK( pcm_fifo_consumer_used( &sound_fifo, 2 ) == 2047 );
+  settings_current.sound = 1;
+  CHECK( !sound_lowlevel_reserve( 240 ) );
+  sound_lowlevel_frame( &sample, 1 );
+  CHECK( output_errors == errors );
+  CHECK( pcm_fifo_consumer_used( &sound_fifo, 2 ) == 2047 );
+  /* A late callback still has valid storage. */
+  wake_consume( 512 );
+  CHECK( pcm_fifo_consumer_used( &sound_fifo, 2 ) == 1535 );
+  sound_lowlevel_end();
+  CHECK( audio_device && sound_fifo.buffer );
+  /* Mock device is quiescent; permit test-only cleanup. Real stalled devices
+     remain retained, and cannot be reopened safely. */
+  audio_failed = 0;
+  sound_lowlevel_end();
+
+  /* The defensive partial-write path needs the same watchdog. */
+  wake_fixture( 2047, 2047 );
+  CHECK( !audio_failed );
+  wake_deadline_valid = -1;
+  settings_current.sound = 1;
+  deadline = compat_wait_until( 4000 );
+  sound_lowlevel_frame( &sample, 1 );
+  CHECK( !compat_wait_expired( deadline ) );
+  CHECK( audio_failed && !settings_current.sound );
+  CHECK( output_errors == ++errors );
+  CHECK( pcm_fifo_consumer_used( &sound_fifo, 2 ) == 2047 );
+  sound_lowlevel_end();
+  CHECK( audio_device && sound_fifo.buffer );
+  audio_failed = 0;
+  sound_lowlevel_end();
+  wake_fixture( 0, 2047 );
+  CHECK( !audio_failed );
+  wake_publish( 240 );
+  CHECK( pcm_fifo_consumer_used( &sound_fifo, 2 ) == 240 );
+  sound_lowlevel_end();
+}
+
+#ifdef main
+/* SDL headers redefine main on Windows, but this test needs a normal entry point. */
+#undef main
+#endif
+
 int
 main( void )
 {
   test_machine.timings.tstates_per_frame = 70000;
   wake_regressions();
+  stalled_consumer();
 #ifdef AUDIO_WAKE_THREADS
   wake_threaded();
 #endif

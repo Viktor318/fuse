@@ -31,6 +31,7 @@ sfifo_t sound_fifo;
 
 static SDL_AudioDeviceID audio_device;
 static int audio_output_started;
+static int audio_failed;
 static struct audio_pacing pacing;
 static struct audio_progress progress;
 _Static_assert( SFIFO_MAX_BUFFER_SIZE < UINT32_MAX - 2,
@@ -142,6 +143,7 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   }
   progress_initialized = 1;
   audio_output_started = 0;
+  audio_failed = 0;
 
   return 0;
 }
@@ -149,6 +151,10 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
 void
 sound_lowlevel_end( void )
 {
+  /* SDL provides no bounded close for a wedged callback. Retain the device
+     and its storage rather than deadlocking pause/menu handling or freeing
+     memory a late callback can still access. Reinit will refuse this device. */
+  if( audio_failed ) return;
   if( audio_device ) {
     SDL_PauseAudioDevice( audio_device, 1 );
     SDL_LockAudioDevice( audio_device );
@@ -174,13 +180,63 @@ sound_lowlevel_end( void )
   pacing.ready = false;
 }
 
+/* A bounded native park alone cannot detect a dead consumer: its caller
+   would simply retry forever. Watch actual FIFO consumption, not notifications
+   (which can be spurious), across those retries. Two seconds is a failure
+   guard, not a pacing target. Leave the device and callback storage intact:
+   closing a wedged SDL device here could block on the very same audio lock. */
+static int
+sdl2_wait_for_space( unsigned int frames, int admission )
+{
+  compat_wait_deadline end = compat_wait_until( 2000 );
+  int previous = pcm_fifo_producer_space( &sound_fifo, bytes_per_frame );
+  for(;;) {
+    int available = admission ?
+      audio_pacing_can_admit( &pacing, &sound_fifo, bytes_per_frame, frames ) :
+      pcm_fifo_producer_space( &sound_fifo, bytes_per_frame );
+    int space, error;
+    if( available < 0 ) return available;
+    if( admission ? available : (unsigned int)available >= frames ) return 0;
+    space = pcm_fifo_producer_space( &sound_fifo, bytes_per_frame );
+    if( space < 0 ) return space;
+    if( space > previous ) end = compat_wait_until( 2000 );
+    previous = space;
+    if( compat_wait_expired( end ) ) return -ETIMEDOUT;
+    error = audio_pacing_wait( &pacing, &progress, &sound_fifo,
+                               bytes_per_frame, frames, admission );
+    if( error ) return error;
+  }
+}
+
+static void
+sdl2_output_failed( int error )
+{
+  if( audio_failed ) return;
+  audio_failed = 1;
+  /* Keep synthesis/recording alive and restore wall-clock timer pacing. */
+  settings_current.sound = 0;
+  /* A modal warning pauses emulation and would try to close SDL audio. */
+  ui_error_console( UI_ERROR_WARNING, "SDL audio output disabled: %s",
+                    strerror( -error ) );
+}
+
 int
 sound_lowlevel_reserve( unsigned int frames )
 {
-  return audio_pacing_reserve( &pacing, &progress, &sound_fifo,
-                              bytes_per_frame, frames,
-                              sound_normal_producer_context(),
-                              audio_output_started );
+  int error;
+  if( audio_failed ) return 0;
+  error = audio_pacing_pending( &pacing, &sound_fifo, bytes_per_frame, frames,
+                                sound_normal_producer_context(),
+                                audio_output_started );
+  if( error ) return error;
+  error = sdl2_wait_for_space( frames, 1 );
+  if( error == -ETIMEDOUT ) {
+    sdl2_output_failed( error );
+    return 0;
+  }
+  if( error ) return error;
+  if( frames && pacing.ready ) pacing.reserved = true;
+  return 0;
 }
 
 void
@@ -189,6 +245,7 @@ sound_lowlevel_frame( libspectrum_signed_word *data, int len )
   int i = 0;
   const char *bytes = (const char *)data;
 
+  if( audio_failed ) return;
   if( len < 0 || !audio_channels || len % audio_channels ) {
     ui_error( UI_ERROR_ERROR, "Invalid SDL audio sample count" );
     return;
@@ -200,8 +257,7 @@ sound_lowlevel_frame( libspectrum_signed_word *data, int len )
                                    bytes, len, audio_output_started ) ) < 0 ) {
       break;
     } else if( !i ) {
-      int error = audio_pacing_wait( &pacing, &progress, &sound_fifo,
-                                     bytes_per_frame, 1, false );
+      int error = sdl2_wait_for_space( 1, 0 );
       if( error ) {
         i = error;
         break;
@@ -213,8 +269,8 @@ sound_lowlevel_frame( libspectrum_signed_word *data, int len )
   }
 
   if( i < 0 ) {
-    ui_error( UI_ERROR_ERROR, "Couldn't write sound fifo: %s",
-              strerror( -i ) );
+    sdl2_output_failed( i );
+    return;
   }
 
   if( !audio_output_started && audio_device ) {

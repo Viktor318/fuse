@@ -72,11 +72,15 @@ post_modifier( input_event_t* event,
     event->type = INPUT_EVENT_KEYRELEASE;
     event->types.key.native_key = modifier;
     event->types.key.spectrum_key = spectrum_key;
+    event->types.key.character = 0;
+    event->types.key.physical_key = 0;
     return 0;
   } else if( !(old & modifier) && (new & modifier) ) {
     event->type = INPUT_EVENT_KEYPRESS;
     event->types.key.native_key = modifier;
     event->types.key.spectrum_key = spectrum_key;
+    event->types.key.character = 0;
+    event->types.key.physical_key = 0;
     return 0;
   }
 
@@ -133,6 +137,8 @@ kbdthread_fn( void *arg )
       }
       if( !found ) {
         fuse_event.types.key.spectrum_key = keysyms_remap(oldevent.keys[i]);
+        fuse_event.types.key.character = 0;
+        fuse_event.types.key.physical_key = 0;
         fuse_event.types.key.native_key = fuse_event.types.key.spectrum_key;
 	      
         if( queuepos >= QUEUELEN ) {
@@ -156,6 +162,8 @@ kbdthread_fn( void *arg )
       }
       if( !found ) {
         fuse_event.types.key.spectrum_key = keysyms_remap( event.keys[i] );
+        fuse_event.types.key.character = 0;
+        fuse_event.types.key.physical_key = 0;
         fuse_event.types.key.native_key = fuse_event.types.key.spectrum_key;
 
         if( queuepos >= QUEUELEN ) {

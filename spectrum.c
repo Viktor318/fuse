@@ -37,6 +37,7 @@
 #include "module.h"
 #include "peripherals/printer.h"
 #include "peripherals/ula.h"
+#include "hungarian_keyboard.h"
 #include "phantom_typist.h"
 #include "psg.h"
 #include "profile.h"
@@ -169,6 +170,7 @@ spectrum_frame( void )
 
   loader_frame( frame_length );
   phantom_typist_frame();
+  hungarian_keyboard_frame();
 
   frames_since_reset++;
 

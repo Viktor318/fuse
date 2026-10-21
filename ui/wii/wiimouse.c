@@ -102,6 +102,8 @@ mouse_update( void )
     fuse_event.type = INPUT_EVENT_KEYPRESS; \
     fuse_event.types.key.native_key = pressed; \
     fuse_event.types.key.spectrum_key = pressed; \
+    fuse_event.types.key.character = 0; \
+    fuse_event.types.key.physical_key = 0; \
     input_event(&fuse_event); \
   } while(0)
   
@@ -110,6 +112,8 @@ mouse_update( void )
     fuse_event.type = INPUT_EVENT_KEYRELEASE; \
     fuse_event.types.key.native_key = pressed; \
     fuse_event.types.key.spectrum_key = pressed; \
+    fuse_event.types.key.character = 0; \
+    fuse_event.types.key.physical_key = 0; \
     input_event(&fuse_event); \
   } while(0)
 

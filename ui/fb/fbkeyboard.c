@@ -140,6 +140,8 @@ keyboard_update( void )
                           INPUT_EVENT_KEYPRESS;
 	fuse_event.types.key.native_key = fuse_keysym;
 	fuse_event.types.key.spectrum_key = fuse_keysym;
+	fuse_event.types.key.character = 0;
+	fuse_event.types.key.physical_key = 0;
 
 	input_event( &fuse_event );
       }

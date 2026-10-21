@@ -51,6 +51,8 @@ get_keysyms( XKeyEvent *event, input_event_t *fuse_event )
 
   spectrum = XLookupKeysym( event, 0 );
   fuse_event->types.key.spectrum_key = keysyms_remap( spectrum );
+  fuse_event->types.key.character = 0;
+  fuse_event->types.key.physical_key = 0;
 }
 
 void xkeyboard_keypress(XKeyEvent *event)

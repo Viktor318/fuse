@@ -64,6 +64,21 @@ unshift_keysym( guint keycode, gint group )
   return r;
 }
 
+/* The character produced by the key press, for character based typing
+   (Hungarian keyboard). 0 if none */
+static libspectrum_dword
+get_character( guint keysym, GdkModifierType state )
+{
+  if( !settings_current.hungarian_keyboard ) return 0;
+
+  /* Ctrl or Alt without AltGr act as Symbol Shift: no character */
+  if( ( state & ( GDK_CONTROL_MASK | GDK_MOD1_MASK ) ) &&
+      !( state & GDK_MOD5_MASK ) )
+    return 0;
+
+  return gdk_keyval_to_unicode( keysym );
+}
+
 static void
 get_keysyms( input_event_t *event, guint keycode, guint keysym, gint group )
 {
@@ -92,6 +107,9 @@ gtkkeyboard_keypress( GtkWidget *widget GCC_UNUSED, GdkEvent *event,
 
   fuse_event.type = INPUT_EVENT_KEYPRESS;
   get_keysyms( &fuse_event, event->key.hardware_keycode, event->key.keyval, event->key.group );
+  fuse_event.types.key.character =
+    get_character( event->key.keyval, event->key.state );
+  fuse_event.types.key.physical_key = event->key.hardware_keycode;
 
   return input_event( &fuse_event );
 
@@ -106,6 +124,8 @@ gtkkeyboard_keyrelease( GtkWidget *widget GCC_UNUSED, GdkEvent *event,
 
   fuse_event.type = INPUT_EVENT_KEYRELEASE;
   get_keysyms( &fuse_event, event->key.hardware_keycode, event->key.keyval, event->key.group );
+  fuse_event.types.key.character = 0;
+  fuse_event.types.key.physical_key = event->key.hardware_keycode;
 
   return input_event( &fuse_event );
 }

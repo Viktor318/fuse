@@ -25,6 +25,7 @@
 
 #include "fuse.h"
 #include "input.h"
+#include "hungarian_keyboard.h"
 #include "keyboard.h"
 #include "peripherals/joystick.h"
 #include "settings.h"
@@ -269,6 +270,9 @@ keypress( const input_event_key_t *event )
 {
   int swallow;
 
+  /* Track host modifiers; swallowed while a timed key sequence runs */
+  if( hungarian_keyboard_modifier( event, 1 ) ) return 0;
+
   if( ui_widget_level >= 0 ) {
     ui_widget_keyhandler( event->native_key );
     return 0;
@@ -282,7 +286,11 @@ keypress( const input_event_key_t *event )
 
   swallow = 0;
   /* Joystick emulation via keyboard keys */
-  if ( event->spectrum_key == settings_current.joystick_keyboard_up ) {
+  if( event->spectrum_key == INPUT_KEY_NONE ) {
+    /* A key with no positional mapping (e.g. an accented letter) can only
+       be handled as a character */
+  }
+  else if ( event->spectrum_key == settings_current.joystick_keyboard_up ) {
     swallow = joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_UP   , 1 );
   }
   else if( event->spectrum_key == settings_current.joystick_keyboard_down ) {
@@ -300,6 +308,12 @@ keypress( const input_event_key_t *event )
 
   if( swallow ) return 0;
 
+  /* Character based typing (Hungarian keyboard) */
+  if( hungarian_keyboard_keypress( event ) ) {
+    ui_popup_menu( event->native_key );
+    return 0;
+  }
+
   if( settings_current.recreated_spectrum ) {
     recreated_keypress( event->spectrum_key );
   } else {
@@ -314,12 +328,19 @@ keypress( const input_event_key_t *event )
 static int
 keyrelease( const input_event_key_t *event )
 {
+  if( hungarian_keyboard_modifier( event, 0 ) ) return 0;
+
+  if( hungarian_keyboard_keyrelease( event ) ) return 0;
+
   if( !settings_current.recreated_spectrum ) {
     send_keyboard_release( event->spectrum_key );
   }
 
   /* Joystick emulation via keyboard keys */
-  if( event->spectrum_key == settings_current.joystick_keyboard_up ) {
+  if( event->spectrum_key == INPUT_KEY_NONE ) {
+    /* Not a positional key: nothing to release */
+  }
+  else if( event->spectrum_key == settings_current.joystick_keyboard_up ) {
     joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_UP   , 0 );
   }
   else if( event->spectrum_key == settings_current.joystick_keyboard_down ) {

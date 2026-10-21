@@ -30,6 +30,7 @@
 
 #include "libspectrum.h"
 
+#include "hungarian_keyboard.h"
 #include "infrastructure/startup_manager.h"
 #include "input.h"
 #include "keyboard.h"
@@ -379,6 +380,9 @@ int keyboard_release_all( void )
   int i;
 
   for( i=0; i<KEYBOARD_HALFROWS; i++ ) keyboard_return_values[i] = 0xff;
+
+  /* Forget the keys held by character based typing too */
+  hungarian_keyboard_reset();
 
   /* The physical keys (including any held cursor keys) are all released,
      so the shifted-arrow tracking state must be reset too.  Otherwise the

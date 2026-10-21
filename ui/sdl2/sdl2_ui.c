@@ -111,6 +111,11 @@ ui_event( void )
   SDL_Event event;
 
   display_timing_input_begin();
+
+  /* Character based typing needs SDL_TEXTINPUT events */
+  if( settings_current.hungarian_keyboard && !SDL_IsTextInputActive() )
+    SDL_StartTextInput();
+
   while( SDL_PollEvent( &event ) ) {
     switch( event.type ) {
     case SDL_KEYDOWN:

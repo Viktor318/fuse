@@ -13,6 +13,7 @@
 
 #include "input.h"
 #include "keyboard.h"
+#include "settings.h"
 #include "ui/ui.h"
 #include "sdl2_keyboard.h"
 
@@ -128,19 +129,75 @@ sdl2keyboard_native_map( const SDL_KeyboardEvent *keyevent )
   return keysyms_remap( keyevent->keysym.sym );
 }
 
+/* Decode the first character of a UTF-8 string; 0 if invalid or empty */
+static libspectrum_dword
+utf8_first_character( const char *text )
+{
+  const unsigned char *s = (const unsigned char *)text;
+
+  if( !s || !s[0] ) return 0;
+  if( s[0] < 0x80 ) return s[0];
+  if( ( s[0] & 0xe0 ) == 0xc0 && ( s[1] & 0xc0 ) == 0x80 )
+    return ( ( s[0] & 0x1f ) << 6 ) | ( s[1] & 0x3f );
+  if( ( s[0] & 0xf0 ) == 0xe0 && ( s[1] & 0xc0 ) == 0x80 &&
+      ( s[2] & 0xc0 ) == 0x80 )
+    return ( ( s[0] & 0x0f ) << 12 ) | ( ( s[1] & 0x3f ) << 6 ) |
+           ( s[2] & 0x3f );
+  if( ( s[0] & 0xf8 ) == 0xf0 && ( s[1] & 0xc0 ) == 0x80 &&
+      ( s[2] & 0xc0 ) == 0x80 && ( s[3] & 0xc0 ) == 0x80 )
+    return ( ( s[0] & 0x07 ) << 18 ) | ( ( s[1] & 0x3f ) << 12 ) |
+           ( ( s[2] & 0x3f ) << 6 ) | ( s[3] & 0x3f );
+
+  return 0;
+}
+
+/* The character produced by a key press arrives in the SDL_TEXTINPUT event
+   which immediately follows the SDL_KEYDOWN. Take it from the queue */
+static libspectrum_dword
+sdl2keyboard_get_character( const SDL_KeyboardEvent *keyevent )
+{
+  SDL_Event next;
+  SDL_Keymod mod = keyevent->keysym.mod;
+  int altgr = ( mod & ( KMOD_RALT | KMOD_MODE ) ) ? 1 : 0;
+
+  if( !settings_current.hungarian_keyboard ) return 0;
+
+  /* Ctrl or left Alt without AltGr act as Symbol Shift: no character */
+  if( !altgr && ( mod & ( KMOD_CTRL | KMOD_LALT ) ) ) return 0;
+
+  if( SDL_PeepEvents( &next, 1, SDL_PEEKEVENT, SDL_FIRSTEVENT,
+                      SDL_LASTEVENT ) == 1 && next.type == SDL_TEXTINPUT ) {
+    SDL_PeepEvents( &next, 1, SDL_GETEVENT, SDL_TEXTINPUT, SDL_TEXTINPUT );
+    return utf8_first_character( next.text.text );
+  }
+
+  return 0;
+}
+
 static void
 sdl2keyboard_dispatch( input_event_type type, SDL_KeyboardEvent *keyevent )
 {
   input_key keysym;
   input_event_t fuse_event;
+  libspectrum_dword character = 0;
 
   keysym = sdl2keyboard_native_map( keyevent );
 
-  if( keysym == INPUT_KEY_NONE ) return;
+  if( type == INPUT_EVENT_KEYPRESS )
+    character = sdl2keyboard_get_character( keyevent );
+
+  /* Keys with no mapping are still passed on if they produced a character
+     (e.g. accented letters), or on release, as they may have done so */
+  if( keysym == INPUT_KEY_NONE && !character &&
+      !( type == INPUT_EVENT_KEYRELEASE &&
+         settings_current.hungarian_keyboard ) )
+    return;
 
   fuse_event.type = type;
   fuse_event.types.key.native_key = keysym;
   fuse_event.types.key.spectrum_key = keysym;
+  fuse_event.types.key.character = character;
+  fuse_event.types.key.physical_key = keyevent->keysym.scancode;
 
   input_event( &fuse_event );
 }

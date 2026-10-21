@@ -216,6 +216,12 @@ typedef struct input_event_key_t {
   input_key native_key;
   input_key spectrum_key;
 
+  /* For character based typing (Hungarian keyboard): the Unicode character
+     the host produced for this key press (0 if none or unknown), and an
+     identifier of the physical key, the same on press and release */
+  unsigned int character;
+  int physical_key;
+
 } input_event_key_t;
 
 typedef struct input_event_joystick_t {

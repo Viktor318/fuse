@@ -46,6 +46,7 @@ fuse_SOURCES = display.c \
 	movie.c \
 	module.c \
 	periph.c \
+	hungarian_keyboard.c \
 	phantom_typist.c \
 	profile.c \
 	psg.c \
@@ -148,6 +149,7 @@ noinst_HEADERS = bitmap.h \
 	movie_tables.h \
 	module.h \
 	periph.h \
+	hungarian_keyboard.h \
 	phantom_typist.h \
 	psg.h \
 	rectangle.h \

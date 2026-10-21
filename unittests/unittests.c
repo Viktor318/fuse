@@ -38,6 +38,7 @@
 #include "display.h"
 #include "fuse.h"
 #include "input.h"
+#include "hungarian_keyboard.h"
 #include "keyboard.h"
 #include "loader.h"
 #include "machine.h"
@@ -1495,6 +1496,8 @@ keyboard_shifted_arrows_test( void )
   event.type = INPUT_EVENT_KEYPRESS;
   event.types.key.native_key = INPUT_KEY_Up;
   event.types.key.spectrum_key = INPUT_KEY_Up;
+  event.types.key.character = 0;
+  event.types.key.physical_key = 0;
   input_event( &event );
   TEST_ASSERT( keyboard_read( 0xfe ) == 0xfe ); /* Caps Shift pressed */
 
@@ -1502,12 +1505,16 @@ keyboard_shifted_arrows_test( void )
   event.type = INPUT_EVENT_KEYPRESS;
   event.types.key.native_key = INPUT_KEY_Left;
   event.types.key.spectrum_key = INPUT_KEY_Left;
+  event.types.key.character = 0;
+  event.types.key.physical_key = 0;
   input_event( &event );
 
   /* Release Up: Caps Shift must stay pressed because Left is still held */
   event.type = INPUT_EVENT_KEYRELEASE;
   event.types.key.native_key = INPUT_KEY_Up;
   event.types.key.spectrum_key = INPUT_KEY_Up;
+  event.types.key.character = 0;
+  event.types.key.physical_key = 0;
   input_event( &event );
   TEST_ASSERT( keyboard_read( 0xfe ) == 0xfe );
 
@@ -1515,10 +1522,105 @@ keyboard_shifted_arrows_test( void )
   event.type = INPUT_EVENT_KEYRELEASE;
   event.types.key.native_key = INPUT_KEY_Left;
   event.types.key.spectrum_key = INPUT_KEY_Left;
+  event.types.key.character = 0;
+  event.types.key.physical_key = 0;
   input_event( &event );
   TEST_ASSERT( keyboard_read( 0xfe ) == 0xff );
 
   settings_current.keyboard_arrows_shifted = old_shifted;
+  return 0;
+}
+
+static void
+hungarian_keyboard_test_event( input_event_type type, input_key key,
+                               unsigned int character, int physical_key )
+{
+  input_event_t event;
+
+  event.type = type;
+  event.types.key.native_key = key;
+  event.types.key.spectrum_key = key;
+  event.types.key.character = character;
+  event.types.key.physical_key = physical_key;
+  input_event( &event );
+}
+
+static int
+hungarian_keyboard_test( void )
+{
+  /* Character based typing (Hungarian keyboard). Half-rows used here:
+     0xfe: Caps Shift is bit 0x01
+     0x7f: Symbol Shift is bit 0x02
+     0xdf: P is bit 0x01, O is bit 0x02, Y is bit 0x10 */
+  int old_hungarian = settings_current.hungarian_keyboard;
+  int old_recreated = settings_current.recreated_spectrum;
+  int i;
+
+  settings_current.hungarian_keyboard = 1;
+  settings_current.recreated_spectrum = 0;
+  keyboard_release_all();
+
+  /* Host Shift held: Caps Shift pressed as usual */
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYPRESS, INPUT_KEY_Shift_L,
+                                 0, 50 );
+  TEST_ASSERT( keyboard_read( 0xfe ) == 0xfe );
+
+  /* Shift + 2 on a Hungarian keyboard produces a double quote: Symbol Shift
+     + P, and Caps Shift must not be pressed */
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYPRESS, INPUT_KEY_2, '"', 11 );
+  TEST_ASSERT( keyboard_read( 0xfe ) == 0xff );
+  TEST_ASSERT( keyboard_read( 0x7f ) == 0xfd );
+  TEST_ASSERT( keyboard_read( 0xdf ) == 0xfe );
+
+  /* Releasing it gives Caps Shift back to the still held host Shift */
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYRELEASE, INPUT_KEY_2, 0, 11 );
+  TEST_ASSERT( keyboard_read( 0xdf ) == 0xff );
+  TEST_ASSERT( keyboard_read( 0x7f ) == 0xff );
+  TEST_ASSERT( keyboard_read( 0xfe ) == 0xfe );
+
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYRELEASE, INPUT_KEY_Shift_L,
+                                 0, 50 );
+  TEST_ASSERT( keyboard_read( 0xfe ) == 0xff );
+
+  /* An accented letter with no positional mapping: o with diaeresis is
+     typed as O */
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYPRESS, INPUT_KEY_NONE,
+                                 0xf6, 19 );
+  TEST_ASSERT( keyboard_read( 0xdf ) == 0xfd );
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYRELEASE, INPUT_KEY_NONE,
+                                 0, 19 );
+  TEST_ASSERT( keyboard_read( 0xdf ) == 0xff );
+
+  /* An extended mode symbol is a timed sequence: Caps + Symbol, release,
+     Symbol + Y, release; each step lasts three frames */
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYPRESS, INPUT_KEY_f, '[', 41 );
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYRELEASE, INPUT_KEY_f, 0, 41 );
+
+  hungarian_keyboard_frame();
+  TEST_ASSERT( keyboard_read( 0xfe ) == 0xfe );
+  TEST_ASSERT( keyboard_read( 0x7f ) == 0xfd );
+  for( i = 0; i < 3; i++ ) hungarian_keyboard_frame();
+  TEST_ASSERT( keyboard_read( 0xfe ) == 0xff );
+  TEST_ASSERT( keyboard_read( 0x7f ) == 0xff );
+  for( i = 0; i < 3; i++ ) hungarian_keyboard_frame();
+  TEST_ASSERT( keyboard_read( 0xfe ) == 0xff );
+  TEST_ASSERT( keyboard_read( 0x7f ) == 0xfd );
+  TEST_ASSERT( keyboard_read( 0xdf ) == 0xef );
+  for( i = 0; i < 6; i++ ) hungarian_keyboard_frame();
+  TEST_ASSERT( keyboard_read( 0x7f ) == 0xff );
+  TEST_ASSERT( keyboard_read( 0xdf ) == 0xff );
+
+  /* With the option off, the character is ignored and the key is mapped by
+     position as before */
+  settings_current.hungarian_keyboard = 0;
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYPRESS, INPUT_KEY_2, '"', 11 );
+  TEST_ASSERT( keyboard_read( 0x7f ) == 0xff );
+  TEST_ASSERT( keyboard_read( 0xf7 ) == 0xfd );	/* 2 */
+  hungarian_keyboard_test_event( INPUT_EVENT_KEYRELEASE, INPUT_KEY_2, 0, 11 );
+
+  keyboard_release_all();
+  settings_current.hungarian_keyboard = old_hungarian;
+  settings_current.recreated_spectrum = old_recreated;
   return 0;
 }
 
@@ -1539,6 +1641,8 @@ keyboard_shifted_arrows_release_all_test( void )
   event.type = INPUT_EVENT_KEYPRESS;
   event.types.key.native_key = INPUT_KEY_Up;
   event.types.key.spectrum_key = INPUT_KEY_Up;
+  event.types.key.character = 0;
+  event.types.key.physical_key = 0;
   input_event( &event );
   TEST_ASSERT( keyboard_read( 0xfe ) == 0xfe );
 
@@ -1550,6 +1654,8 @@ keyboard_shifted_arrows_release_all_test( void )
   event.type = INPUT_EVENT_KEYPRESS;
   event.types.key.native_key = INPUT_KEY_Up;
   event.types.key.spectrum_key = INPUT_KEY_Up;
+  event.types.key.character = 0;
+  event.types.key.physical_key = 0;
   input_event( &event );
   TEST_ASSERT( keyboard_read( 0xfe ) == 0xfe );
 
@@ -4201,6 +4307,7 @@ unittests_run( void )
   r += keyboard_simulate_keypress_test();
   r += keyboard_shifted_arrows_test();
   r += keyboard_shifted_arrows_release_all_test();
+  r += hungarian_keyboard_test();
   r += utils_safe_strdup_test();
   r += bitmap_ops_test();
   r += mempool_test();

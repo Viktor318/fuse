@@ -30,11 +30,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <libspectrum.h>
+
 #include "compat.h"
+#include "periph.h"
 #include "session.h"
 #include "settings.h"
 #include "snapshot.h"
 #include "tape.h"
+#include "utils.h"
 #include "ui/ui.h"
 
 #define SESSION_NAME "fuse-last-session"
@@ -82,6 +86,44 @@ session_save( void )
   return 0;
 }
 
+/* Read the session snapshot, but keep the peripherals the user has chosen.
+   SZX snapshots don't record every peripheral (e.g. the Fuller Box,
+   Melodik, Covox or an empty Interface 2), so a plain snapshot_read()
+   would switch those off. */
+static int
+session_read_snapshot( const char *filename )
+{
+  utils_file file;
+  libspectrum_snap *snap;
+  int interface2 = settings_current.interface2;
+  int error;
+
+  if( utils_read_file( filename, &file ) ) return 1;
+
+  snap = libspectrum_snap_alloc();
+  error = libspectrum_snap_read( snap, file.buffer, file.length,
+                                 LIBSPECTRUM_ID_UNKNOWN, filename );
+  utils_close_file( &file );
+  if( error ) { libspectrum_snap_free( snap ); return error; }
+
+  libspectrum_snap_set_fuller_box_active( snap, settings_current.fuller );
+  libspectrum_snap_set_melodik_active( snap, settings_current.melodik );
+  libspectrum_snap_set_specdrum_active( snap, settings_current.specdrum );
+  libspectrum_snap_set_covox_active( snap, settings_current.covox );
+  libspectrum_snap_set_uspeech_active( snap, settings_current.uspeech );
+
+  error = snapshot_copy_from( snap );
+  libspectrum_snap_free( snap );
+  if( error ) return error;
+
+  if( interface2 && !settings_current.interface2 ) {
+    settings_current.interface2 = 1;
+    periph_update();
+  }
+
+  return 0;
+}
+
 int
 session_restore( void )
 {
@@ -97,7 +139,7 @@ session_restore( void )
 
   if( !compat_file_exists( snapshot ) ) return 0;
 
-  if( snapshot_read( snapshot ) ) {
+  if( session_read_snapshot( snapshot ) ) {
     ui_error( UI_ERROR_WARNING, "The last session could not be restored" );
     return 1;
   }

@@ -524,3 +524,4 @@ extra	Debugger window: menu > View	&Breakpoints	&Töréspontok
 extra	Debugger window: menu > View	&Disassembly	Vissza&fejtés
 extra	Debugger window: menu > View	&Stack	&Verem
 extra	Debugger window: menu > View	&Events	&Események
+4 Üzenetek	kérdés (OK/Mégse)	Some options need to reset the machine. Reset?	Néhány beállításhoz újra kell indítani a gépet. Újraindítod?

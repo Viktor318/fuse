@@ -25,6 +25,7 @@
 
 #include "libspectrum.h"
 
+#include "basic_text.h"
 #include "event.h"
 #include "fuse.h"
 #include "menu.h"
@@ -82,6 +83,40 @@ MENU_CALLBACK( menu_file_open )
   libspectrum_free( filename );
 
   display_refresh_all();
+
+  fuse_emulation_unpause();
+}
+
+MENU_CALLBACK( menu_file_loadbasictext )
+{
+  char *filename;
+
+  fuse_emulation_pause();
+
+  filename = ui_get_open_filename( "Fuse - Load BASIC Text" );
+  if( !filename ) { fuse_emulation_unpause(); return; }
+
+  basic_text_load( filename );
+
+  libspectrum_free( filename );
+
+  display_refresh_all();
+
+  fuse_emulation_unpause();
+}
+
+MENU_CALLBACK( menu_file_savebasicastext )
+{
+  char *filename;
+
+  fuse_emulation_pause();
+
+  filename = ui_get_save_filename( "Fuse - Save BASIC as Text" );
+  if( !filename ) { fuse_emulation_unpause(); return; }
+
+  basic_text_save( filename );
+
+  libspectrum_free( filename );
 
   fuse_emulation_unpause();
 }

@@ -40,6 +40,7 @@ typedef enum keyboard_synthetic_source {
 
   KEYBOARD_SYNTHETIC_PHANTOM_TYPIST = 0,
   KEYBOARD_SYNTHETIC_DISCIPLE,
+  KEYBOARD_SYNTHETIC_BASIC_TEXT,
   KEYBOARD_SYNTHETIC_SOURCE_COUNT
 
 } keyboard_synthetic_source;

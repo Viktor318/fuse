@@ -55,6 +55,8 @@
  */
 
 MENU_CALLBACK( menu_file_open );
+MENU_CALLBACK( menu_file_loadbasictext );
+MENU_CALLBACK( menu_file_savebasicastext );
 MENU_CALLBACK( menu_file_recording_continuerecording );
 MENU_CALLBACK( menu_file_recording_insertsnapshot );
 MENU_CALLBACK( menu_file_recording_rollback );

@@ -26,18 +26,35 @@
 #include <windows.h>
 #include <mmsystem.h>
 #include <dsound.h>
+#include <string.h>
 
 #include "settings.h"
 #include "sound.h"
 #include "ui/ui.h"
 
 /* same as for SDL Sound */
-#define MAX_AUDIO_BUFFER 8192*5
+#define MAX_AUDIO_BUFFER ( 8192 * 5 )
 
 static LPDIRECTSOUND lpDS; /* DirectSound object */
 static LPDIRECTSOUNDBUFFER lpDSBuffer; /* sound buffer */
 
 static DWORD nextpos; /* next position in circular buffer */
+
+/* How far ahead of the play cursor we have written. The circular buffer is
+   played in a loop, so if playing catches up with writing, whatever is in
+   the buffer gets played again. To avoid that being old audio (heard as a
+   delayed echo of earlier sounds), we count bytes written and played, resync
+   after an underrun, and fill all the rest of the buffer (from the end of
+   the written data round to the play cursor) with the last sample, which
+   plays as silence without a click. Then even a stall longer than the
+   whole buffer finds no old audio to play again */
+static unsigned long long written_total, played_total;
+static DWORD last_playcursor;
+static DWORD last_frame_time;
+static DWORD block_align;	/* bytes per sample frame */
+static DWORD buffer_ms;		/* buffer length in milliseconds */
+static libspectrum_signed_word last_sample[2];
+static int channels;
 
 int
 sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
@@ -120,6 +137,13 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   }
 
   nextpos = 0;
+  written_total = played_total = 0;
+  last_playcursor = 0;
+  last_frame_time = GetTickCount();
+  block_align = pcmwf.nBlockAlign;
+  buffer_ms = MAX_AUDIO_BUFFER * 1000 / pcmwf.nAvgBytesPerSec;
+  channels = pcmwf.nChannels;
+  last_sample[0] = last_sample[1] = 0;
 
   return 0;      
 }
@@ -137,77 +161,100 @@ sound_lowlevel_end( void )
   CoUninitialize();
 }
 
+/* Update the count of bytes played from the play cursor */
+static void
+update_played( DWORD *playcursor, DWORD *writecursor )
+{
+  IDirectSoundBuffer_GetCurrentPosition( lpDSBuffer, playcursor, writecursor );
+
+  played_total += ( *playcursor + MAX_AUDIO_BUFFER - last_playcursor ) %
+                  MAX_AUDIO_BUFFER;
+  last_playcursor = *playcursor;
+}
+
+/* Write `bytes' bytes at `position': from `data', or if NULL, the last
+   sample repeated. Returns 0 on success */
+static int
+write_buffer( DWORD position, const libspectrum_signed_word *data,
+              DWORD bytes )
+{
+  HRESULT hres;
+  void *part[2];
+  DWORD length[2];
+  int i;
+
+  hres = IDirectSoundBuffer_Lock( lpDSBuffer, position, bytes,
+                                  &part[0], &length[0], &part[1], &length[1],
+                                  0 );
+  if( hres != DS_OK ) return 1;
+
+  for( i = 0; i < 2; i++ ) {
+    if( !part[i] ) continue;
+
+    if( data ) {
+      memcpy( part[i], data, length[i] );
+      data += length[i] / sizeof( *data );
+    } else {
+      libspectrum_signed_word *out = part[i];
+      DWORD j, samples = length[i] / sizeof( *out );
+      for( j = 0; j < samples; j++ ) out[j] = last_sample[ j % channels ];
+    }
+  }
+
+  IDirectSoundBuffer_Unlock( lpDSBuffer, part[0], length[0], part[1],
+                             length[1] );
+
+  return 0;
+}
+
 /* Copying data to the buffer */
 void
 sound_lowlevel_frame( libspectrum_signed_word *data, int len )
 {
-  HRESULT hres;
-  int i1, i2;
-  int lsb = 1;
+  DWORD playcursor, writecursor, now, bytes, fill;
+  long long ahead;
 
-  /* two pair because of circular buffer */
-  UCHAR *ucbuffer1, *ucbuffer2;
-  DWORD length1, length2;
-  DWORD playcursor;
-  long cursordiff;
+  bytes = len * sizeof( *data );
 
-  len *= 2;
+  update_played( &playcursor, &writecursor );
 
-  while( len ) {
-    while( 1 ) {
-      IDirectSoundBuffer_GetCurrentPosition( lpDSBuffer, &playcursor, NULL );
-
-      cursordiff = (long)nextpos - (long)playcursor;
-
-      if( playcursor > nextpos )
-        cursordiff += MAX_AUDIO_BUFFER;
-
-      if( cursordiff < len * 6 )
-        break;
-
-      Sleep(10);
-    }
-
-    /* lock the buffer */
-    hres = IDirectSoundBuffer_Lock( lpDSBuffer, nextpos, (DWORD)len,
-                                  (void **)&ucbuffer1, &length1,
-                                  (void **)&ucbuffer2, &length2,
-                                  0 );
-    if( hres != DS_OK ) return; /* couldn't get a lock on the buffer */
-
-    /* write to the first part of buffer */
-    for( i1 = 0; i1 < length1 && len > 0; i1++ ) {
-      if( lsb ) {
-        ucbuffer1[ i1 ] = *data & 0xff;
-      } else {
-        ucbuffer1[ i1 ] = *data >> 8;
-        data++;
-      }
-      lsb = !lsb;
-      nextpos++;
-      len--;
-    }
-
-    if( ucbuffer2 ) {
-      /* write to the second part of buffer */
-      for( i2 = 0; i2 < length2 && len > 0; i2++ ) {
-        if( lsb ) {
-          ucbuffer2[ i2 ] = *data & 0xff;
-        } else {
-          ucbuffer2[ i2 ] = *data >> 8;
-          data++;
-        }
-        lsb = !lsb;
-        nextpos++;
-        len--;
-      }
-    } else {
-      i2 = 0;
-    }
-
+  /* Underrun: playing has caught up with writing (or we have not been
+     called for so long that it may have gone round the buffer). Continue
+     writing just after the write cursor, the first position safe to write */
+  now = GetTickCount();
+  if( written_total < played_total ||
+      now - last_frame_time > buffer_ms * 3 / 4 ) {
+    nextpos = ( writecursor + block_align - 1 ) / block_align * block_align;
     if( nextpos >= MAX_AUDIO_BUFFER ) nextpos -= MAX_AUDIO_BUFFER;
-
-    /* unlock the buffer */
-    IDirectSoundBuffer_Unlock( lpDSBuffer, ucbuffer1, i1, ucbuffer2, i2 );
+    written_total = played_total +
+      ( nextpos + MAX_AUDIO_BUFFER - playcursor ) % MAX_AUDIO_BUFFER;
   }
+
+  /* Too far ahead: wait for some of it to be played */
+  while( (long long)( written_total - played_total ) >=
+         (long long)bytes * 6 ) {
+    Sleep( 10 );
+    update_played( &playcursor, &writecursor );
+  }
+
+  last_frame_time = GetTickCount();
+
+  if( write_buffer( nextpos, data, bytes ) ) return;
+
+  nextpos = ( nextpos + bytes ) % MAX_AUDIO_BUFFER;
+  written_total += bytes;
+
+  if( len >= channels ) {
+    last_sample[0] = data[ len - channels ];
+    last_sample[1] = data[ len - 1 ];
+  }
+
+  /* Fill the rest of the buffer with the last sample, so an underrun plays
+     silence instead of old audio. Never touch what is still to be played */
+  ahead = written_total - played_total;
+  fill = ahead + block_align < MAX_AUDIO_BUFFER ?
+         ( MAX_AUDIO_BUFFER - ahead - block_align ) / block_align *
+           block_align :
+         0;
+  if( fill ) write_buffer( nextpos, NULL, fill );
 }

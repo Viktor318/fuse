@@ -441,6 +441,40 @@ translate_dialog( HWND window )
 
 /* Options -> General: the language list starts where the OK button does,
    close to its short label */
+/* Width in pixels of the longest item of a combo box, 0 if unknown */
+static int
+widest_list_item( HWND list )
+{
+  HDC dc;
+  HFONT font, old_font = NULL;
+  LRESULT count, i;
+  int widest = 0;
+  char text[256];
+
+  count = SendMessageA( list, CB_GETCOUNT, 0, 0 );
+  if( count == CB_ERR || count <= 0 ) return 0;
+
+  dc = GetDC( list );
+  if( !dc ) return 0;
+  font = (HFONT)SendMessageA( list, WM_GETFONT, 0, 0 );
+  if( font ) old_font = SelectObject( dc, font );
+
+  for( i = 0; i < count; i++ ) {
+    SIZE size;
+    LRESULT length = SendMessageA( list, CB_GETLBTEXTLEN, i, 0 );
+    if( length == CB_ERR || length >= (LRESULT)sizeof( text ) ) continue;
+    SendMessageA( list, CB_GETLBTEXT, i, (LPARAM)text );
+    if( GetTextExtentPoint32A( dc, text, (int)length, &size ) &&
+        size.cx > widest )
+      widest = size.cx;
+  }
+
+  if( old_font ) SelectObject( dc, old_font );
+  ReleaseDC( list, dc );
+
+  return widest;
+}
+
 static void
 align_language_list( HWND dialog )
 {
@@ -448,6 +482,7 @@ align_language_list( HWND dialog )
   HWND label = GetDlgItem( dialog, IDC_OPT_GENERAL_LABEL_LANGUAGE );
   HWND ok = GetDlgItem( dialog, IDOK );
   RECT list_rect, label_rect, ok_rect;
+  int width, text_width;
 
   if( !list || !label || !ok ) return;
 
@@ -463,9 +498,17 @@ align_language_list( HWND dialog )
   SetWindowPos( label, NULL, 0, 0, ok_rect.left - label_rect.left - 4,
                 label_rect.bottom - label_rect.top,
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
+  width = list_rect.right - ok_rect.left;
+  text_width = widest_list_item( list );
+  if( text_width > 0 ) {
+    int arrow = GetSystemMetrics( SM_CXVSCROLL ) + 8;
+    int wanted = text_width * 3 / 2;
+    if( wanted < text_width + arrow ) wanted = text_width + arrow;
+    if( wanted < width ) width = wanted;
+  }
+
   SetWindowPos( list, NULL, ok_rect.left, list_rect.top,
-                list_rect.right - ok_rect.left,
-                list_rect.bottom - list_rect.top,
+                width, list_rect.bottom - list_rect.top,
                 SWP_NOZORDER | SWP_NOACTIVATE );
 }
 

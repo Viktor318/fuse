@@ -1208,7 +1208,7 @@ typedef enum load_state_t {
   LOAD_MAIN_MENU_KEY,		/* pressing a key in the main menu */
   LOAD_WAIT_EDITOR,		/* waiting for 128 BASIC to start */
   LOAD_LIST_KEY,		/* 48K: pressing Enter to list the program */
-  LOAD_REPORT,			/* done: tell the user */
+  LOAD_REPORT,			/* 128K: done, tell the user */
 } load_state_t;
 
 /* Menu items */
@@ -1238,38 +1238,13 @@ load_finish( void )
   keyboard_synthetic_release_all( KEYBOARD_SYNTHETIC_BASIC_TEXT );
 }
 
-/* Tell the user the program is in memory, and what had to be replaced */
+/* Tell the user the program is in memory */
 static void
 report_loaded( const basic_text_info *info )
 {
-  char lines[ BASIC_TEXT_MAX_REPORTED_LINES * 8 + 8 ];
-  char replaced[ 256 ];
-  size_t i, used = 0;
-
-  lines[0] = '\0';
-  for( i = 0; i < info->replaced_line_count &&
-              i < BASIC_TEXT_MAX_REPORTED_LINES; i++ )
-    used += snprintf( lines + used, sizeof( lines ) - used, "%s%d",
-                      i ? ", " : "", info->replaced_lines[i] );
-  if( info->replaced_line_count > BASIC_TEXT_MAX_REPORTED_LINES )
-    snprintf( lines + used, sizeof( lines ) - used, ", ..." );
-
-  if( info->unknown )
-    snprintf( replaced, sizeof( replaced ), "\n\n%lu character(s) were "
-              "replaced by a plain letter and %lu with no Spectrum "
-              "equivalent by '?'.\nLines: %s",
-              (unsigned long)info->replaced, (unsigned long)info->unknown,
-              lines );
-  else if( info->replaced )
-    snprintf( replaced, sizeof( replaced ), "\n\n%lu accented character(s) "
-              "were replaced by the plain letter, as the Spectrum has "
-              "none.\nLines: %s", (unsigned long)info->replaced, lines );
-  else
-    replaced[0] = '\0';
-
   ui_error( UI_ERROR_INFO, "The BASIC program \"%s\" was loaded "
-            "successfully (%lu lines).%s", pending_name,
-            (unsigned long)info->lines, replaced );
+            "successfully (%lu lines).", pending_name,
+            (unsigned long)info->lines );
 }
 
 /* Put the pending program in memory. Returns 0 on success */
@@ -1296,13 +1271,15 @@ press_key( keyboard_key_name key, int caps, load_state_t state,
   after_key_state = next;
 }
 
-/* 48K: Enter on the empty edit line lists the program */
+/* 48K: once the user has seen the message, Enter on the empty edit line
+   lists the program */
 static void
 list_program( void )
 {
   libspectrum_free( pending_program );
   pending_program = NULL;
-  press_key( KEYBOARD_Enter, 0, LOAD_LIST_KEY, LOAD_REPORT );
+  report_loaded( &pending_info );
+  press_key( KEYBOARD_Enter, 0, LOAD_LIST_KEY, LOAD_IDLE );
 }
 
 /* At the main menu: put the program in memory, then choose 128 BASIC */

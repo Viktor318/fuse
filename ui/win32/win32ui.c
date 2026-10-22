@@ -453,7 +453,8 @@ ui_error_specific( ui_error_level severity, const char *message )
   switch( severity ) {
 
   case UI_ERROR_INFO:
-    MessageBox( fuse_hWnd, message, "Fuse - Info", MB_ICONINFORMATION | MB_OK );
+    /* Without the system sound, as the About box */
+    win32ui_infobox( message );
     break;
   case UI_ERROR_WARNING:
     MessageBox( fuse_hWnd, message, "Fuse - Warning", MB_ICONWARNING | MB_OK );

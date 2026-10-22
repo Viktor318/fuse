@@ -113,6 +113,7 @@ int win32ui_confirm( const char *string );
 typedef enum win32ui_picture_format {
   PICTURE_SCR,
   PICTURE_PNG,
+  PICTURE_JPG,
 } win32ui_picture_format;
 
 int win32ui_picture( const char *filename, win32ui_picture_format format );

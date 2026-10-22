@@ -90,7 +90,7 @@ mkdir -p "$NAME/roms" "$NAME/lib"
 cp .libs/fuse.exe "$NAME/"
 cp "/usr/$HOST/lib/zlib1.dll" "/usr/$HOST/lib/libwinpthread-1.dll" "$NAME/"
 cp roms/*.rom roms/README.copyright "$NAME/roms/"
-cp lib/*.bmp lib/*.png lib/*.scr "$NAME/lib/"
+cp lib/*.bmp lib/*.png lib/*.jpg lib/*.scr "$NAME/lib/"
 cp COPYING README AUTHORS "$NAME/"
 
 mkdir -p "$OUTDIR"

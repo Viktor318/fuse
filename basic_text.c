@@ -1207,6 +1207,8 @@ typedef enum load_state_t {
   LOAD_WAIT_MAIN_MENU,		/* waiting for the main menu */
   LOAD_MAIN_MENU_KEY,		/* pressing a key in the main menu */
   LOAD_WAIT_EDITOR,		/* waiting for 128 BASIC to start */
+  LOAD_LIST_KEY,		/* 48K: pressing Enter to list the program */
+  LOAD_REPORT,			/* done: tell the user */
 } load_state_t;
 
 /* Menu items */
@@ -1225,6 +1227,7 @@ static unsigned long key_frames, load_frames;
 static libspectrum_byte *pending_program = NULL;
 static size_t pending_length;
 static basic_text_info pending_info;
+static char pending_name[ 128 ];
 
 static void
 load_finish( void )
@@ -1235,13 +1238,13 @@ load_finish( void )
   keyboard_synthetic_release_all( KEYBOARD_SYNTHETIC_BASIC_TEXT );
 }
 
+/* Tell the user the program is in memory, and what had to be replaced */
 static void
-report_replacements( const basic_text_info *info )
+report_loaded( const basic_text_info *info )
 {
   char lines[ BASIC_TEXT_MAX_REPORTED_LINES * 8 + 8 ];
+  char replaced[ 256 ];
   size_t i, used = 0;
-
-  if( !info->replaced && !info->unknown ) return;
 
   lines[0] = '\0';
   for( i = 0; i < info->replaced_line_count &&
@@ -1252,16 +1255,21 @@ report_replacements( const basic_text_info *info )
     snprintf( lines + used, sizeof( lines ) - used, ", ..." );
 
   if( info->unknown )
-    ui_error( UI_ERROR_INFO, "The program was loaded, but %lu character(s) "
-              "had to be replaced by a plain letter and %lu with no "
-              "Spectrum equivalent by '?'.\nLines: %s",
+    snprintf( replaced, sizeof( replaced ), "\n\n%lu character(s) were "
+              "replaced by a plain letter and %lu with no Spectrum "
+              "equivalent by '?'.\nLines: %s",
               (unsigned long)info->replaced, (unsigned long)info->unknown,
               lines );
+  else if( info->replaced )
+    snprintf( replaced, sizeof( replaced ), "\n\n%lu accented character(s) "
+              "were replaced by the plain letter, as the Spectrum has "
+              "none.\nLines: %s", (unsigned long)info->replaced, lines );
   else
-    ui_error( UI_ERROR_INFO, "The program was loaded, but %lu accented "
-              "character(s) were replaced by the plain letter, as the "
-              "Spectrum has none.\nLines: %s",
-              (unsigned long)info->replaced, lines );
+    replaced[0] = '\0';
+
+  ui_error( UI_ERROR_INFO, "The BASIC program \"%s\" was loaded "
+            "successfully (%lu lines).%s", pending_name,
+            (unsigned long)info->lines, replaced );
 }
 
 /* Put the pending program in memory. Returns 0 on success */
@@ -1286,6 +1294,15 @@ press_key( keyboard_key_name key, int caps, load_state_t state,
   key_frames = 0;
   load_state = state;
   after_key_state = next;
+}
+
+/* 48K: Enter on the empty edit line lists the program */
+static void
+list_program( void )
+{
+  libspectrum_free( pending_program );
+  pending_program = NULL;
+  press_key( KEYBOARD_Enter, 0, LOAD_LIST_KEY, LOAD_REPORT );
 }
 
 /* At the main menu: put the program in memory, then choose 128 BASIC */
@@ -1322,6 +1339,13 @@ basic_text_load( const char *filename )
 
   if( utils_read_file( filename, &file ) ) return 1;
 
+  {
+    const char *name = filename, *p;
+    for( p = filename; *p; p++ )
+      if( *p == '/' || *p == '\\' ) name = p + 1;
+    snprintf( pending_name, sizeof( pending_name ), "%s", name );
+  }
+
   editor = editor_idle();
   mode = target_mode( editor );
 
@@ -1339,8 +1363,7 @@ basic_text_load( const char *filename )
 
   if( editor == 48 ) {
     if( load_inject() ) return 1;
-    report_replacements( &pending_info );
-    load_finish();
+    list_program();
     return 0;
   }
 
@@ -1378,8 +1401,7 @@ basic_text_frame( void )
   case LOAD_WAIT_BOOT:
     if( editor_48_idle() ) {
       if( load_inject() ) return;
-      report_replacements( &pending_info );
-      load_finish();
+      list_program();
     } else if( menu_128_shown() ) {
       main_menu();
     }
@@ -1388,6 +1410,7 @@ basic_text_frame( void )
   case LOAD_EDIT_KEY:
   case LOAD_EDIT_MENU_KEY:
   case LOAD_MAIN_MENU_KEY:
+  case LOAD_LIST_KEY:
     if( ++key_frames == KEY_FRAMES ) {
       keyboard_synthetic_release_all( KEYBOARD_SYNTHETIC_BASIC_TEXT );
     } else if( key_frames >= 2 * KEY_FRAMES ) {
@@ -1412,10 +1435,13 @@ basic_text_frame( void )
     break;
 
   case LOAD_WAIT_EDITOR:
-    if( editor_128_idle() ) {
-      report_replacements( &pending_info );
-      load_finish();
-    }
+    /* The 128K editor starts with the program listed */
+    if( editor_128_idle() ) load_state = LOAD_REPORT;
+    break;
+
+  case LOAD_REPORT:
+    load_finish();
+    report_loaded( &pending_info );
     break;
 
   case LOAD_IDLE:

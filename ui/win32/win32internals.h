@@ -110,6 +110,8 @@ void win32ui_fuse_resize( int width, int height );
 
 int win32ui_confirm( const char *string );
 
+void win32ui_infobox( const char *message );
+
 typedef enum win32ui_picture_format {
   PICTURE_SCR,
   PICTURE_PNG,

@@ -47,6 +47,8 @@ ui_win32_files = \
                  ui/display_timing.c \
                  ui/win32/hyperlinks.c \
                  ui/win32/hyperlinks.h \
+                 ui/win32/infobox.c \
+                 ui/win32/infobox.h \
                  ui/win32/keysyms.c \
                  ui/win32/memorybrowser.c \
                  ui/win32/memorybrowser.h \
@@ -77,6 +79,7 @@ ui_win32_rc_files = \
                  ui/win32/binary.rc \
                  ui/win32/browse.rc \
                  ui/win32/debugger.rc \
+                 ui/win32/infobox.rc \
                  ui/win32/memorybrowser.rc \
                  ui/win32/menu_data.rc \
                  ui/win32/options.rc \

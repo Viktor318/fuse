@@ -101,6 +101,7 @@
 #include "psg.h"
 #include "rzx.h"
 #include "screenshot.h"
+#include "session.h"
 #include "settings.h"
 #include "slt.h"
 #include "snapshot.h"
@@ -176,6 +177,7 @@ static int parse_nonoption_args( int argc, char **argv, int first_arg,
 				 start_files_t *start_files );
 static int do_start_files( start_files_t *start_files );
 static void free_start_files( start_files_t *start_files );
+static int start_files_given( const start_files_t *start_files );
 
 static int fuse_end(void);
 
@@ -230,6 +232,17 @@ int main(int argc, char **argv)
 #ifdef ENABLE_AUTOMATION
   if( automation_active() && automation_write_result() ) r = 1;
 #endif
+
+  if( 1
+#ifdef UI_NULL
+      && !settings_current.unittests
+#endif
+#ifdef ENABLE_AUTOMATION
+      && !automation_active()
+#endif
+    )
+    session_save();
+
   fuse_end();
 #ifdef ENABLE_AUTOMATION
   if( automation_active() ) automation_end();
@@ -442,6 +455,19 @@ static int fuse_init(int argc, char **argv)
     return 1;
   }
   error = do_start_files( &start_files );
+
+  /* Carry on from where the last session stopped, unless something to
+     open was given */
+  if( !error && !start_files_given( &start_files )
+#ifdef UI_NULL
+      && !settings_current.unittests
+#endif
+#ifdef ENABLE_AUTOMATION
+      && !automation_active()
+#endif
+    )
+    session_restore();
+
   free_start_files( &start_files );
   if( error ) return 1;
 
@@ -702,6 +728,31 @@ setup_start_files( start_files_t *start_files )
   utils_file_init( &start_files->mdr[5], settings_current.mdr_file6 );
   utils_file_init( &start_files->mdr[6], settings_current.mdr_file7 );
   utils_file_init( &start_files->mdr[7], settings_current.mdr_file8 );
+
+  return 0;
+}
+
+static int
+start_files_given( const start_files_t *start_files )
+{
+  size_t i;
+
+  if( start_files->disk_plus3.filename || start_files->disk_opus.filename ||
+      start_files->disk_plusd.filename || start_files->disk_beta.filename ||
+      start_files->disk_didaktik80.filename ||
+      start_files->disk_disciple.filename || start_files->dock.filename ||
+      start_files->if2.filename || start_files->playback.filename ||
+      start_files->recording || start_files->snapshot.filename ||
+      start_files->tape.filename ||
+      start_files->simpleide_master || start_files->simpleide_slave ||
+      start_files->zxatasp_master || start_files->zxatasp_slave ||
+      start_files->zxcf || start_files->divide_master ||
+      start_files->divide_slave || start_files->divmmc ||
+      start_files->zxmmc )
+    return 1;
+
+  for( i = 0; i < 8; i++ )
+    if( start_files->mdr[i].filename ) return 1;
 
   return 0;
 }

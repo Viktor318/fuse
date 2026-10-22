@@ -54,6 +54,7 @@ fuse_SOURCES = display.c \
 	rzx_recording.c \
 	rzx_internal.h \
 	screenshot.c \
+	session.c \
 	settings.c \
 	slt.c \
 	snapshot.c \
@@ -153,6 +154,7 @@ noinst_HEADERS = bitmap.h \
 	rectangle.h \
 	rzx.h \
 	screenshot.h \
+	session.h \
 	settings.h \
 	slt.h \
 	snapshot.h \

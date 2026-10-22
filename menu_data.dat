@@ -71,6 +71,8 @@ File/Movie/_Stop, Item
 File/separator, Separator
 File/Loa_d binary data..., Item
 File/Save _binary data..., Item
+File/Load BASIC _text..., Item
+File/Save BASIC _as text..., Item
 
 File/separator, Separator
 File/E_xit..., Item, F10

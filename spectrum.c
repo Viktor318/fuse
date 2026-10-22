@@ -25,6 +25,7 @@
 
 #include "libspectrum.h"
 
+#include "basic_text.h"
 #include "compat.h"
 #include "debugger/debugger.h"
 #include "display.h"
@@ -171,6 +172,7 @@ spectrum_frame( void )
   loader_frame( frame_length );
   phantom_typist_frame();
   hungarian_keyboard_frame();
+  basic_text_frame();
 
   frames_since_reset++;
 

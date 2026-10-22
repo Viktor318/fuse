@@ -24,6 +24,7 @@
 
 #include "config.h"
 
+#include <string.h>
 #include <windows.h>
 
 #include "ui/ui.h"
@@ -56,6 +57,8 @@ static LPCTSTR file_filter = TEXT(
 "\0"
 "All Files (*.*)\0"
 "*.*\0"
+"BASIC Text Files (*.bas;*.txt)\0"
+"*.bas;*.txt\0"
 "Auxiliary Files (*.scr;*.mlt;*.pok;*.png;*.svg;...)\0"
 "*.bin;*.log;*.mlt;*.png;*.pok;*.scr;*.svg\0"
 #ifdef LIBSPECTRUM_SUPPORTS_ZLIB_COMPRESSION
@@ -94,12 +97,16 @@ static LPCTSTR file_filter = TEXT(
 
 static DWORD filter_index = 0;
 
+/* Position of "BASIC Text Files" in file_filter, counting from 1 */
+#define BASIC_TEXT_FILTER_INDEX 3
+
 static char*
 run_dialog( const char *title, int is_saving )
 {
   OPENFILENAME ofn;
   char szFile[512];
   int result;
+  int basic_text = strstr( title, "BASIC" ) != NULL;
 
   memset( &ofn, 0, sizeof( ofn ) );
   szFile[0] = '\0';
@@ -125,6 +132,12 @@ run_dialog( const char *title, int is_saving )
   ofn.nFileOffset = 0;
   ofn.nFileExtension = 0;
   ofn.lpstrDefExt = NULL;
+
+  /* BASIC text: show and suggest .bas files */
+  if( basic_text ) {
+    ofn.nFilterIndex = BASIC_TEXT_FILTER_INDEX;
+    ofn.lpstrDefExt = "bas";
+  }
 /* ofn.pvReserved = NULL; */
 /* ofn.FlagsEx = 0; */
 
@@ -134,7 +147,7 @@ run_dialog( const char *title, int is_saving )
     result = GetOpenFileName( &ofn );
   }
 
-  filter_index = ofn.nFilterIndex;
+  if( !basic_text ) filter_index = ofn.nFilterIndex;
 
   if( !result ) {
     return NULL;

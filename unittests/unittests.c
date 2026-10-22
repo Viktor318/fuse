@@ -34,6 +34,7 @@
 
 #include "libspectrum.h"
 
+#include "basic_text.h"
 #include "debugger/debugger.h"
 #include "display.h"
 #include "fuse.h"
@@ -4270,6 +4271,265 @@ event_queue_test( void )
   return error;
 }
 
+/* Tokenise `text' and compare with the expected bytes (one line's text,
+   without line number, length and final 0x0d) */
+static int
+basic_text_line_is( const char *text, int basic128,
+                    const libspectrum_byte *expected, size_t expected_length )
+{
+  libspectrum_byte *program;
+  size_t length;
+  basic_text_info info;
+  char error[256];
+  int ok;
+
+  if( basic_text_tokenize( text, strlen( text ), basic128, &program, &length,
+                           &info, error, sizeof( error ) ) ) {
+    printf( "basic_text: '%s': %s\n", text, error );
+    return 0;
+  }
+
+  ok = length == expected_length + 5 &&
+       !memcmp( program + 4, expected, expected_length ) &&
+       program[ length - 1 ] == 0x0d &&
+       program[2] + ( program[3] << 8 ) == expected_length + 1;
+  if( !ok ) {
+    size_t i;
+    printf( "basic_text: '%s' gave", text );
+    for( i = 0; i < length; i++ ) printf( " %02x", program[i] );
+    printf( "\n" );
+  }
+
+  libspectrum_free( program );
+  return ok;
+}
+
+static int
+basic_text_fails( const char *text )
+{
+  libspectrum_byte *program = NULL;
+  size_t length;
+  basic_text_info info;
+  char error[256];
+
+  if( basic_text_tokenize( text, strlen( text ), 0, &program, &length, &info,
+                           error, sizeof( error ) ) )
+    return error[0] != '\0';
+
+  libspectrum_free( program );
+  return 0;
+}
+
+/* Text -> tokens -> text -> tokens gives the same tokens */
+static int
+basic_text_round_trip( const char *text, int basic128 )
+{
+  libspectrum_byte *program, *program2;
+  size_t length, length2;
+  basic_text_info info;
+  char error[256], *listing;
+  int ok;
+
+  if( basic_text_tokenize( text, strlen( text ), basic128, &program, &length,
+                           &info, error, sizeof( error ) ) ) {
+    printf( "basic_text: %s\n", error );
+    return 0;
+  }
+  listing = basic_text_detokenize( program, length, basic128, "\n" );
+  if( !listing ) { libspectrum_free( program ); return 0; }
+
+  if( basic_text_tokenize( listing, strlen( listing ), basic128, &program2,
+                           &length2, &info, error, sizeof( error ) ) ) {
+    printf( "basic_text: listing:\n%s%s\n", listing, error );
+    libspectrum_free( program ); libspectrum_free( listing );
+    return 0;
+  }
+
+  ok = length == length2 && !memcmp( program, program2, length );
+  if( !ok ) printf( "basic_text: round trip differs:\n%s---\n%s", text,
+                    listing );
+
+  libspectrum_free( program ); libspectrum_free( program2 );
+  libspectrum_free( listing );
+  return ok;
+}
+
+static int
+basic_text_test( void )
+{
+  libspectrum_byte *program;
+  size_t length;
+  basic_text_info info;
+  char error[256], *listing;
+
+  {
+    const libspectrum_byte e[] = { 0xf5, '"', 'H', 'i', '"' };
+    TEST_ASSERT( basic_text_line_is( "10 PRINT \"Hi\"", 0, e, sizeof( e ) ) );
+  }
+  {
+    /* Hidden numbers, TO, lower case variable, colon */
+    const libspectrum_byte e[] = {
+      0xeb, 'i', '=', '1', 0x0e, 0, 0, 1, 0, 0, 0xcc, '1', '0',
+      0x0e, 0, 0, 10, 0, 0, ':', 0xf3, 'i'
+    };
+    TEST_ASSERT( basic_text_line_is( "10 FOR i=1 TO 10: NEXT i", 0, e,
+                                     sizeof( e ) ) );
+    TEST_ASSERT( basic_text_line_is( "10 FOR i=1TO 10:NEXT i", 0, e,
+                                     sizeof( e ) ) );
+  }
+  {
+    /* Floating point numbers */
+    const libspectrum_byte e[] = {
+      0xf5, '0', '.', '5', 0x0e, 0x80, 0, 0, 0, 0, ',',
+      '3', '.', '5', 0x0e, 0x82, 0x60, 0, 0, 0, ',',
+      '6', '5', '5', '3', '6', 0x0e, 0x91, 0, 0, 0, 0, ',',
+      '1', 'E', '3', 0x0e, 0, 0, 0xe8, 0x03, 0
+    };
+    TEST_ASSERT( basic_text_line_is( "1 PRINT 0.5,3.5,65536,1E3", 0, e,
+                                     sizeof( e ) ) );
+  }
+  {
+    /* DEF FN parameters get room for their values */
+    const libspectrum_byte e[] = {
+      0xce, 'f', '(', 'x', 0x0e, 0, 0, 0, 0, 0, ',', 'y', '$',
+      0x0e, 0, 0, 0, 0, 0, ')', '=', 'x'
+    };
+    TEST_ASSERT( basic_text_line_is( "5 DEF FN f(x,y$)=x", 0, e,
+                                     sizeof( e ) ) );
+  }
+  {
+    const libspectrum_byte e[] = {
+      0xf5, 0xc4, '1', '0', '1', 0x0e, 0, 0, 5, 0, 0
+    };
+    TEST_ASSERT( basic_text_line_is( "5 PRINT BIN 101", 0, e, sizeof( e ) ) );
+  }
+  {
+    /* Nothing after REM is tokenised */
+    const libspectrum_byte e[] = { 0xea, 'P', 'R', 'I', 'N', 'T', ' ', '1' };
+    TEST_ASSERT( basic_text_line_is( "5 REM PRINT 1", 0, e, sizeof( e ) ) );
+  }
+  {
+    const libspectrum_byte e[] = {
+      0xfa, 'a', 0xc9, 'b', 0xcb, 0xec, '1', '0', 0x0e, 0, 0, 10, 0, 0
+    };
+    TEST_ASSERT( basic_text_line_is( "5 IF a<>b THEN GOTO 10", 0, e,
+                                     sizeof( e ) ) );
+  }
+  {
+    /* Variable names: no keywords inside words, no numbers after letters */
+    const libspectrum_byte e[] = {
+      0xf1, 'T', 'O', 'T', 'A', 'L', '=', 'a', '1', '+', 't', 'o'
+    };
+    TEST_ASSERT( basic_text_line_is( "5 LET TOTAL=a1+to", 0, e,
+                                     sizeof( e ) ) );
+  }
+  {
+    /* Escapes, pound and copyright signs */
+    const libspectrum_byte e[] = {
+      0xf5, '"', 0x10, 2, 0x90, 0x87, 0x7f, 0x60, 0x60, '\\', '"'
+    };
+    TEST_ASSERT( basic_text_line_is(
+      "5 PRINT \"\\{16}\\{0x02}\\a\\':\\*\xc2\xa3`\\\\\"", 0, e,
+      sizeof( e ) ) );
+  }
+  {
+    /* PLAY is a keyword in 128 BASIC only */
+    const libspectrum_byte e128[] = { 0xa4, '"', 'c', '"' };
+    const libspectrum_byte e48[] = { 'P', 'L', 'A', 'Y', ' ', '"', 'c', '"' };
+    TEST_ASSERT( basic_text_line_is( "5 PLAY \"c\"", 1, e128,
+                                     sizeof( e128 ) ) );
+    TEST_ASSERT( basic_text_line_is( "5 PLAY \"c\"", 0, e48, sizeof( e48 ) ) );
+  }
+
+  /* Accented letters, UTF-8 and Windows-1250 */
+  {
+    const libspectrum_byte e[] = { 0xf5, '"', 'S', 'z', 'e', 'p', '"' };
+    TEST_ASSERT( basic_text_line_is( "5 PRINT \"Sz\xc3\xa9p\"", 0, e,
+                                     sizeof( e ) ) );
+    TEST_ASSERT( basic_text_line_is( "5 PRINT \"Sz\xe9p\"", 0, e,
+                                     sizeof( e ) ) );
+  }
+  TEST_ASSERT( !basic_text_tokenize( "10 PRINT \"\xc5\x91r\"\n20 PRINT \"ok\"\n"
+                                     "30 PRINT \"\xc3\xbc\xc3\xbc\"\n",
+                                     strlen( "10 PRINT \"\xc5\x91r\"\n20 PRINT "
+                                             "\"ok\"\n30 PRINT \"\xc3\xbc\xc3"
+                                             "\xbc\"\n" ),
+                                     0, &program, &length, &info, error,
+                                     sizeof( error ) ) );
+  TEST_ASSERT( info.replaced == 3 && info.unknown == 0 &&
+               info.replaced_line_count == 2 &&
+               info.replaced_lines[0] == 10 && info.replaced_lines[1] == 30 );
+  libspectrum_free( program );
+
+  /* Automatic line numbers, comments, continuation lines, CR LF */
+  TEST_ASSERT( !basic_text_tokenize( "# demo\r\nCLS\r\n\r\nPRINT \\\r\n 1\r\n",
+                                     strlen( "# demo\r\nCLS\r\n\r\nPRINT \\\r\n"
+                                             " 1\r\n" ),
+                                     0, &program, &length, &info, error,
+                                     sizeof( error ) ) );
+  TEST_ASSERT( info.lines == 2 && program[0] == 0 && program[1] == 10 &&
+               program[2] == 2 && program[4] == 0xfb && program[5] == 0x0d &&
+               program[6] == 0 && program[7] == 20 && program[10] == 0xf5 &&
+               program[11] == '1' );
+  libspectrum_free( program );
+
+  /* Lines are sorted */
+  TEST_ASSERT( !basic_text_tokenize( "20 STOP\n10 CLS\n", 15, 0, &program,
+                                     &length, &info, error,
+                                     sizeof( error ) ) );
+  TEST_ASSERT( program[1] == 10 && program[4] == 0xfb && program[7] == 20 );
+  libspectrum_free( program );
+
+  /* Errors */
+  TEST_ASSERT( basic_text_fails( "10 CLS\nPRINT\n" ) );
+  TEST_ASSERT( basic_text_fails( "CLS\n10 PRINT\n" ) );
+  TEST_ASSERT( basic_text_fails( "10 CLS\n10 PRINT\n" ) );
+  TEST_ASSERT( basic_text_fails( "10000 CLS\n" ) );
+  TEST_ASSERT( basic_text_fails( "10 PRINT \"\\{256}\"\n" ) );
+  TEST_ASSERT( basic_text_fails( "10 PRINT \"\\z\"\n" ) );
+  TEST_ASSERT( basic_text_fails( "# nothing\n\n" ) );
+  TEST_ASSERT( basic_text_fails( "10\n" ) );
+
+  /* Listing */
+  TEST_ASSERT( !basic_text_tokenize( "10 FOR i=1 TO 10 STEP 2\n"
+                                     "20 IF a<>b AND NOT c THEN GO TO 10\n"
+                                     "30 LET a=INT (RND*10): PRINT AT 1,2;"
+                                     "\"\\{17}\\{6}x\\::\\*\"\n"
+                                     "40 REM \\{201}ok\n",
+                                     strlen( "10 FOR i=1 TO 10 STEP 2\n"
+                                             "20 IF a<>b AND NOT c THEN GO TO "
+                                             "10\n30 LET a=INT (RND*10): PRINT "
+                                             "AT 1,2;\"\\{17}\\{6}x\\::\\*\"\n"
+                                             "40 REM \\{201}ok\n" ),
+                                     0, &program, &length, &info, error,
+                                     sizeof( error ) ) );
+  listing = basic_text_detokenize( program, length, 0, "\n" );
+  libspectrum_free( program );
+  TEST_ASSERT( listing );
+  if( strcmp( listing, "10 FOR i=1 TO 10 STEP 2\n"
+                       "20 IF a<>b AND NOT c THEN GO TO 10\n"
+                       "30 LET a=INT (RND*10): PRINT AT 1,2;"
+                       "\"\\{17}\\{6}x\\::\xc2\xa9\"\n"
+                       "40 REM \\{201}ok\n" ) ) {
+    printf( "basic_text listing:\n%s", listing );
+    libspectrum_free( listing );
+    return 1;
+  }
+  libspectrum_free( listing );
+
+  TEST_ASSERT( basic_text_round_trip(
+    "10 DEF FN f(x,y$)=x*VAL y$\n"
+    "20 PRINT FN f(2,\"3\");BIN 1101;0.1;1E-5;PI;INKEY$\n"
+    "30 OPEN #4,\"b\": CLOSE #4: GO SUB 100: RANDOMIZE USR 0\n"
+    "40 PRINT \"\\a\\b\\u\\  \\'.\\.'\\: \\::\\{0x0e}\xc2\xa3\\\\\"\n"
+    "50 DATA 1,2: READ a: RESTORE : PLOT INK 2;1,1: DRAW 3,4,PI/2\n"
+    "60 IF INKEY$=\"\" THEN GO TO 60\n"
+    "100 RETURN\n", 0 ) );
+  TEST_ASSERT( basic_text_round_trip( "10 PLAY \"abc\": SPECTRUM\n", 1 ) );
+
+  return 0;
+}
+
 int
 unittests_run( void )
 {
@@ -4308,6 +4568,7 @@ unittests_run( void )
   r += keyboard_shifted_arrows_test();
   r += keyboard_shifted_arrows_release_all_test();
   r += hungarian_keyboard_test();
+  r += basic_text_test();
   r += utils_safe_strdup_test();
   r += bitmap_ops_test();
   r += mempool_test();

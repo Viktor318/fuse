@@ -88,7 +88,7 @@ group	context	english	hungarian
 1 Menü	Machine	Multiface Red &Button	Multiface piros &gomb
 1 Menü	Machine	Didaktik SNA&P	Didaktik SN&AP
 1 Menü	(főmenü)	M&edia	&Média
-1 Menü	Media	&Tape	&Szalag
+1 Menü	Media	&Tape	Ka&zetta
 1 Menü	Media > Tape	&Play	&Lejátszás
 1 Menü	Media > Tape	&Browse...	&Tallózás...
 1 Menü	Media > Tape	&Rewind	&Visszatekerés
@@ -171,11 +171,11 @@ group	context	english	hungarian
 2 Beállítások (Options)	IDD_OPT_MEDIA: LTEXT	&Phantom typist mode	Automatikus &gépelés módja
 2 Beállítások (Options)	IDD_OPT_MEDIA: AUTOCHECKBOX	&Detect loaders	Betöltők &felismerése
 2 Beállítások (Options)	IDD_OPT_MEDIA: AUTOCHECKBOX	&Fastloading	Gyors&töltés
-2 Beállítások (Options)	IDD_OPT_MEDIA: AUTOCHECKBOX	Use &tape traps	Szalag-&ROM-gyorsítás (traps)
+2 Beállítások (Options)	IDD_OPT_MEDIA: AUTOCHECKBOX	Use &tape traps	Kazetta-&ROM-gyorsítás (traps)
 2 Beállítások (Options)	IDD_OPT_MEDIA: AUTOCHECKBOX	Accelerate l&oaders	Betöltők gyor&sítása
 2 Beállítások (Options)	IDD_OPT_MEDIA: AUTOCHECKBOX	Use .s&lt traps	.s&lt gyorsítás (traps)
-2 Beállítások (Options)	IDD_OPT_MEDIA: LTEXT	&MDR cartridge len	&MDR kazetta hossza
-2 Beállítások (Options)	IDD_OPT_MEDIA: AUTOCHECKBOX	Random len&gth MDR cartridge	&Véletlen hosszú MDR kazetta
+2 Beállítások (Options)	IDD_OPT_MEDIA: LTEXT	&MDR cartridge len	&Microdrive-kazetta hossza
+2 Beállítások (Options)	IDD_OPT_MEDIA: AUTOCHECKBOX	Random len&gth MDR cartridge	&Véletlen hosszú Microdrive-kazetta
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	&Kempston joystick	&Kempston joystick
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Kempston &mouse	Kempston &egér
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	&Swap mouse buttons	Egér&gombok felcserélése
@@ -290,8 +290,8 @@ group	context	english	hungarian
 3 Ablakok	IDD_BINARY: CTEXT	Length	Hossz
 3 Ablakok	IDD_BINARY: DEFPUSHBUTTON; IDD_INFOBOX: DEFPUSHBUTTON; IDD_ROLLBACK: DEFPUSHBUTTON; IDD_ROMS: DEFPUSHBUTTON; IDD_JOYSTICKS: DEFPUSHBUTTON	OK	OK
 3 Ablakok	IDD_BINARY: PUSHBUTTON; IDD_ROLLBACK: PUSHBUTTON; IDD_ROMS: PUSHBUTTON; IDD_JOYSTICKS: PUSHBUTTON	Cancel	Mégse
-3 Ablakok	ablak címe	Fuse - Browse Tape	Fuse - Szalag tartalma
-3 Ablakok	IDD_BROWSE: CTEXT	Tape modified	A szalag módosult
+3 Ablakok	ablak címe	Fuse - Browse Tape	Fuse - Kazetta tartalma
+3 Ablakok	IDD_BROWSE: CTEXT	Tape modified	A kazetta módosult
 3 Ablakok	IDD_BROWSE: DEFPUSHBUTTON; IDD_DBG: PUSHBUTTON; IDD_MEM: PUSHBUTTON; IDD_POKEFINDER: PUSHBUTTON	&Close	&Bezárás
 3 Ablakok	ablak címe	Fuse - Debugger	Fuse - Hibakereső
 3 Ablakok	IDD_DBG: DEFPUSHBUTTON	&Evaluate	&Kiértékelés
@@ -379,7 +379,7 @@ group	context	english	hungarian
 3 Ablakok	ablak címe	Fuse - Load Snapshot	Fuse - Pillanatkép betöltése
 3 Ablakok	ablak címe	Fuse - Continue Recording	Fuse - Felvétel folytatása
 3 Ablakok	ablak címe	Fuse - Start AY Log	Fuse - AY naplózás indítása
-3 Ablakok	ablak címe	Fuse - Write Tape	Fuse - Szalag kiírása
+3 Ablakok	ablak címe	Fuse - Write Tape	Fuse - Kazetta kiírása
 3 Ablakok	ablak címe	Fuse - Confirm	Fuse - Megerősítés
 3 Ablakok	ablak címe	Fuse - Select ROM	Fuse - ROM kiválasztása
 3 Ablakok	ablak címe	Fuse - Warning	Fuse - Figyelmeztetés
@@ -400,7 +400,7 @@ group	context	english	hungarian
 3 Ablakok	fájltípus szűrő	Snapshot Files (*.szx;*.z80;*.sna;...)	Pillanatkép-fájlok (*.szx;*.z80;*.sna;...)
 3 Ablakok	táblázat oszlopfejléc / felirat	Block type	Blokk típusa
 3 Ablakok	táblázat oszlopfejléc / felirat	Data	Adat
-3 Ablakok	táblázat oszlopfejléc / felirat	Tape not modified	A szalag nem módosult
+3 Ablakok	táblázat oszlopfejléc / felirat	Tape not modified	A kazetta nem módosult
 3 Ablakok	táblázat oszlopfejléc / felirat	ID	ID
 3 Ablakok	táblázat oszlopfejléc / felirat	Type	Típus
 3 Ablakok	táblázat oszlopfejléc / felirat	Value	Érték
@@ -451,8 +451,8 @@ group	context	english	hungarian
 4 Üzenetek	hibaüzenet	This machine does not support the dock	Ez a gép nem támogatja a Timex Dockot
 4 Üzenetek	kérdés (Igen/Nem)	Try to merge 'B' side of this disk?	Összevonjam a lemez „B” oldalát?
 4 Üzenetek	figyelmeztetés	This %d track disk image is incompatible with the configured %d track drive. Use disk options to select a compatible drive.	Ez a %d sávos lemezkép nem illik a beállított %d sávos meghajtóhoz. A Lemezbeállításokban válassz megfelelő meghajtót.
-4 Üzenetek	hibaüzenet	Cannot insert cartridge '%s', all Microdrives in use	A(z) „%s” kazetta nem helyezhető be, minden Microdrive foglalt
-4 Üzenetek	hibaüzenet	Failed to open cartridge image	A kazettafájl megnyitása nem sikerült
+4 Üzenetek	hibaüzenet	Cannot insert cartridge '%s', all Microdrives in use	A(z) „%s” Microdrive-kazetta nem helyezhető be, minden Microdrive foglalt
+4 Üzenetek	hibaüzenet	Failed to open cartridge image	A Microdrive-kazetta megnyitása nem sikerült
 4 Üzenetek	kérdés (Igen/Nem)	Cartridge in Microdrive %i has been modified.\nDo you want to save it?	A(z) %i. Microdrive kazettája módosult.\nMented?
 4 Üzenetek	hibaüzenet	Error opening '%s': %s	Hiba a(z) „%s” megnyitásakor: %s
 4 Üzenetek	hibaüzenet	This machine does not support the Interface 2	Ez a gép nem támogatja az Interface 2-t
@@ -481,8 +481,8 @@ group	context	english	hungarian
 4 Üzenetek	hibaüzenet	Loading a %s snapshot, but that's not available	%s pillanatkép betöltése, de ez a gép nem érhető el
 4 Üzenetek	figyelmeztetés	A large amount of information has been lost in conversion; the snapshot probably won't work	Az átalakításkor sok adat elveszett; a pillanatkép valószínűleg nem fog működni
 4 Üzenetek	figyelmeztetés	Some information has been lost in conversion; the snapshot may not work	Az átalakításkor néhány adat elveszett; lehet, hogy a pillanatkép nem fog működni
-4 Üzenetek	kérdés (Igen/Nem)	Tape has been modified.\nDo you want to save it?	A szalag módosult.\nMented?
-4 Üzenetek	hibaüzenet	Tape recording is unavailable during RZX	RZX közben nem lehet szalagra felvenni
+4 Üzenetek	kérdés (Igen/Nem)	Tape has been modified.\nDo you want to save it?	A kazetta módosult.\nMented?
+4 Üzenetek	hibaüzenet	Tape recording is unavailable during RZX	RZX közben nem lehet kazettára felvenni
 4 Üzenetek	figyelmeztetés	Scaler id '%s' has been removed; using 'normal'	A(z) „%s” szűrő megszűnt; helyette: normal
 4 Üzenetek	hibaüzenet	Scaler id '%s' unknown	Ismeretlen szűrő: „%s”
 4 Üzenetek	hibaüzenet	Length must be between 1 and 65536	A hossz 1 és 65536 között lehet
@@ -514,8 +514,8 @@ group	context	english	hungarian
 4 Üzenetek	hibaüzenet	Couldn't start capture for joystick 2	A 2. joystick nem kezelhető
 extra	Options > General: Language	Lan&guage	Nyel&v
 extra	Language list	Automatic	Automatikus
-extra	file type filter	Tape Files (*.tap;*.tzx;*.pzx;*.csw;...)	Szalagfájlok (*.tap;*.tzx;*.pzx;*.csw;...)
-extra	file type filter	Tape Files (*.tap;*.tzx;*.pzx;*.wav;*.csw;...)	Szalagfájlok (*.tap;*.tzx;*.pzx;*.wav;*.csw;...)
+extra	file type filter	Tape Files (*.tap;*.tzx;*.pzx;*.csw;...)	Kazettafájlok (*.tap;*.tzx;*.pzx;*.csw;...)
+extra	file type filter	Tape Files (*.tap;*.tzx;*.pzx;*.wav;*.csw;...)	Kazettafájlok (*.tap;*.tzx;*.pzx;*.wav;*.csw;...)
 extra	Poke Finder window: label	Possible locations: %lu	Lehetséges helyek: %lu
 extra	Debugger window: menu	&View	&Nézet
 extra	Debugger window: menu > View	&Registers	&Regiszterek

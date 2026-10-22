@@ -34,6 +34,7 @@
 #include <windows.h>
 
 #include "i18n.h"
+#include "options_internals.h"
 #include "win32internals.h"
 
 /* ------------------------------------------------------------------------
@@ -438,6 +439,36 @@ translate_dialog( HWND window )
   free( d );
 }
 
+/* Options -> General: the language list starts where the OK button does,
+   close to its short label */
+static void
+align_language_list( HWND dialog )
+{
+  HWND list = GetDlgItem( dialog, IDC_OPT_GENERAL_LANGUAGE );
+  HWND label = GetDlgItem( dialog, IDC_OPT_GENERAL_LABEL_LANGUAGE );
+  HWND ok = GetDlgItem( dialog, IDOK );
+  RECT list_rect, label_rect, ok_rect;
+
+  if( !list || !label || !ok ) return;
+
+  GetWindowRect( list, &list_rect );
+  GetWindowRect( label, &label_rect );
+  GetWindowRect( ok, &ok_rect );
+  MapWindowPoints( NULL, dialog, (POINT*)&list_rect, 2 );
+  MapWindowPoints( NULL, dialog, (POINT*)&label_rect, 2 );
+  MapWindowPoints( NULL, dialog, (POINT*)&ok_rect, 2 );
+
+  if( ok_rect.left <= label_rect.left ) return;
+
+  SetWindowPos( label, NULL, 0, 0, ok_rect.left - label_rect.left - 4,
+                label_rect.bottom - label_rect.top,
+                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
+  SetWindowPos( list, NULL, ok_rect.left, list_rect.top,
+                list_rect.right - ok_rect.left,
+                list_rect.bottom - list_rect.top,
+                SWP_NOZORDER | SWP_NOACTIVATE );
+}
+
 static HHOOK dialog_hook = NULL;
 
 static LRESULT CALLBACK
@@ -445,7 +476,10 @@ dialog_hook_proc( int code, WPARAM wParam, LPARAM lParam )
 {
   if( code == HC_ACTION ) {
     const CWPRETSTRUCT *message = (const CWPRETSTRUCT*)lParam;
-    if( message->message == WM_INITDIALOG ) translate_dialog( message->hwnd );
+    if( message->message == WM_INITDIALOG ) {
+      translate_dialog( message->hwnd );
+      align_language_list( message->hwnd );
+    }
   }
 
   return CallNextHookEx( dialog_hook, code, wParam, lParam );

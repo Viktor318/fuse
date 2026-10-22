@@ -153,6 +153,13 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       win32keyboard_keyrelease( wParam, lParam );
       return 0;
 
+    case WM_SYSKEYUP:
+      /* A key released while Alt is down, or Alt itself once Ctrl is
+         already up (e.g. the end of AltGr). Release it in the emulated
+         machine too, then let Windows handle it as usual (menus) */
+      win32keyboard_keyrelease( wParam, lParam );
+      break;
+
     case WM_PAINT:
       if( ! win32ui_window_paint( hWnd, wParam, lParam ) )
         return 0;

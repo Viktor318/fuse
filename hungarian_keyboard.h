@@ -40,6 +40,10 @@ int hungarian_keyboard_keyrelease( const input_event_key_t *event );
    event must be swallowed because a timed key sequence is running */
 int hungarian_keyboard_modifier( const input_event_key_t *event, int press );
 
+/* Is this host modifier key tracked as held? Lets a UI resynchronise if it
+   missed a release event */
+int hungarian_keyboard_modifier_held( input_key key );
+
 /* Advance timed key sequences; called once per emulated frame */
 void hungarian_keyboard_frame( void );
 

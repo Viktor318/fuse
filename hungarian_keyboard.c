@@ -356,6 +356,17 @@ hungarian_keyboard_modifier( const input_event_key_t *event, int press )
   return queue_count && hungarian_keyboard_active();
 }
 
+int
+hungarian_keyboard_modifier_held( input_key key )
+{
+  int i;
+
+  for( i = 0; i < held_modifier_count; i++ )
+    if( held_modifiers[i] == key ) return 1;
+
+  return 0;
+}
+
 void
 hungarian_keyboard_frame( void )
 {

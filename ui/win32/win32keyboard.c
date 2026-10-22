@@ -35,6 +35,7 @@
 
 #include "display.h"
 #include "fuse.h"
+#include "hungarian_keyboard.h"
 #include "keyboard.h"
 #include "machine.h"
 #include "settings.h"
@@ -103,6 +104,38 @@ get_character( void )
   return character;
 }
 
+/* Windows doesn't always tell us when a modifier is released. In
+   particular, AltGr is sent as Ctrl + Alt, and when Ctrl goes up first the
+   Alt release comes as WM_SYSKEYUP. If character based typing still
+   believes a modifier is held while Windows says it is up, release it, or
+   it would keep Symbol (or Caps) Shift pressed after the next character */
+static void
+sync_modifiers( void )
+{
+  static const struct { int vk; input_key key; } modifiers[] = {
+    { VK_SHIFT, INPUT_KEY_Shift_L },
+    { VK_CONTROL, INPUT_KEY_Control_L },
+    { VK_MENU, INPUT_KEY_Alt_L },
+  };
+  input_event_t fuse_event;
+  size_t i;
+
+  if( !settings_current.hungarian_keyboard ) return;
+
+  for( i = 0; i < ARRAY_SIZE( modifiers ); i++ ) {
+    if( ( GetKeyState( modifiers[i].vk ) & 0x8000 ) ||
+        !hungarian_keyboard_modifier_held( modifiers[i].key ) )
+      continue;
+
+    fuse_event.type = INPUT_EVENT_KEYRELEASE;
+    fuse_event.types.key.native_key = modifiers[i].key;
+    fuse_event.types.key.spectrum_key = modifiers[i].key;
+    fuse_event.types.key.character = 0;
+    fuse_event.types.key.physical_key = 0;
+    input_event( &fuse_event );
+  }
+}
+
 void
 win32keyboard_init( void )
 {
@@ -126,6 +159,8 @@ win32keyboard_keypress( WPARAM wParam, LPARAM lParam )
   input_key fuse_keysym;
   input_event_t fuse_event;
   libspectrum_dword character;
+
+  sync_modifiers();
 
   switch( wParam ) {
   case VK_OEM_1:
@@ -168,6 +203,8 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
 {
   input_key fuse_keysym;
   input_event_t fuse_event;
+
+  sync_modifiers();
 
   switch( wParam ) {
   case VK_OEM_1:

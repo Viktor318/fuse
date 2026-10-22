@@ -69,9 +69,14 @@ static int read_png_file( const char *filename, png_bytep *buffer,
 int
 win32ui_picture( const char *filename, win32ui_picture_format format )
 {
-  /* Dialog already open? */
-  if( hDialogPicture != NULL )
+  /* Dialog already open? Bring it back to the front */
+  if( hDialogPicture != NULL ) {
+    if( IsIconic( hDialogPicture ) ) ShowWindow( hDialogPicture, SW_RESTORE );
+    SetWindowPos( hDialogPicture, HWND_TOP, 0, 0, 0, 0,
+                  SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW );
+    SetForegroundWindow( hDialogPicture );
     return 0;
+  }
 
   switch( format ) {
 
@@ -296,8 +301,11 @@ create_dialog( int width, int height )
 {
   HWND dialog;
 
+  /* Not owned by Fuse's main window, so that clicking the main window brings
+     it in front of the picture (an owned window always stays above its
+     owner). The picture has its own taskbar button to bring it back */
   dialog = CreateDialog( fuse_hInstance, MAKEINTRESOURCE( IDD_PICTURE ),
-                         fuse_hWnd, (DLGPROC)picture_wnd_proc );
+                         NULL, (DLGPROC)picture_wnd_proc );
 
   if( dialog == NULL )
     return NULL;

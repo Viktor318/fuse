@@ -25,6 +25,8 @@
 #include "config.h"
 
 #include <windows.h>
+#include <ole2.h>
+#include <olectl.h>
 
 #ifdef USE_LIBPNG
 #include <png.h>
@@ -51,6 +53,10 @@ static HWND create_dialog( int width, int height );
 static void draw_screen( libspectrum_byte *screen, int border );
 
 static LRESULT WINAPI picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
+
+static HBITMAP load_picture( const char *filename, IPicture **ipicture,
+                             int *width, int *height );
+static void draw_bitmap( HBITMAP bitmap, int width, int height );
 
 #ifdef PNG_SIMPLIFIED_READ_SUPPORTED
 
@@ -92,6 +98,28 @@ win32ui_picture( const char *filename, win32ui_picture_format format )
     /* PNG format not supported */
     return 1;
 #endif			/* #ifdef PNG_SIMPLIFIED_READ_SUPPORTED */
+  }
+
+  case PICTURE_JPG:
+  {
+    int width, height;
+    IPicture *ipicture;
+    HBITMAP bitmap;
+    HRESULT com = CoInitialize( NULL );
+
+    bitmap = load_picture( filename, &ipicture, &width, &height );
+    if( bitmap ) {
+      hDialogPicture = create_dialog( width, height );
+      if( hDialogPicture != NULL ) draw_bitmap( bitmap, width, height );
+
+      /* The bitmap belongs to the picture object */
+      ipicture->lpVtbl->Release( ipicture );
+    }
+
+    if( SUCCEEDED( com ) ) CoUninitialize();
+
+    if( !bitmap || hDialogPicture == NULL ) return 1;
+    break;
   }
 
   case PICTURE_SCR:
@@ -501,6 +529,96 @@ draw_screen( libspectrum_byte *screen, int border )
     }
 
   }
+}
+
+/* Load a picture in any format Windows can decode itself (JPEG, GIF, BMP)
+   from the lib directory. Returns its bitmap (owned by *ipicture, which the
+   caller must release) or NULL on error */
+static HBITMAP
+load_picture( const char *filename, IPicture **ipicture, int *width,
+              int *height )
+{
+  utils_file file;
+  HGLOBAL memory;
+  void *data;
+  IStream *stream = NULL;
+  OLE_HANDLE handle;
+  BITMAP info;
+  HRESULT result;
+  short type;
+
+  *ipicture = NULL;
+
+  if( utils_read_auxiliary_file( filename, &file, UTILS_AUXILIARY_LIB ) )
+    return NULL;
+
+  memory = GlobalAlloc( GMEM_MOVEABLE, file.length );
+  if( !memory ) {
+    utils_close_file( &file );
+    return NULL;
+  }
+
+  data = GlobalLock( memory );
+  memcpy( data, file.buffer, file.length );
+  GlobalUnlock( memory );
+
+  /* The stream takes ownership of the memory */
+  result = CreateStreamOnHGlobal( memory, TRUE, &stream );
+  if( FAILED( result ) ) {
+    GlobalFree( memory );
+    utils_close_file( &file );
+    return NULL;
+  }
+
+  result = OleLoadPicture( stream, file.length, FALSE, &IID_IPicture,
+                           (void **)ipicture );
+  stream->lpVtbl->Release( stream );
+  utils_close_file( &file );
+
+  if( FAILED( result ) || !*ipicture ) {
+    *ipicture = NULL;
+    return NULL;
+  }
+
+  /* Only bitmaps; the real size in pixels comes from the bitmap itself */
+  if( FAILED( (*ipicture)->lpVtbl->get_Type( *ipicture, &type ) ) ||
+      type != PICTYPE_BITMAP ||
+      FAILED( (*ipicture)->lpVtbl->get_Handle( *ipicture, &handle ) ) ||
+      !GetObject( (HBITMAP)(UINT_PTR)handle, sizeof( info ), &info ) ) {
+    (*ipicture)->lpVtbl->Release( *ipicture );
+    *ipicture = NULL;
+    return NULL;
+  }
+
+  *width = info.bmWidth;
+  *height = info.bmHeight;
+
+  return (HBITMAP)(UINT_PTR)handle;
+}
+
+/* Copy a bitmap into the picture buffer */
+static void
+draw_bitmap( HBITMAP bitmap, int width, int height )
+{
+  HDC screen_dc, source_dc, picture_dc;
+  HGDIOBJ old_source, old_picture;
+
+  GdiFlush();
+
+  screen_dc = GetDC( NULL );
+  source_dc = CreateCompatibleDC( screen_dc );
+  picture_dc = CreateCompatibleDC( screen_dc );
+  ReleaseDC( NULL, screen_dc );
+
+  old_source = SelectObject( source_dc, bitmap );
+  old_picture = SelectObject( picture_dc, picture_BMP );
+
+  BitBlt( picture_dc, 0, 0, width, height, source_dc, 0, 0, SRCCOPY );
+
+  SelectObject( source_dc, old_source );
+  SelectObject( picture_dc, old_picture );
+  DeleteDC( source_dc );
+  DeleteDC( picture_dc );
 }
 
 #ifdef PNG_SIMPLIFIED_READ_SUPPORTED

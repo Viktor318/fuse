@@ -25,8 +25,10 @@
 */
 
 #include "config.h"
+#include <stdio.h>
 #include <tchar.h>
 
+#include "compat.h"
 #include "debugger/debugger.h"
 #include "display.h"
 #include "fuse.h"
@@ -90,6 +92,8 @@ typedef struct win32ui_select_info {
 } win32ui_select_info;
 
 static BOOL win32ui_make_menu( void );
+static void save_window_position( void );
+static void restore_window_position( void );
 
 static int win32ui_lose_focus( HWND hWnd, WPARAM wParam, LPARAM lParam );
 static int win32ui_gain_focus( HWND hWnd, WPARAM wParam, LPARAM lParam );
@@ -125,6 +129,63 @@ handle_drop( HDROP hDrop )
     }
   }
   DragFinish( hDrop );
+}
+
+/* The main window's position is kept in a file next to the settings, so
+   that it is remembered even without saving the settings */
+static int
+window_position_path( char *path, size_t length )
+{
+  const char *dir = compat_get_config_path();
+
+  if( !dir ) return 1;
+  snprintf( path, length, "%s/fuse-window.txt", dir );
+  return 0;
+}
+
+static void
+save_window_position( void )
+{
+  char path[ PATH_MAX ];
+  RECT rect;
+  FILE *f;
+
+  /* A minimised window has no useful position */
+  if( IsIconic( fuse_hWnd ) || !GetWindowRect( fuse_hWnd, &rect ) ) return;
+  if( window_position_path( path, sizeof( path ) ) ) return;
+
+  f = fopen( path, "w" );
+  if( !f ) return;
+  fprintf( f, "x=%ld\ny=%ld\n", (long)rect.left, (long)rect.top );
+  fclose( f );
+}
+
+static void
+restore_window_position( void )
+{
+  char path[ PATH_MAX ];
+  RECT rect;
+  long x, y;
+  FILE *f;
+  int ok;
+
+  if( window_position_path( path, sizeof( path ) ) ) return;
+
+  f = fopen( path, "r" );
+  if( !f ) return;
+  ok = fscanf( f, "x=%ld y=%ld", &x, &y ) == 2;
+  fclose( f );
+  if( !ok ) return;
+
+  /* Only if the title bar would be on a monitor, which may have been
+     disconnected since */
+  GetWindowRect( fuse_hWnd, &rect );
+  rect.right = x + ( rect.right - rect.left ); rect.left = x;
+  rect.bottom = y + GetSystemMetrics( SM_CYCAPTION ); rect.top = y;
+  if( !MonitorFromRect( &rect, MONITOR_DEFAULTTONULL ) ) return;
+
+  SetWindowPos( fuse_hWnd, NULL, x, y, 0, 0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
 }
 
 static LRESULT WINAPI
@@ -176,6 +237,7 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       break;
 
     case WM_DESTROY:
+      save_window_position();
       fuse_exiting = 1;
       PostQuitMessage( 0 );
 
@@ -379,6 +441,9 @@ ui_init( int *argc, char ***argv )
   if( win32display_init() ) return 1;
 
   win32keyboard_init();
+
+  /* where it was when Fuse last exited */
+  restore_window_position();
 
   /* show the window finally */
   ShowWindow( fuse_hWnd, fuse_nCmdShow );

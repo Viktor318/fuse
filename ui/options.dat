@@ -73,6 +73,7 @@ Checkbox, Show status(b)ar, statusbar, INPUT_KEY_b
 Checkbox, Snap (j)oystick prompt, joy_prompt, INPUT_KEY_j
 Checkbox, (C)onfirm actions, confirm_actions, INPUT_KEY_c
 Checkbox, A(u)to-save settings, autosave_settings, INPUT_KEY_u
+Checkbox, Resume (l)ast session, resume_last_session, INPUT_KEY_l
 
 media
 Media Options

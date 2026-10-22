@@ -43,16 +43,20 @@ static DWORD nextpos; /* next position in circular buffer */
 /* How far ahead of the play cursor we have written. The circular buffer is
    played in a loop, so if playing catches up with writing, whatever is in
    the buffer gets played again. To avoid that being old audio (heard as a
-   delayed echo of earlier sounds), we count bytes written and played, resync
-   after an underrun, and fill all the rest of the buffer (from the end of
-   the written data round to the play cursor) with the last sample, which
-   plays as silence without a click. Then even a stall longer than the
-   whole buffer finds no old audio to play again */
+   delayed echo of earlier sounds), we count bytes written and played, always
+   write beyond DirectSound's write cursor (what is before it may already
+   have been mixed: on Windows it can be tens of milliseconds ahead of the
+   play cursor), resync after an underrun, and fill all the rest of the
+   buffer (from the end of the written data round to the play cursor) with
+   the last sample fading to zero, which plays as silence without a click.
+   Then even a stall longer than the whole buffer finds no old audio to play
+   again */
 static unsigned long long written_total, played_total;
 static DWORD last_playcursor;
 static DWORD last_frame_time;
 static DWORD block_align;	/* bytes per sample frame */
 static DWORD buffer_ms;		/* buffer length in milliseconds */
+static DWORD bytes_per_ms;
 static libspectrum_signed_word last_sample[2];
 static int channels;
 
@@ -142,6 +146,7 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   last_frame_time = GetTickCount();
   block_align = pcmwf.nBlockAlign;
   buffer_ms = MAX_AUDIO_BUFFER * 1000 / pcmwf.nAvgBytesPerSec;
+  bytes_per_ms = pcmwf.nAvgBytesPerSec / 1000;
   channels = pcmwf.nChannels;
   last_sample[0] = last_sample[1] = 0;
 
@@ -195,9 +200,14 @@ write_buffer( DWORD position, const libspectrum_signed_word *data,
       memcpy( part[i], data, length[i] );
       data += length[i] / sizeof( *data );
     } else {
+      /* Fade from the last sample to zero in about 2 ms, then silence */
       libspectrum_signed_word *out = part[i];
       DWORD j, samples = length[i] / sizeof( *out );
-      for( j = 0; j < samples; j++ ) out[j] = last_sample[ j % channels ];
+      for( j = 0; j < samples; j++ ) {
+        int c = j % channels;
+        out[j] = last_sample[c];
+        last_sample[c] = last_sample[c] * 15 / 16;
+      }
     }
   }
 
@@ -211,30 +221,40 @@ write_buffer( DWORD position, const libspectrum_signed_word *data,
 void
 sound_lowlevel_frame( libspectrum_signed_word *data, int len )
 {
-  DWORD playcursor, writecursor, now, bytes, fill;
+  DWORD playcursor, writecursor, now, bytes, fill, lead, margin, target;
   long long ahead;
 
   bytes = len * sizeof( *data );
 
-  update_played( &playcursor, &writecursor );
+  /* How far ahead of the play cursor to keep: beyond the write cursor, plus
+     at least 40 ms and a few frames */
+  margin = 40 * bytes_per_ms;
+  if( margin < bytes * 6 ) margin = bytes * 6;
 
-  /* Underrun: playing has caught up with writing (or we have not been
-     called for so long that it may have gone round the buffer). Continue
-     writing just after the write cursor, the first position safe to write */
+  update_played( &playcursor, &writecursor );
+  lead = ( writecursor + MAX_AUDIO_BUFFER - playcursor ) % MAX_AUDIO_BUFFER;
+
+  /* Underrun: we are not beyond the write cursor any more (or have not been
+     called for so long that playing may have gone round the buffer).
+     Continue writing a little after the write cursor */
   now = GetTickCount();
-  if( written_total < played_total ||
+  if( (long long)( written_total - played_total ) < (long long)lead ||
       now - last_frame_time > buffer_ms * 3 / 4 ) {
-    nextpos = ( writecursor + block_align - 1 ) / block_align * block_align;
-    if( nextpos >= MAX_AUDIO_BUFFER ) nextpos -= MAX_AUDIO_BUFFER;
+    nextpos = writecursor + 5 * bytes_per_ms;
+    nextpos = nextpos / block_align * block_align % MAX_AUDIO_BUFFER;
     written_total = played_total +
       ( nextpos + MAX_AUDIO_BUFFER - playcursor ) % MAX_AUDIO_BUFFER;
   }
 
   /* Too far ahead: wait for some of it to be played */
-  while( (long long)( written_total - played_total ) >=
-         (long long)bytes * 6 ) {
-    Sleep( 10 );
+  while( 1 ) {
+    target = lead + margin;
+    if( target > MAX_AUDIO_BUFFER / 2 ) target = MAX_AUDIO_BUFFER / 2;
+    if( (long long)( written_total - played_total ) < (long long)target )
+      break;
+    Sleep( 5 );
     update_played( &playcursor, &writecursor );
+    lead = ( writecursor + MAX_AUDIO_BUFFER - playcursor ) % MAX_AUDIO_BUFFER;
   }
 
   last_frame_time = GetTickCount();
@@ -249,12 +269,18 @@ sound_lowlevel_frame( libspectrum_signed_word *data, int len )
     last_sample[1] = data[ len - 1 ];
   }
 
-  /* Fill the rest of the buffer with the last sample, so an underrun plays
-     silence instead of old audio. Never touch what is still to be played */
+  /* Fill the rest of the buffer with the last sample fading to zero, so an
+     underrun plays silence instead of old audio. Never touch what is still
+     to be played. write_buffer() fades last_sample, so keep a copy */
   ahead = written_total - played_total;
   fill = ahead + block_align < MAX_AUDIO_BUFFER ?
          ( MAX_AUDIO_BUFFER - ahead - block_align ) / block_align *
            block_align :
          0;
-  if( fill ) write_buffer( nextpos, NULL, fill );
+  if( fill ) {
+    libspectrum_signed_word saved[2];
+    saved[0] = last_sample[0]; saved[1] = last_sample[1];
+    write_buffer( nextpos, NULL, fill );
+    last_sample[0] = saved[0]; last_sample[1] = saved[1];
+  }
 }

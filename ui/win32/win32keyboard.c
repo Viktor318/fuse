@@ -65,6 +65,44 @@ oem_keysyms_remap( WPARAM wParam )
   return ptr ? *ptr : INPUT_KEY_NONE;
 }
 
+/* Identifier of the physical key, the same on press and release: the
+   scan code, plus the extended key flag */
+static int
+physical_key( LPARAM lParam )
+{
+  return ( lParam >> 16 ) & 0x1ff;
+}
+
+/* For character based typing (Hungarian keyboard): the character produced
+   by this key press. TranslateMessage() has already posted the WM_CHAR
+   message for it, right behind the WM_KEYDOWN being handled, so take it from
+   the queue. Asking for it with the W variant gives Unicode even for an ANSI
+   window, so no code page handling is needed. Returns 0 if none (keys like
+   cursors, dead keys, or Ctrl/Alt combinations, which don't produce
+   WM_CHAR, or produce a control character) */
+static libspectrum_dword
+get_character( void )
+{
+  MSG msg;
+  libspectrum_dword character;
+
+  if( !settings_current.hungarian_keyboard ) return 0;
+
+  if( !PeekMessageW( &msg, fuse_hWnd, WM_CHAR, WM_CHAR, PM_REMOVE ) )
+    return 0;
+
+  character = (WCHAR)msg.wParam;
+
+  /* Characters outside the Basic Multilingual Plane come as a surrogate
+     pair; none of them has a Spectrum equivalent */
+  if( character >= 0xd800 && character <= 0xdfff ) {
+    PeekMessageW( &msg, fuse_hWnd, WM_CHAR, WM_CHAR, PM_REMOVE );
+    return 0;
+  }
+
+  return character;
+}
+
 void
 win32keyboard_init( void )
 {
@@ -87,6 +125,7 @@ win32keyboard_keypress( WPARAM wParam, LPARAM lParam )
 {
   input_key fuse_keysym;
   input_event_t fuse_event;
+  libspectrum_dword character;
 
   switch( wParam ) {
   case VK_OEM_1:
@@ -109,13 +148,17 @@ win32keyboard_keypress( WPARAM wParam, LPARAM lParam )
     break;
   }
 
-  if( fuse_keysym == INPUT_KEY_NONE ) return;
+  character = get_character();
+
+  /* Keys with no mapping are still passed on if they produced a character
+     (e.g. accented letters) */
+  if( fuse_keysym == INPUT_KEY_NONE && !character ) return;
 
   fuse_event.type = INPUT_EVENT_KEYPRESS;
   fuse_event.types.key.native_key = fuse_keysym;
   fuse_event.types.key.spectrum_key = fuse_keysym;
-  fuse_event.types.key.character = 0;
-  fuse_event.types.key.physical_key = 0;
+  fuse_event.types.key.character = character;
+  fuse_event.types.key.physical_key = physical_key( lParam );
 
   input_event( &fuse_event );
 }
@@ -147,13 +190,16 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
     break;
   }
 
-  if( fuse_keysym == INPUT_KEY_NONE ) return;
+  /* With character based typing, keys with no mapping may have produced a
+     character on press, so their release is needed too */
+  if( fuse_keysym == INPUT_KEY_NONE &&
+      !settings_current.hungarian_keyboard ) return;
 
   fuse_event.type = INPUT_EVENT_KEYRELEASE;
   fuse_event.types.key.native_key = fuse_keysym;
   fuse_event.types.key.spectrum_key = fuse_keysym;
   fuse_event.types.key.character = 0;
-  fuse_event.types.key.physical_key = 0;
+  fuse_event.types.key.physical_key = physical_key( lParam );
 
   input_event( &fuse_event );
 }

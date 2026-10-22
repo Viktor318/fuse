@@ -25,8 +25,8 @@
 #include "config.h"
 
 #include <windows.h>
-#include <ole2.h>
-#include <olectl.h>
+#include <objidl.h>
+#include <gdiplus.h>
 
 #ifdef USE_LIBPNG
 #include <png.h>
@@ -54,8 +54,8 @@ static void draw_screen( libspectrum_byte *screen, int border );
 
 static LRESULT WINAPI picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam );
 
-static HBITMAP load_picture( const char *filename, IPicture **ipicture,
-                             int *width, int *height );
+static int show_system_picture( const char *filename );
+static HBITMAP load_picture( const char *filename, int *width, int *height );
 static void draw_bitmap( HBITMAP bitmap, int width, int height );
 
 #ifdef PNG_SIMPLIFIED_READ_SUPPORTED
@@ -95,32 +95,15 @@ win32ui_picture( const char *filename, win32ui_picture_format format )
     free( buffer );
     break;
 #else
-    /* PNG format not supported */
-    return 1;
+    /* Without libpng, let Windows decode it */
+    if( show_system_picture( filename ) ) return 1;
+    break;
 #endif			/* #ifdef PNG_SIMPLIFIED_READ_SUPPORTED */
   }
 
   case PICTURE_JPG:
-  {
-    int width, height;
-    IPicture *ipicture;
-    HBITMAP bitmap;
-    HRESULT com = CoInitialize( NULL );
-
-    bitmap = load_picture( filename, &ipicture, &width, &height );
-    if( bitmap ) {
-      hDialogPicture = create_dialog( width, height );
-      if( hDialogPicture != NULL ) draw_bitmap( bitmap, width, height );
-
-      /* The bitmap belongs to the picture object */
-      ipicture->lpVtbl->Release( ipicture );
-    }
-
-    if( SUCCEEDED( com ) ) CoUninitialize();
-
-    if( !bitmap || hDialogPicture == NULL ) return 1;
+    if( show_system_picture( filename ) ) return 1;
     break;
-  }
 
   case PICTURE_SCR:
   {
@@ -198,8 +181,11 @@ resize_dialog( HWND dialog )
 static void
 inflate_dialog( HWND dialog, int width, int height )
 {
-  RECT wr_dialog, cr_dialog, wr_button, rc;
+  RECT wr_dialog, cr_dialog, wr_button, rc, rc_workarea;
   HWND button_hWnd;
+  int decorations_width, decorations_height;
+  int available_width, available_height, shown_width, shown_height;
+  float scale;
 
   /* Dialog dimensions */
   GetWindowRect( dialog, &wr_dialog );
@@ -220,20 +206,40 @@ inflate_dialog( HWND dialog, int width, int height )
   rc.bottom += wr_button.bottom; /* pixels */
   rc.right  += wr_button.right;  /* pixels */
 
-  /* Image dimensions */
-  rc.bottom += height; /* pixels */
-  if( width > rc.right )
-    rc.right = width;  /* pixels */
-
   /* Window decorations */
-  rc.bottom += wr_dialog.bottom - cr_dialog.bottom;
-  rc.right  += wr_dialog.right - cr_dialog.right;
+  decorations_width = wr_dialog.right - cr_dialog.right;
+  decorations_height = wr_dialog.bottom - cr_dialog.bottom;
 
-  SetWindowPos( dialog, NULL, 0, 0, rc.right, rc.bottom,
+  /* Initial size: the picture at its own size, unless that doesn't fit on
+     the screen, then scaled down to fit */
+  SystemParametersInfo( SPI_GETWORKAREA, 0, &rc_workarea, 0 );
+  available_width = ( rc_workarea.right - rc_workarea.left ) * 9 / 10 -
+                    decorations_width;
+  available_height = ( rc_workarea.bottom - rc_workarea.top ) * 9 / 10 -
+                     decorations_height - rc.bottom;
+
+  scale = 1.0f;
+  if( available_width > 0 && width > available_width )
+    scale = (float)available_width / width;
+  if( available_height > 0 && height * scale > available_height )
+    scale = (float)available_height / height;
+
+  shown_width = width * scale;
+  shown_height = height * scale;
+
+  SetWindowPos( dialog, NULL, 0, 0,
+                ( shown_width > rc.right ? shown_width : rc.right ) +
+                  decorations_width,
+                rc.bottom + shown_height + decorations_height,
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
 
-  min_width = rc.right;
-  min_height = rc.bottom;
+  /* The window can be made smaller than the picture, down to a quarter of
+     it (the picture is scaled to fit) */
+  shown_width = width / 4;
+  shown_height = height / 4;
+  min_width = ( shown_width > rc.right ? shown_width : rc.right ) +
+              decorations_width;
+  min_height = rc.bottom + shown_height + decorations_height;
 
   resize_dialog( dialog );
 }
@@ -395,6 +401,14 @@ draw_frame( LPDRAWITEMSTRUCT drawitem )
   offset_x = ( allocation_width - scaled_width ) / 2;
   offset_y = ( allocation_height - scaled_height ) / 2;
 
+  /* Good quality when the picture is shown smaller than its own size */
+  if( scale_factor < 1.0f ) {
+    SetStretchBltMode( drawitem->hDC, HALFTONE );
+    SetBrushOrgEx( drawitem->hDC, 0, 0, NULL );
+  } else {
+    SetStretchBltMode( drawitem->hDC, COLORONCOLOR );
+  }
+
   StretchBlt( drawitem->hDC, offset_x, offset_y,
               scaled_width,
               scaled_height,
@@ -531,23 +545,21 @@ draw_screen( libspectrum_byte *screen, int border )
   }
 }
 
-/* Load a picture in any format Windows can decode itself (JPEG, GIF, BMP)
-   from the lib directory. Returns its bitmap (owned by *ipicture, which the
-   caller must release) or NULL on error */
+/* Load a picture in any format Windows can decode itself with GDI+ (JPEG,
+   PNG, GIF, BMP) from the lib directory. Returns a bitmap the caller must
+   delete, or NULL on error */
 static HBITMAP
-load_picture( const char *filename, IPicture **ipicture, int *width,
-              int *height )
+load_picture( const char *filename, int *width, int *height )
 {
   utils_file file;
   HGLOBAL memory;
   void *data;
   IStream *stream = NULL;
-  OLE_HANDLE handle;
-  BITMAP info;
-  HRESULT result;
-  short type;
-
-  *ipicture = NULL;
+  GdiplusStartupInput startup_input;
+  ULONG_PTR token;
+  GpBitmap *image = NULL;
+  HBITMAP bitmap = NULL;
+  UINT image_width, image_height;
 
   if( utils_read_auxiliary_file( filename, &file, UTILS_AUXILIARY_LIB ) )
     return NULL;
@@ -561,39 +573,55 @@ load_picture( const char *filename, IPicture **ipicture, int *width,
   data = GlobalLock( memory );
   memcpy( data, file.buffer, file.length );
   GlobalUnlock( memory );
-
-  /* The stream takes ownership of the memory */
-  result = CreateStreamOnHGlobal( memory, TRUE, &stream );
-  if( FAILED( result ) ) {
-    GlobalFree( memory );
-    utils_close_file( &file );
-    return NULL;
-  }
-
-  result = OleLoadPicture( stream, file.length, FALSE, &IID_IPicture,
-                           (void **)ipicture );
-  stream->lpVtbl->Release( stream );
   utils_close_file( &file );
 
-  if( FAILED( result ) || !*ipicture ) {
-    *ipicture = NULL;
+  /* The stream takes ownership of the memory */
+  if( FAILED( CreateStreamOnHGlobal( memory, TRUE, &stream ) ) ) {
+    GlobalFree( memory );
     return NULL;
   }
 
-  /* Only bitmaps; the real size in pixels comes from the bitmap itself */
-  if( FAILED( (*ipicture)->lpVtbl->get_Type( *ipicture, &type ) ) ||
-      type != PICTYPE_BITMAP ||
-      FAILED( (*ipicture)->lpVtbl->get_Handle( *ipicture, &handle ) ) ||
-      !GetObject( (HBITMAP)(UINT_PTR)handle, sizeof( info ), &info ) ) {
-    (*ipicture)->lpVtbl->Release( *ipicture );
-    *ipicture = NULL;
+  memset( &startup_input, 0, sizeof( startup_input ) );
+  startup_input.GdiplusVersion = 1;
+  if( GdiplusStartup( &token, &startup_input, NULL ) != Ok ) {
+    stream->lpVtbl->Release( stream );
     return NULL;
   }
 
-  *width = info.bmWidth;
-  *height = info.bmHeight;
+  if( GdipCreateBitmapFromStream( stream, &image ) == Ok &&
+      GdipGetImageWidth( (GpImage *)image, &image_width ) == Ok &&
+      GdipGetImageHeight( (GpImage *)image, &image_height ) == Ok &&
+      /* transparent areas on white */
+      GdipCreateHBITMAPFromBitmap( image, &bitmap, 0xffffffff ) == Ok ) {
+    *width = image_width;
+    *height = image_height;
+  } else {
+    bitmap = NULL;
+  }
 
-  return (HBITMAP)(UINT_PTR)handle;
+  if( image ) GdipDisposeImage( (GpImage *)image );
+  GdiplusShutdown( token );
+  stream->lpVtbl->Release( stream );
+
+  return bitmap;
+}
+
+/* Show a picture decoded by Windows. Returns 0 on success */
+static int
+show_system_picture( const char *filename )
+{
+  int width = 0, height = 0;
+  HBITMAP bitmap;
+
+  bitmap = load_picture( filename, &width, &height );
+  if( !bitmap ) return 1;
+
+  hDialogPicture = create_dialog( width, height );
+  if( hDialogPicture != NULL ) draw_bitmap( bitmap, width, height );
+
+  DeleteObject( bitmap );
+
+  return hDialogPicture == NULL;
 }
 
 /* Copy a bitmap into the picture buffer */

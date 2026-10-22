@@ -663,14 +663,13 @@ ui_widgets_reset( void )
 void
 menu_help_keyboard( int action )
 {
-  /* A JPEG picture is loaded by Windows itself, no library needed */
+  /* JPEG and PNG pictures are loaded with libpng if available, otherwise by
+     Windows itself (GDI+) */
   if( win32ui_picture( "keyboard.jpg", PICTURE_JPG ) == 0 )
     return;
 
-#ifdef USE_LIBPNG
   if( win32ui_picture( "keyboard.png", PICTURE_PNG ) == 0 )
     return;
-#endif
 
   win32ui_picture( "keyboard.scr", PICTURE_SCR );
 }

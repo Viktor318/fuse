@@ -1,0 +1,21 @@
+{
+    // IntelliSense a Windows (win32) fordításhoz. A config.h és a generált
+    // fejlécek az első fordítás után jönnek létre a gyorsítótárban.
+    "configurations": [
+        {
+            "name": "Windows (MinGW-w64, win32 UI)",
+            "includePath": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/ui/win32",
+                "${env:HOME}/.cache/fuse-windows-build/fuse",
+                "${env:HOME}/.cache/fuse-windows-build/fuse/ui/win32",
+                "${env:HOME}/.cache/fuse-windows-build/prefix/include"
+            ],
+            "defines": ["WIN32", "_WIN32", "UI_WIN32", "HAVE_CONFIG_H"],
+            "compilerPath": "/usr/bin/x86_64-w64-mingw32-gcc",
+            "cStandard": "gnu11",
+            "intelliSenseMode": "windows-gcc-x64"
+        }
+    ],
+    "version": 4
+}

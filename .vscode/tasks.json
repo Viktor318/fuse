@@ -1,0 +1,54 @@
+{
+    // Fuse feladatok. Fordítás: Ctrl+Shift+B, a többi: Terminal -> Run Task...
+    // A fordítás a forrás egy másolatán fut (~/.cache/fuse-windows-build),
+    // az eredmény a ~/fuse-windows mappába kerül.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Fuse: Windows .exe fordítása",
+            "detail": "build-windows-cross.sh (az első fordítás hosszabb, utána gyorsabb)",
+            "type": "shell",
+            "command": "./build-windows-cross.sh",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": ["relative", "${workspaceFolder}"]
+            }
+        },
+        {
+            "label": "Fuse: indítás",
+            "detail": "Elindítja a legutóbb lefordított fuse.exe-t Windowson",
+            "type": "shell",
+            "command": "cd \"$HOME/fuse-windows/Fuse-windows-$(git rev-parse --abbrev-ref HEAD)\" && ./fuse.exe",
+            "problemMatcher": []
+        },
+        {
+            "label": "Fuse: fordítás és indítás",
+            "detail": "Fordít, majd elindítja",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Fuse: Windows .exe fordítása", "Fuse: indítás"],
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Fuse: kész csomag megnyitása",
+            "detail": "Megnyitja a ~/fuse-windows mappát a Windows Fájlkezelőben",
+            "type": "shell",
+            "command": "explorer.exe \"$(wslpath -w \"$HOME/fuse-windows\")\" || true",
+            "problemMatcher": []
+        },
+        {
+            "label": "Fuse: tiszta fordítás",
+            "detail": "Törli a fordítási gyorsítótárat (libspectrum is), majd újrafordít",
+            "type": "shell",
+            "command": "rm -rf \"${XDG_CACHE_HOME:-$HOME/.cache}/fuse-windows-build\" && ./build-windows-cross.sh",
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": ["relative", "${workspaceFolder}"]
+            }
+        }
+    ]
+}

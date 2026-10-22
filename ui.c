@@ -35,6 +35,7 @@
 #include "automation/automation.h"
 #endif
 #include "fuse.h"
+#include "i18n.h"
 #include "peripherals/if1.h"
 #include "peripherals/kempmouse.h"
 #include "settings.h"
@@ -114,7 +115,7 @@ ui_verror_internal( ui_error_level severity, const char *format, va_list ap,
 {
   char message[ MESSAGE_MAX_LENGTH ];
 
-  vsnprintf( message, MESSAGE_MAX_LENGTH, format, ap );
+  vsnprintf( message, MESSAGE_MAX_LENGTH, i18n( format ), ap );
 
   /* Skip the message if the same message was displayed recently */
   if( frames_since_last_message < 50 && !strcmp( message, last_message ) ) {
@@ -149,7 +150,7 @@ ui_confirm_save( const char *format, ... )
 
   va_start( ap, format );
 
-  vsnprintf( message, MESSAGE_MAX_LENGTH, format, ap );
+  vsnprintf( message, MESSAGE_MAX_LENGTH, i18n( format ), ap );
   confirm = ui_confirm_save_specific( message );
 
   va_end( ap );
@@ -165,7 +166,7 @@ ui_query( const char *format, ... )
   int confirm;
 
   va_start( ap, format );
-  vsnprintf( message, MESSAGE_MAX_LENGTH, format, ap );
+  vsnprintf( message, MESSAGE_MAX_LENGTH, i18n( format ), ap );
   va_end( ap );
 
   confirm = ui_query_message( message );

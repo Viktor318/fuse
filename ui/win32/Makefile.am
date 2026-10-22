@@ -70,6 +70,7 @@ ui_win32_files = \
                  ui/win32/win32internals.h \
                  ui/win32/win32joystick.c \
                  ui/win32/win32joystick.h \
+                 ui/win32/win32i18n.c \
                  ui/win32/win32keyboard.c \
                  ui/win32/win32mouse.c \
                  ui/win32/win32ui.c

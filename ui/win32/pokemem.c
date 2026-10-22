@@ -30,6 +30,7 @@
 #include "pokemem.h"
 #include "pokefinder/pokemem.h"
 #include "ui/ui.h"
+#include "i18n.h"
 #include "win32internals.h"
 
 void menu_machine_pokememory( int action );
@@ -385,13 +386,13 @@ initialize_dialog( HWND hwnd_dialog )
   lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
   lvc.fmt = LVCFMT_LEFT;
   lvc.cx = cx - ( cx >> 2 );
-  lvc.pszText = (LPTSTR) TEXT( "Trainer" );
+  lvc.pszText = (LPTSTR) i18n( "Trainer" );
   SendMessage( hwnd_list, LVM_INSERTCOLUMN, 0, (LPARAM) &lvc );
 
   /* Create value column */
   lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
   lvc.cx = cx >> 2;
-  lvc.pszText = (LPTSTR) TEXT( "Value" );
+  lvc.pszText = (LPTSTR) i18n( "Value" );
   SendMessage( hwnd_list, LVM_INSERTCOLUMN, 1, (LPARAM) &lvc );
 
   /* Fill listview with data */

@@ -26,6 +26,7 @@
 #include <windows.h>
 
 #include "fuse.h"
+#include "i18n.h"
 #include "win32internals.h"
 #include "settings.h"
 #include "ui/ui.h"
@@ -45,7 +46,7 @@ win32ui_confirm( const char *string )
 
   confirm = 0;
 
-  result = MessageBox( fuse_hWnd, string, "Fuse - Confirm",
+  result = MessageBox( fuse_hWnd, i18n( string ), i18n( "Fuse - Confirm" ),
                        MB_OKCANCEL | MB_ICONQUESTION );
   if( result == IDOK ) confirm = 1;
 
@@ -66,7 +67,7 @@ ui_confirm_save_specific( const char *message )
 
   confirm = UI_CONFIRM_SAVE_CANCEL;
 
-  result = MessageBox( fuse_hWnd, message, "Fuse - Confirm",
+  result = MessageBox( fuse_hWnd, message, i18n( "Fuse - Confirm" ),
                        MB_YESNOCANCEL | MB_ICONQUESTION );
   switch( result )
   {

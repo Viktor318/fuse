@@ -32,6 +32,7 @@
 #include "menu.h"
 #include "tape.h"
 #include "ui/ui.h"
+#include "i18n.h"
 #include "win32internals.h"
 
 #include "browse.h"
@@ -92,7 +93,7 @@ dialog_init( HWND hwndDlg )
     if( i != 0 )
       lvc.mask |= LVCF_SUBITEM;
     lvc.cx = titles_widths[i];
-    lvc.pszText = (LPTSTR)titles[i];
+    lvc.pszText = (LPTSTR)i18n( titles[i] );
     SendDlgItemMessage( hwndDlg, IDC_BROWSE_LV, LVM_INSERTCOLUMN, i,
                         ( LPARAM ) &lvc );
   }
@@ -185,10 +186,10 @@ ui_tape_browser_update( ui_tape_browser_update_type change GCC_UNUSED,
 
   if( tape_modified ) {
     SendDlgItemMessage( dialog, IDC_BROWSE_MODIFIED, WM_SETTEXT,
-                        0, ( LPARAM ) TEXT( "Tape modified" ) );
+                        0, ( LPARAM ) i18n( "Tape modified" ) );
   } else {
     SendDlgItemMessage( dialog, IDC_BROWSE_MODIFIED, WM_SETTEXT,
-                        0, ( LPARAM ) TEXT( "Tape not modified" ) );
+                        0, ( LPARAM ) i18n( "Tape not modified" ) );
  }
 
   fuse_emulation_unpause();

@@ -74,6 +74,10 @@ Checkbox, Snap (j)oystick prompt, joy_prompt, INPUT_KEY_j
 Checkbox, (C)onfirm actions, confirm_actions, INPUT_KEY_c
 Checkbox, A(u)to-save settings, autosave_settings, INPUT_KEY_u
 Checkbox, Resume (l)ast session, resume_last_session, INPUT_KEY_l
+#ifdef UI_WIN32
+Combo, Lan(g)uage, language, INPUT_KEY_g, *Automatic|English|Magyar
+Posthook, i18n_posthook
+#endif
 
 media
 Media Options

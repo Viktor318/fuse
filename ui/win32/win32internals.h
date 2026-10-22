@@ -112,6 +112,9 @@ int win32ui_confirm( const char *string );
 
 void win32ui_infobox( const char *message );
 
+void win32i18n_init( void );
+void win32i18n_end( void );
+
 typedef enum win32ui_picture_format {
   PICTURE_SCR,
   PICTURE_PNG,

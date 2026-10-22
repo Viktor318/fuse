@@ -32,6 +32,7 @@
 #include "debugger/debugger.h"
 #include "display.h"
 #include "fuse.h"
+#include "i18n.h"
 #include "keyboard.h"
 #include "menu.h"
 #include "peripherals/joystick.h"
@@ -449,6 +450,9 @@ ui_init( int *argc, char ***argv )
 
   win32keyboard_init();
 
+  /* menus and dialogs in the selected language */
+  win32i18n_init();
+
   /* where it was when Fuse last exited */
   restore_window_position();
 
@@ -496,6 +500,7 @@ ui_end( void )
   int error;
 
   win32keyboard_end();
+  win32i18n_end();
 
   error = win32display_end(); if( error ) return error;
 
@@ -522,13 +527,15 @@ ui_error_specific( ui_error_level severity, const char *message )
     win32ui_infobox( message );
     break;
   case UI_ERROR_WARNING:
-    MessageBox( fuse_hWnd, message, "Fuse - Warning", MB_ICONWARNING | MB_OK );
+    MessageBox( fuse_hWnd, message, i18n( "Fuse - Warning" ),
+                MB_ICONWARNING | MB_OK );
     break;
   case UI_ERROR_ERROR:
-    MessageBox( fuse_hWnd, message, "Fuse - Error", MB_ICONERROR | MB_OK );
+    MessageBox( fuse_hWnd, message, i18n( "Fuse - Error" ),
+                MB_ICONERROR | MB_OK );
     break;
   default:
-    MessageBox( fuse_hWnd, message, "Fuse - (Unknown Error Level)",
+    MessageBox( fuse_hWnd, message, i18n( "Fuse - (Unknown Error Level)" ),
                 MB_ICONINFORMATION | MB_OK );
     break;
 

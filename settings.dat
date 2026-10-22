@@ -50,6 +50,7 @@ full_screen, boolean, 0
 writable_roms, boolean, 0
 autosave_settings, boolean, 0
 resume_last_session, boolean, 0
+language, string, "Automatic"
 bw_tv, boolean, 0
 recreated_spectrum, boolean, 0
 hungarian_keyboard, boolean, 0

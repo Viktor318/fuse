@@ -30,6 +30,7 @@
 #include "compat.h"
 #include "fuse.h"
 #include "memory_pages.h"
+#include "i18n.h"
 #include "win32internals.h"
 
 #include "memorybrowser.h"
@@ -347,7 +348,7 @@ memorybrowser_init( HWND hwndDlg )
     if( i != 0 )
       lvc.mask |= LVCF_SUBITEM;
     lvc.cx = column_widths[i];
-    lvc.pszText = (TCHAR *)titles[i];
+    lvc.pszText = (TCHAR *)i18n( titles[i] );
     SendDlgItemMessage( hwndDlg, IDC_MEM_LV, LVM_INSERTCOLUMN, i,
                         ( LPARAM ) &lvc );
   }

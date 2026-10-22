@@ -32,6 +32,7 @@
 #include "pokefinder.h"
 #include "pokefinder/pokefinder.h"
 #include "ui/ui.h"
+#include "i18n.h"
 #include "win32internals.h"
 
 void menu_machine_pokefinder( int action );
@@ -205,7 +206,7 @@ update_pokefinder( void )
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
 
   /* print possible locations */
-  _sntprintf( buffer, 256, "Possible locations: %lu",
+  _sntprintf( buffer, 256, i18n( "Possible locations: %lu" ),
               (unsigned long)pokefinder_count );
   SendDlgItemMessage( fuse_hPFWnd, IDC_PF_LOCATIONS, WM_SETTEXT, 0,
                       (LPARAM) buffer );
@@ -256,12 +257,12 @@ menu_machine_pokefinder( int action GCC_UNUSED )
     lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT ;
     lvc.fmt = LVCFMT_LEFT;
     lvc.cx = cx;
-    lvc.pszText = (LPTSTR) TEXT( "Page" );
+    lvc.pszText = (LPTSTR) i18n( "Page" );
     SendDlgItemMessage( fuse_hPFWnd, IDC_PF_LIST, LVM_INSERTCOLUMN, 0,
                         ( LPARAM ) &lvc );
     lvc.mask |= LVCF_SUBITEM;
     lvc.cx = cx;
-    lvc.pszText = (LPTSTR) TEXT( "Offset" );
+    lvc.pszText = (LPTSTR) i18n( "Offset" );
     SendDlgItemMessage( fuse_hPFWnd, IDC_PF_LIST, LVM_INSERTCOLUMN, 1,
                         ( LPARAM ) &lvc );
 

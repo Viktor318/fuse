@@ -27,6 +27,7 @@
 #include <string.h>
 #include <windows.h>
 
+#include "i18n.h"
 #include "ui/ui.h"
 #include "utils.h"
 #include "win32internals.h"
@@ -100,6 +101,30 @@ static DWORD filter_index = 0;
 /* Position of "BASIC Text Files" in file_filter, counting from 1 */
 #define BASIC_TEXT_FILTER_INDEX 3
 
+/* file_filter with the names of the file types translated */
+static const char*
+translated_filter( void )
+{
+  static char buffer[ 4096 ];
+  const char *in = file_filter;
+  size_t used = 0;
+  int name = 1;
+
+  while( *in ) {
+    const char *text = name ? i18n( in ) : in;
+    size_t length = strlen( text ) + 1;
+
+    if( used + length + 1 > sizeof( buffer ) ) return file_filter;
+    memcpy( buffer + used, text, length );
+    used += length;
+    in += strlen( in ) + 1;
+    name = !name;
+  }
+  buffer[ used ] = '\0';
+
+  return buffer;
+}
+
 static char*
 run_dialog( const char *title, int is_saving )
 {
@@ -113,7 +138,7 @@ run_dialog( const char *title, int is_saving )
 
   ofn.lStructSize = sizeof( ofn );
   ofn.hwndOwner = fuse_hWnd;
-  ofn.lpstrFilter = file_filter;
+  ofn.lpstrFilter = translated_filter();
   ofn.lpstrCustomFilter = NULL;
   /* TODO: select filter based on UI operation (snapshot, recording, screenshot) */
   /* TODO: custom filter based file action (open, save) */
@@ -122,7 +147,7 @@ run_dialog( const char *title, int is_saving )
   ofn.nMaxFile = sizeof( szFile );
   ofn.lpstrFileTitle = NULL;
   ofn.lpstrInitialDir = NULL;
-  ofn.lpstrTitle = title;
+  ofn.lpstrTitle = i18n( title );
   ofn.Flags = /* OFN_DONTADDTORECENT | */ OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
   if( is_saving ) {
     ofn.Flags |= OFN_OVERWRITEPROMPT | OFN_NOREADONLYRETURN;

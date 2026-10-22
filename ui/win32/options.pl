@@ -47,6 +47,7 @@ print Fuse::GPL( 'options.c: options dialog boxes',
 
 #include "display.h"
 #include "fuse.h"
+#include "i18n.h"
 #include "menu.h"
 #include "options.h"
 #include "options_internals.h"
@@ -172,7 +173,7 @@ CODE
   for( i = 0; i < $_->{name}_$widget->{value}_combo_count; i++ ) {
     /* FIXME This is asuming SendDlgItemMessage is not UNICODE */
     SendDlgItemMessage( hwndDlg, IDC_${optname}_${idcname}, CB_ADDSTRING,
-                        0, (LPARAM) $_->{name}_$widget->{value}_combo[i] );
+                        0, (LPARAM) i18n( $_->{name}_$widget->{value}_combo[i] ) );
   }
   SendDlgItemMessage( hwndDlg, IDC_${optname}_${idcname}, CB_SETCURSEL,
                       (LPARAM) $combo_default{$widget->{value}}, 0 );

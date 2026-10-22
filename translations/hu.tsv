@@ -512,3 +512,15 @@ group	context	english	hungarian
 4 Üzenetek	hibaüzenet	Cannot add trainer	A trainer nem adható hozzá
 4 Üzenetek	hibaüzenet	Couldn't start capture for joystick 1	Az 1. joystick nem kezelhető
 4 Üzenetek	hibaüzenet	Couldn't start capture for joystick 2	A 2. joystick nem kezelhető
+extra	Options > General: Language	Lan&guage	Nyel&v
+extra	Language list	Automatic	Automatikus
+extra	file type filter	Tape Files (*.tap;*.tzx;*.pzx;*.csw;...)	Szalagfájlok (*.tap;*.tzx;*.pzx;*.csw;...)
+extra	file type filter	Tape Files (*.tap;*.tzx;*.pzx;*.wav;*.csw;...)	Szalagfájlok (*.tap;*.tzx;*.pzx;*.wav;*.csw;...)
+extra	Poke Finder window: label	Possible locations: %lu	Lehetséges helyek: %lu
+extra	Debugger window: menu	&View	&Nézet
+extra	Debugger window: menu > View	&Registers	&Regiszterek
+extra	Debugger window: menu > View	&Memory Map	&Memóriatérkép
+extra	Debugger window: menu > View	&Breakpoints	&Töréspontok
+extra	Debugger window: menu > View	&Disassembly	Vissza&fejtés
+extra	Debugger window: menu > View	&Stack	&Verem
+extra	Debugger window: menu > View	&Events	&Események

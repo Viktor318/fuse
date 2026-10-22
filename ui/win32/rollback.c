@@ -30,6 +30,7 @@
 
 #include "fuse.h"
 #include "ui/ui.h"
+#include "i18n.h"
 #include "win32internals.h"
 
 #include "rollback.h"
@@ -52,7 +53,7 @@ dialog_init( HWND hwndDlg )
   lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT ;
   lvc.fmt = LVCFMT_LEFT;
   lvc.cx = 100; /* FIXME: preferably calculate the whole length */
-  lvc.pszText = (LPTSTR) TEXT( "Seconds" );
+  lvc.pszText = (LPTSTR) i18n( "Seconds" );
   SendDlgItemMessage( hwndDlg, IDC_ROLLBACK_LV, LVM_INSERTCOLUMN, 0,
                         ( LPARAM ) &lvc );
 }

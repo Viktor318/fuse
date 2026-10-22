@@ -697,6 +697,8 @@ const i18n_entry i18n_hu_table[] = {
     "Pillanatkép-fájlok (*.szx;*.z80;*.sna;...)" },
   { "Some information has been lost in conversion; the snapshot may not work",
     "Az átalakításkor néhány adat elveszett; lehet, hogy a pillanatkép nem fog működni" },
+  { "Some options need to reset the machine. Reset?",
+    "Néhány beállításhoz újra kell indítani a gépet. Újraindítod?" },
   { "Source",
     "Forrás" },
   { "Spe&ctranet disable",

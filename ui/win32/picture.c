@@ -136,8 +136,10 @@ win32ui_picture( const char *filename, win32ui_picture_format format )
 
   ShowWindow( hDialogPicture, SW_SHOW );
 
-  /* Keep focus on Fuse's main window */
-  SetForegroundWindow( fuse_hWnd );
+  /* Show the picture in front; clicking the main window brings Fuse back */
+  SetWindowPos( hDialogPicture, HWND_TOP, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE );
+  SetForegroundWindow( hDialogPicture );
 
   return 0;
 }
@@ -344,7 +346,12 @@ create_dialog( int width, int height )
 static void
 destroy_dialog( void )
 {
+  /* Give the focus back to Fuse's main window, not to another program:
+     make the main window the owner just before closing, as Windows
+     activates the owner when an owned window goes away */
+  SetWindowLongPtr( hDialogPicture, GWLP_HWNDPARENT, (LONG_PTR)fuse_hWnd );
   DestroyWindow( hDialogPicture );
+  SetForegroundWindow( fuse_hWnd );
   hDialogPicture = NULL;
 
   DeleteObject( picture_BMP );

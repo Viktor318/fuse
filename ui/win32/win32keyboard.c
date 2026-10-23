@@ -72,6 +72,54 @@ oem_keysyms_remap( WPARAM wParam )
   return ptr ? *ptr : INPUT_KEY_NONE;
 }
 
+/* Identifier of the physical key, the same on press and release: the
+   scan code, plus the extended key flag */
+static int
+physical_key( LPARAM lParam )
+{
+  return ( lParam >> 16 ) & 0x1ff;
+}
+
+/* Keypad keys held, by physical key: Windows may report the release with
+   another virtual key (e.g. VK_END instead of VK_NUMPAD1 if Shift or Num
+   Lock changed meanwhile), but the same key must be released */
+#define MAX_KEYPAD_HELD 16
+static struct { int physical; input_key key; } keypad_held[ MAX_KEYPAD_HELD ];
+static int keypad_held_count = 0;
+
+static void
+keypad_remember( int physical, input_key key )
+{
+  int i;
+
+  for( i = 0; i < keypad_held_count; i++ )
+    if( keypad_held[i].physical == physical ) {
+      keypad_held[i].key = key;
+      return;
+    }
+
+  if( keypad_held_count < MAX_KEYPAD_HELD ) {
+    keypad_held[ keypad_held_count ].physical = physical;
+    keypad_held[ keypad_held_count++ ].key = key;
+  }
+}
+
+static input_key
+keypad_forget( int physical )
+{
+  int i;
+  input_key key;
+
+  for( i = 0; i < keypad_held_count; i++ )
+    if( keypad_held[i].physical == physical ) {
+      key = keypad_held[i].key;
+      keypad_held[i] = keypad_held[ --keypad_held_count ];
+      return key;
+    }
+
+  return INPUT_KEY_NONE;
+}
+
 /* The numeric keypad with Num Lock on: digits and the operators, in every
    typing mode */
 static input_key
@@ -91,13 +139,6 @@ numpad_keysym( WPARAM wParam )
   return INPUT_KEY_NONE;
 }
 
-/* Identifier of the physical key, the same on press and release: the
-   scan code, plus the extended key flag */
-static int
-physical_key( LPARAM lParam )
-{
-  return ( lParam >> 16 ) & 0x1ff;
-}
 
 /* For character based typing (Hungarian keyboard): the character produced
    by this key press. TranslateMessage() has already posted the WM_CHAR
@@ -205,7 +246,10 @@ win32keyboard_keypress( WPARAM wParam, LPARAM lParam )
     break;
   default:
     fuse_keysym = numpad_keysym( wParam );
-    if( fuse_keysym == INPUT_KEY_NONE ) fuse_keysym = keysyms_remap( wParam );
+    if( fuse_keysym != INPUT_KEY_NONE )
+      keypad_remember( physical_key( lParam ), fuse_keysym );
+    else
+      fuse_keysym = keysyms_remap( wParam );
     break;
   }
 
@@ -249,7 +293,7 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
     fuse_keysym = oem_keysyms_remap( wParam );
     break;
   default:
-    fuse_keysym = numpad_keysym( wParam );
+    fuse_keysym = keypad_forget( physical_key( lParam ) );
     if( fuse_keysym == INPUT_KEY_NONE ) fuse_keysym = keysyms_remap( wParam );
     break;
   }

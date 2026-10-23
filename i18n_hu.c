@@ -321,6 +321,8 @@ const i18n_entry i18n_hu_table[] = {
     "Összevonás előtt kérde&zzen" },
   { "Condition",
     "Feltétel" },
+  { "Confirm on e&xit",
+    "Rákérdezés ki&lépéskor" },
   { "Couldn't close '%s': %s",
     "A(z) „%s” nem zárható be: %s" },
   { "Couldn't close `%s': %s",

@@ -79,6 +79,7 @@ Checkbox, (C)onfirm actions, confirm_actions, INPUT_KEY_c
 Checkbox, A(u)to-save settings, autosave_settings, INPUT_KEY_u
 Checkbox, Resume (l)ast session, resume_last_session, INPUT_KEY_l
 #ifdef UI_WIN32
+Checkbox, Confirm on e(x)it, confirm_exit, INPUT_KEY_x
 Posthook, i18n_posthook
 #endif
 

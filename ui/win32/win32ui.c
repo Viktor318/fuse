@@ -800,7 +800,7 @@ void
 menu_file_exit( int action )
 {
  /* FIXME: this should really be sending WM_CLOSE, not duplicate code */
-  if( win32ui_confirm( "Exit Fuse?" ) ) {
+  if( !settings_current.confirm_exit || win32ui_confirm( "Exit Fuse?" ) ) {
 
     if( menu_check_media_changed() ) return;
 

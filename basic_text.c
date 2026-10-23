@@ -349,6 +349,22 @@ make_units( tokenizer_t *t, const unsigned int *text, size_t length,
 
     if( c == '\\' || c == '@' ) {
       units[n].c = c; units[n].raw = 0; n++;
+    } else if( c == '`' ) {
+      /* BASin: pound sign */
+      units[n].c = 0x60; units[n].raw = 1; n++;
+    } else if( c == '#' ) {
+      /* BASin: \#nnn is the character with decimal code nnn */
+      unsigned long value = 0;
+      int digits = 0;
+      while( digits < 3 && i + 1 < length &&
+             text[ i + 1 ] >= '0' && text[ i + 1 ] <= '9' ) {
+        value = value * 10 + ( text[ ++i ] - '0' );
+        digits++;
+      }
+      if( !digits ) return tokenizer_error( t, "bad \\#nnn escape" );
+      if( value > 255 )
+        return tokenizer_error( t, "\\#nnn escape is above 255" );
+      units[n].c = value; units[n].raw = 1; n++;
     } else if( c == '*' ) {
       units[n].c = 0x7f; units[n].raw = 1; n++;
     } else if( ( c >= 'a' && c <= 'u' ) || ( c >= 'A' && c <= 'U' ) ) {
@@ -665,6 +681,18 @@ note_replacements( basic_text_info *info, unsigned int line,
   info->replaced_line_count++;
 }
 
+/* Does the text start with the given word followed by a space? */
+static int
+starts_with_word( const unsigned int *text, size_t length, const char *word )
+{
+  size_t i;
+
+  for( i = 0; word[i]; i++ )
+    if( i >= length || text[i] != (unsigned char)word[i] ) return 0;
+
+  return i < length && ( text[i] == ' ' || text[i] == '\t' );
+}
+
 int
 basic_text_tokenize( const char *text, size_t length, int basic128,
                      libspectrum_byte **program, size_t *program_length,
@@ -722,6 +750,16 @@ basic_text_tokenize( const char *text, size_t length, int basic128,
                                   line_chars[pos] == '\t' ) )
       pos++;
     if( pos == line_length || line_chars[pos] == '#' ) {
+      libspectrum_free( line_chars );
+      continue;
+    }
+
+    /* BASin header lines before the program: checksum, autostart line
+       and run-time variables. The program is loaded without them. */
+    if( line_count == 0 && numbered == -1 &&
+        ( starts_with_word( line_chars + pos, line_length - pos, "Check" ) ||
+          starts_with_word( line_chars + pos, line_length - pos, "Auto" ) ||
+          starts_with_word( line_chars + pos, line_length - pos, "Var" ) ) ) {
       libspectrum_free( line_chars );
       continue;
     }

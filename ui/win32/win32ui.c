@@ -296,8 +296,8 @@ menubar_measure( MEASUREITEMSTRUCT *measure )
   if( old_font ) SelectObject( dc, old_font );
   ReleaseDC( fuse_hWnd, dc );
 
-  /* Owner drawn menu bar items get some extra space from Windows too */
-  measure->itemWidth = rect.right - rect.left + 6;
+  /* Windows adds the usual spacing around owner drawn menu bar items */
+  measure->itemWidth = rect.right - rect.left;
   measure->itemHeight = rect.bottom - rect.top + 4;
   return 1;
 }

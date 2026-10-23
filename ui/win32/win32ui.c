@@ -189,6 +189,207 @@ restore_window_position( void )
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
 }
 
+/* ------------------------------------------------------------------------
+   The menu bar (File, Options, ...) is drawn by Fuse: the item selected or
+   under the mouse gets a clearly visible light blue background (Windows 11
+   only shades it very lightly), and the underlined access letters can be
+   shown while the left Alt is held, also when Alt is kept from Windows (see
+   win32keyboard.c). The drop down menus are still drawn by Windows. */
+
+/* Marks our items in dwItemData; the low bits are the position */
+#define MENUBAR_MAGIC 0x46550000
+#define MENUBAR_MAGIC_MASK 0xffff0000
+
+static HFONT menubar_font = NULL;
+
+typedef HANDLE ( WINAPI *open_theme_data_t )( HWND, LPCWSTR );
+typedef HRESULT ( WINAPI *close_theme_data_t )( HANDLE );
+typedef HRESULT ( WINAPI *draw_theme_background_t )( HANDLE, HDC, int, int,
+                                                      const RECT*,
+                                                      const RECT* );
+static open_theme_data_t open_theme_data;
+static close_theme_data_t close_theme_data;
+static draw_theme_background_t draw_theme_background;
+
+static void
+menubar_init( void )
+{
+  HMENU menu = GetMenu( fuse_hWnd );
+  NONCLIENTMETRICSA metrics;
+  HMODULE uxtheme;
+  int count, i;
+
+  if( !menu ) return;
+
+  memset( &metrics, 0, sizeof( metrics ) );
+  metrics.cbSize = sizeof( metrics );
+  if( SystemParametersInfoA( SPI_GETNONCLIENTMETRICS, sizeof( metrics ),
+                             &metrics, 0 ) )
+    menubar_font = CreateFontIndirectA( &metrics.lfMenuFont );
+
+  /* The menu bar background comes from the visual style, if there is one */
+  uxtheme = LoadLibraryA( "uxtheme.dll" );
+  if( uxtheme ) {
+    open_theme_data =
+      (open_theme_data_t)GetProcAddress( uxtheme, "OpenThemeData" );
+    close_theme_data =
+      (close_theme_data_t)GetProcAddress( uxtheme, "CloseThemeData" );
+    draw_theme_background =
+      (draw_theme_background_t)GetProcAddress( uxtheme,
+                                               "DrawThemeBackground" );
+  }
+
+  /* Owner drawn, but the text stays in the item: menu translation keeps
+     working, and we read it from there */
+  count = GetMenuItemCount( menu );
+  for( i = 0; i < count; i++ ) {
+    MENUITEMINFOA info;
+
+    memset( &info, 0, sizeof( info ) );
+    info.cbSize = sizeof( info );
+    info.fMask = MIIM_FTYPE;
+    if( !GetMenuItemInfoA( menu, i, TRUE, &info ) ) continue;
+
+    info.fMask = MIIM_FTYPE | MIIM_DATA;
+    info.fType |= MFT_OWNERDRAW;
+    info.dwItemData = MENUBAR_MAGIC | i;
+    SetMenuItemInfoA( menu, i, TRUE, &info );
+  }
+
+  DrawMenuBar( fuse_hWnd );
+}
+
+static int
+menubar_text( int position, char *text, size_t length )
+{
+  MENUITEMINFOA info;
+
+  memset( &info, 0, sizeof( info ) );
+  info.cbSize = sizeof( info );
+  info.fMask = MIIM_STRING;
+  info.dwTypeData = text;
+  info.cch = length;
+  if( !GetMenuItemInfoA( GetMenu( fuse_hWnd ), position, TRUE, &info ) )
+    return 1;
+  text[ length - 1 ] = '\0';
+  return 0;
+}
+
+static int
+menubar_measure( MEASUREITEMSTRUCT *measure )
+{
+  char text[ 256 ];
+  RECT rect = { 0, 0, 0, 0 };
+  HDC dc;
+  HFONT old_font = NULL;
+
+  if( measure->CtlType != ODT_MENU ||
+      ( measure->itemData & MENUBAR_MAGIC_MASK ) != MENUBAR_MAGIC )
+    return 0;
+
+  if( menubar_text( measure->itemData & 0xffff, text, sizeof( text ) ) )
+    return 0;
+
+  dc = GetDC( fuse_hWnd );
+  if( menubar_font ) old_font = SelectObject( dc, menubar_font );
+  DrawTextA( dc, text, -1, &rect, DT_SINGLELINE | DT_CALCRECT );
+  if( old_font ) SelectObject( dc, old_font );
+  ReleaseDC( fuse_hWnd, dc );
+
+  /* Owner drawn menu bar items get some extra space from Windows too */
+  measure->itemWidth = rect.right - rect.left + 6;
+  measure->itemHeight = rect.bottom - rect.top + 4;
+  return 1;
+}
+
+static int
+menubar_draw( DRAWITEMSTRUCT *draw )
+{
+  char text[ 256 ];
+  RECT rect = draw->rcItem;
+  HDC dc = draw->hDC;
+  HFONT old_font = NULL;
+  UINT format = DT_SINGLELINE | DT_CENTER | DT_VCENTER;
+  int underline;
+
+  if( draw->CtlType != ODT_MENU ||
+      ( draw->itemData & MENUBAR_MAGIC_MASK ) != MENUBAR_MAGIC )
+    return 0;
+
+  if( menubar_text( draw->itemData & 0xffff, text, sizeof( text ) ) )
+    return 0;
+
+  /* Background: the menu bar's own, or light blue if selected */
+  if( draw->itemState & ( ODS_SELECTED | ODS_HOTLIGHT ) ) {
+    HBRUSH brush = CreateSolidBrush( RGB( 0xb3, 0xd7, 0xf3 ) );
+    FillRect( dc, &rect, brush );
+    DeleteObject( brush );
+  } else {
+    HANDLE theme = open_theme_data && draw_theme_background ?
+                   open_theme_data( fuse_hWnd, L"MENU" ) : NULL;
+    if( theme ) {
+      /* MENU_BARBACKGROUND, MB_ACTIVE / MB_INACTIVE */
+      draw_theme_background( theme, dc, 7,
+                             ( draw->itemState & ODS_INACTIVE ) ? 2 : 1,
+                             &rect, NULL );
+      if( close_theme_data ) close_theme_data( theme );
+    } else {
+      FillRect( dc, &rect, GetSysColorBrush( COLOR_MENUBAR ) );
+    }
+  }
+
+  /* The access letters: while the left Alt is held alone (Caps Shift for
+     the number keys), or whenever Windows would show them */
+  underline = win32keyboard_menu_underline() ||
+              !( draw->itemState & ODS_NOACCEL );
+  if( !underline ) format |= DT_HIDEPREFIX;
+
+  SetBkMode( dc, TRANSPARENT );
+  SetTextColor( dc, GetSysColor(
+    ( draw->itemState & ( ODS_GRAYED | ODS_DISABLED | ODS_INACTIVE ) ) ?
+      COLOR_GRAYTEXT : COLOR_MENUTEXT ) );
+  if( menubar_font ) old_font = SelectObject( dc, menubar_font );
+  DrawTextA( dc, text, -1, &rect, format );
+  if( old_font ) SelectObject( dc, old_font );
+
+  return 1;
+}
+
+/* An access letter typed while the menu bar is active (or with Alt): find
+   the item, as Windows doesn't for owner drawn items */
+static LRESULT
+menubar_menuchar( WPARAM wParam, LPARAM lParam )
+{
+  HMENU menu = GetMenu( fuse_hWnd );
+  char key[2] = { (char)LOWORD( wParam ), 0 };
+  int count, i;
+
+  if( (HMENU)lParam != menu ) return 0;
+
+  CharLowerA( key );
+  count = GetMenuItemCount( menu );
+  for( i = 0; i < count; i++ ) {
+    char text[ 256 ], letter[2] = { 0, 0 };
+    const char *amp;
+
+    if( menubar_text( i, text, sizeof( text ) ) ) continue;
+    for( amp = strchr( text, '&' ); amp && amp[1] == '&';
+         amp = strchr( amp + 2, '&' ) ) ;
+    if( !amp || !amp[1] ) continue;
+    letter[0] = amp[1];
+    CharLowerA( letter );
+    if( letter[0] == key[0] ) return MAKELRESULT( i, MNC_EXECUTE );
+  }
+
+  return 0;
+}
+
+void
+win32ui_menubar_redraw( void )
+{
+  DrawMenuBar( fuse_hWnd );
+}
+
 static LRESULT WINAPI
 fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
@@ -254,7 +455,20 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
         return 0;
       break;
 
+    case WM_MEASUREITEM:
+      if( menubar_measure( (MEASUREITEMSTRUCT*)lParam ) ) return TRUE;
+      break;
+
+    case WM_MENUCHAR:
+    {
+      LRESULT result = menubar_menuchar( wParam, lParam );
+      if( result ) return result;
+      break;
+    }
+
     case WM_DRAWITEM:
+      if( wParam == 0 && menubar_draw( (DRAWITEMSTRUCT*)lParam ) )
+        return TRUE;
       if( wParam == ID_STATUSBAR ) {
         win32statusbar_redraw( hWnd, lParam );
         return TRUE;
@@ -469,6 +683,9 @@ ui_init( int *argc, char ***argv )
 
   /* menus and dialogs in the selected language */
   win32i18n_init();
+
+  /* the menu bar is drawn by Fuse */
+  menubar_init();
 
   /* where it was when Fuse last exited */
   restore_window_position();

@@ -784,7 +784,7 @@ const i18n_entry i18n_hu_table[] = {
   { "Use .s&lt traps",
     ".s&lt gyorsítás (traps)" },
   { "Use le&ft Alt as Caps Shift with number keys",
-    "&Bal Alt, mint Caps Shift a számbillentyűknél" },
+    "A &bal Alt legyen Caps Shift a számbillentyűknél" },
   { "Use shift with &arrow keys",
     "Shift használata a &nyílbillentyűknél" },
   { "Value",

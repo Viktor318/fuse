@@ -388,11 +388,15 @@ win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam )
 {
   if( wParam == VK_MENU ) {
     /* A new press of Alt (not autorepeat) */
-    if( !( lParam & ( 1 << 30 ) ) ) { alt_used = 0; alt_alone = 1; }
+    if( !( lParam & ( 1 << 30 ) ) ) {
+      alt_used = 0; alt_alone = 1;
+      if( settings_current.alt_caps_shift && is_left_alt( wParam, lParam ) )
+        win32ui_menubar_redraw();
+    }
     return settings_current.alt_caps_shift && is_left_alt( wParam, lParam );
   }
 
-  alt_alone = 0;
+  win32keyboard_alt_not_alone();
 
   if( !settings_current.alt_caps_shift || !is_number_key( wParam ) ||
       !( GetKeyState( VK_LMENU ) & 0x8000 ) ||
@@ -439,6 +443,7 @@ win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam )
 
     win32keyboard_keyrelease( wParam, lParam );
     alt_alone = alt_used = 0;
+    win32ui_menubar_redraw();
 
     /* Alt pressed and released alone activates the menu bar */
     if( alone ) PostMessage( fuse_hWnd, WM_SYSCOMMAND, SC_KEYMENU, 0 );
@@ -467,5 +472,16 @@ win32keyboard_alt_digit_char( WPARAM wParam )
 void
 win32keyboard_alt_not_alone( void )
 {
+  if( !alt_alone ) return;
   alt_alone = 0;
+  if( settings_current.alt_caps_shift ) win32ui_menubar_redraw();
+}
+
+/* Should the menu bar show the access letters? While the left Alt, kept
+   from Windows, is held alone */
+int
+win32keyboard_menu_underline( void )
+{
+  return settings_current.alt_caps_shift && alt_alone &&
+         ( GetKeyState( VK_LMENU ) & 0x8000 );
 }

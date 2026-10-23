@@ -447,6 +447,17 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       if( menubar_measure( (MEASUREITEMSTRUCT*)lParam ) ) return TRUE;
       break;
 
+    case WM_NEXTMENU:
+      /* The arrow keys go round the menu bar, from Help to File and back,
+         without the system menu in between */
+      if( wParam == VK_LEFT || wParam == VK_RIGHT ) {
+        MDINEXTMENU *next = (MDINEXTMENU*)lParam;
+        next->hmenuNext = GetMenu( hWnd );
+        next->hwndNext = hWnd;
+        return 0;
+      }
+      break;
+
     case WM_MENUCHAR:
     {
       LRESULT result = menubar_menuchar( wParam, lParam );

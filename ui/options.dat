@@ -50,6 +50,9 @@
 #
 general
 General Options
+#ifdef UI_WIN32
+Combo, Lan(g)uage, language, INPUT_KEY_g, *Automatic|English|Magyar
+#endif
 Entry, (E)mulation speed, emulation_speed, INPUT_KEY_e, 5, %
 Entry, F(r)ame rate (1:n), frame_rate, INPUT_KEY_r, 1, frames
 Checkbox, Issue (2) keyboard, issue2, INPUT_KEY_2
@@ -75,7 +78,6 @@ Checkbox, (C)onfirm actions, confirm_actions, INPUT_KEY_c
 Checkbox, A(u)to-save settings, autosave_settings, INPUT_KEY_u
 Checkbox, Resume (l)ast session, resume_last_session, INPUT_KEY_l
 #ifdef UI_WIN32
-Combo, Lan(g)uage, language, INPUT_KEY_g, *Automatic|English|Magyar
 Posthook, i18n_posthook
 #endif
 

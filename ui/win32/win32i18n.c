@@ -441,74 +441,33 @@ translate_dialog( HWND window )
 
 /* Options -> General: the language list starts where the OK button does,
    close to its short label */
-/* Width in pixels of the longest item of a combo box, 0 if unknown */
-static int
-widest_list_item( HWND list )
-{
-  HDC dc;
-  HFONT font, old_font = NULL;
-  LRESULT count, i;
-  int widest = 0;
-  char text[256];
-
-  count = SendMessageA( list, CB_GETCOUNT, 0, 0 );
-  if( count == CB_ERR || count <= 0 ) return 0;
-
-  dc = GetDC( list );
-  if( !dc ) return 0;
-  font = (HFONT)SendMessageA( list, WM_GETFONT, 0, 0 );
-  if( font ) old_font = SelectObject( dc, font );
-
-  for( i = 0; i < count; i++ ) {
-    SIZE size;
-    LRESULT length = SendMessageA( list, CB_GETLBTEXTLEN, i, 0 );
-    if( length == CB_ERR || length >= (LRESULT)sizeof( text ) ) continue;
-    SendMessageA( list, CB_GETLBTEXT, i, (LPARAM)text );
-    if( GetTextExtentPoint32A( dc, text, (int)length, &size ) &&
-        size.cx > widest )
-      widest = size.cx;
-  }
-
-  if( old_font ) SelectObject( dc, old_font );
-  ReleaseDC( list, dc );
-
-  return widest;
-}
-
+/* Put the language list exactly above the emulation speed box (same left
+   edge and width), whatever the translation did to the label widths */
 static void
 align_language_list( HWND dialog )
 {
   HWND list = GetDlgItem( dialog, IDC_OPT_GENERAL_LANGUAGE );
   HWND label = GetDlgItem( dialog, IDC_OPT_GENERAL_LABEL_LANGUAGE );
-  HWND ok = GetDlgItem( dialog, IDOK );
-  RECT list_rect, label_rect, ok_rect;
-  int width, text_width;
+  HWND below = GetDlgItem( dialog, IDC_OPT_GENERAL_EMULATION_SPEED );
+  RECT list_rect, label_rect, below_rect;
 
-  if( !list || !label || !ok ) return;
+  if( !list || !label || !below ) return;
 
   GetWindowRect( list, &list_rect );
   GetWindowRect( label, &label_rect );
-  GetWindowRect( ok, &ok_rect );
+  GetWindowRect( below, &below_rect );
   MapWindowPoints( NULL, dialog, (POINT*)&list_rect, 2 );
   MapWindowPoints( NULL, dialog, (POINT*)&label_rect, 2 );
-  MapWindowPoints( NULL, dialog, (POINT*)&ok_rect, 2 );
+  MapWindowPoints( NULL, dialog, (POINT*)&below_rect, 2 );
 
-  if( ok_rect.left <= label_rect.left ) return;
+  if( below_rect.left <= label_rect.left ) return;
 
-  SetWindowPos( label, NULL, 0, 0, ok_rect.left - label_rect.left - 4,
+  SetWindowPos( label, NULL, 0, 0, below_rect.left - label_rect.left - 4,
                 label_rect.bottom - label_rect.top,
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
-  width = list_rect.right - ok_rect.left;
-  text_width = widest_list_item( list );
-  if( text_width > 0 ) {
-    int arrow = GetSystemMetrics( SM_CXVSCROLL ) + 8;
-    int wanted = text_width * 3 / 2;
-    if( wanted < text_width + arrow ) wanted = text_width + arrow;
-    if( wanted < width ) width = wanted;
-  }
-
-  SetWindowPos( list, NULL, ok_rect.left, list_rect.top,
-                width, list_rect.bottom - list_rect.top,
+  SetWindowPos( list, NULL, below_rect.left, list_rect.top,
+                below_rect.right - below_rect.left,
+                list_rect.bottom - list_rect.top,
                 SWP_NOZORDER | SWP_NOACTIVATE );
 }
 

@@ -153,6 +153,36 @@ periph_is_active( periph_type type )
   return type_data ? type_data->active : 0;
 }
 
+typedef struct periph_option_search_t {
+  const int *option;
+  int found;
+  int present;
+} periph_option_search_t;
+
+static void
+find_option( gpointer key GCC_UNUSED, gpointer value, gpointer user_data )
+{
+  periph_private_t *private = value;
+  periph_option_search_t *search = user_data;
+
+  if( private->periph->option != search->option ) return;
+
+  search->found = 1;
+  if( private->present != PERIPH_PRESENT_NEVER ) search->present = 1;
+}
+
+int
+periph_option_available( const int *option )
+{
+  periph_option_search_t search = { option, 0, 0 };
+
+  if( !option ) return -1;
+
+  g_hash_table_foreach( peripherals, find_option, &search );
+
+  return search.found ? search.present : -1;
+}
+
 /* Work out whether a peripheral is present on this machine, and mark it
    (in)active as appropriate */
 static void

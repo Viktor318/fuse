@@ -140,6 +140,10 @@ int periph_activate_type( periph_type type, int active );
 /* Is a specific peripheral active at the moment? */
 int periph_is_active( periph_type type );
 
+/* Can a peripheral controlled by this option be present on the current
+   machine? Returns 1 if yes, 0 if no, -1 if no peripheral uses the option */
+int periph_option_available( const int *option );
+
 /* Empty out the list of peripherals */
 void periph_clear( void );
 

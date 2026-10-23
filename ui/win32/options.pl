@@ -156,6 +156,16 @@ CODE
     settings_current.$widget->{value} ? BST_CHECKED : BST_UNCHECKED, 0 );
 
 CODE
+            # Grey out peripherals the current machine can't have
+            # ("printer" also switches ZX Printer output, so it stays)
+            if( $_->{postcheck} && $_->{postcheck} eq 'periph_postcheck' &&
+                $widget->{value} ne 'printer' ) {
+                print << "CODE";
+  if( !periph_option_available( &settings_current.$widget->{value} ) )
+    EnableWindow( GetDlgItem( hwndDlg, IDC_${optname}_${idcname} ), FALSE );
+
+CODE
+            }
 	} elsif( $widget->{type} eq "Entry" ) {
 	    my $idcname = uc( "$widget->{value}" );
         print << "CODE";

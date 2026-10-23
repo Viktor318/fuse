@@ -191,8 +191,8 @@ restore_window_position( void )
 
 /* ------------------------------------------------------------------------
    The menu bar (File, Options, ...) is drawn by Fuse: the item selected or
-   under the mouse gets a clearly visible light blue background (Windows 11
-   only shades it very lightly), and the underlined access letters can be
+   under the mouse gets a clearly visible grey background (Windows 11 only
+   shades it very lightly), and the underlined access letters can be
    shown while the left Alt is held, also when Alt is kept from Windows (see
    win32keyboard.c). The drop down menus are still drawn by Windows. */
 
@@ -202,21 +202,15 @@ restore_window_position( void )
 
 static HFONT menubar_font = NULL;
 
-typedef HANDLE ( WINAPI *open_theme_data_t )( HWND, LPCWSTR );
-typedef HRESULT ( WINAPI *close_theme_data_t )( HANDLE );
-typedef HRESULT ( WINAPI *draw_theme_background_t )( HANDLE, HDC, int, int,
-                                                      const RECT*,
-                                                      const RECT* );
-static open_theme_data_t open_theme_data;
-static close_theme_data_t close_theme_data;
-static draw_theme_background_t draw_theme_background;
+/* The menu bar was activated from the keyboard (Alt): show the access
+   letters as long as it is active */
+static int menubar_keyboard = 0;
 
 static void
 menubar_init( void )
 {
   HMENU menu = GetMenu( fuse_hWnd );
   NONCLIENTMETRICSA metrics;
-  HMODULE uxtheme;
   int count, i;
 
   if( !menu ) return;
@@ -226,18 +220,6 @@ menubar_init( void )
   if( SystemParametersInfoA( SPI_GETNONCLIENTMETRICS, sizeof( metrics ),
                              &metrics, 0 ) )
     menubar_font = CreateFontIndirectA( &metrics.lfMenuFont );
-
-  /* The menu bar background comes from the visual style, if there is one */
-  uxtheme = LoadLibraryA( "uxtheme.dll" );
-  if( uxtheme ) {
-    open_theme_data =
-      (open_theme_data_t)GetProcAddress( uxtheme, "OpenThemeData" );
-    close_theme_data =
-      (close_theme_data_t)GetProcAddress( uxtheme, "CloseThemeData" );
-    draw_theme_background =
-      (draw_theme_background_t)GetProcAddress( uxtheme,
-                                               "DrawThemeBackground" );
-  }
 
   /* Owner drawn, but the text stays in the item: menu translation keeps
      working, and we read it from there */
@@ -319,28 +301,20 @@ menubar_draw( DRAWITEMSTRUCT *draw )
   if( menubar_text( draw->itemData & 0xffff, text, sizeof( text ) ) )
     return 0;
 
-  /* Background: the menu bar's own, or light blue if selected */
+  /* Background: the same grey as the rest of the menu bar, or a darker
+     grey for the selected item */
   if( draw->itemState & ( ODS_SELECTED | ODS_HOTLIGHT ) ) {
-    HBRUSH brush = CreateSolidBrush( RGB( 0xb3, 0xd7, 0xf3 ) );
+    HBRUSH brush = CreateSolidBrush( RGB( 0xcf, 0xcf, 0xcf ) );
     FillRect( dc, &rect, brush );
     DeleteObject( brush );
   } else {
-    HANDLE theme = open_theme_data && draw_theme_background ?
-                   open_theme_data( fuse_hWnd, L"MENU" ) : NULL;
-    if( theme ) {
-      /* MENU_BARBACKGROUND, MB_ACTIVE / MB_INACTIVE */
-      draw_theme_background( theme, dc, 7,
-                             ( draw->itemState & ODS_INACTIVE ) ? 2 : 1,
-                             &rect, NULL );
-      if( close_theme_data ) close_theme_data( theme );
-    } else {
-      FillRect( dc, &rect, GetSysColorBrush( COLOR_MENUBAR ) );
-    }
+    FillRect( dc, &rect, GetSysColorBrush( COLOR_MENUBAR ) );
   }
 
   /* The access letters: while the left Alt is held alone (Caps Shift for
-     the number keys), or whenever Windows would show them */
-  underline = win32keyboard_menu_underline() ||
+     the number keys), while the menu bar is used from the keyboard, or
+     whenever Windows would show them */
+  underline = win32keyboard_menu_underline() || menubar_keyboard ||
               !( draw->itemState & ODS_NOACCEL );
   if( !underline ) format |= DT_HIDEPREFIX;
 
@@ -363,6 +337,13 @@ menubar_menuchar( WPARAM wParam, LPARAM lParam )
   HMENU menu = GetMenu( fuse_hWnd );
   char key[2] = { (char)LOWORD( wParam ), 0 };
   int count, i;
+
+  /* A number key leaves the menus (instead of a beep), as it would turn
+     off the access letters if the menu bar wasn't active */
+  if( menubar_keyboard && key[0] >= '0' && key[0] <= '9' ) {
+    EndMenu();
+    return MAKELRESULT( 0, MNC_CLOSE );
+  }
 
   if( (HMENU)lParam != menu ) return 0;
 
@@ -388,6 +369,13 @@ void
 win32ui_menubar_redraw( void )
 {
   DrawMenuBar( fuse_hWnd );
+}
+
+/* Alt was released alone: the menu bar is about to be activated */
+void
+win32ui_menubar_from_keyboard( void )
+{
+  menubar_keyboard = 1;
 }
 
 static LRESULT WINAPI
@@ -490,6 +478,11 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       return 0;
 
     case WM_ENTERMENULOOP:
+      /* Opened with Alt (e.g. Alt+F) */
+      if( GetKeyState( VK_MENU ) & 0x8000 ) menubar_keyboard = 1;
+      fuse_emulation_pause();
+      return 0;
+
     case WM_ENTERSIZEMOVE:
     {
       fuse_emulation_pause();
@@ -497,6 +490,13 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     }
 
     case WM_EXITMENULOOP:
+      if( menubar_keyboard ) {
+        menubar_keyboard = 0;
+        DrawMenuBar( hWnd );
+      }
+      fuse_emulation_unpause();
+      return 0;
+
     case WM_EXITSIZEMOVE:
     {
       fuse_emulation_unpause();

@@ -446,7 +446,10 @@ win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam )
     win32ui_menubar_redraw();
 
     /* Alt pressed and released alone activates the menu bar */
-    if( alone ) PostMessage( fuse_hWnd, WM_SYSCOMMAND, SC_KEYMENU, 0 );
+    if( alone ) {
+      win32ui_menubar_from_keyboard();
+      PostMessage( fuse_hWnd, WM_SYSCOMMAND, SC_KEYMENU, 0 );
+    }
 
     return 2;
   }

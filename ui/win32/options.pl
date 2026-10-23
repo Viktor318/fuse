@@ -294,6 +294,22 @@ CODE
   EndDialog( hwndDlg, 0 );
 }
 
+CODE
+
+    # Options that depend on another one are greyed out when it is off
+    print "static void\nmenu_options_$_->{name}_dependencies( HWND hwndDlg GCC_UNUSED )\n{\n";
+    if( $_->{name} eq 'general' ) {
+      print << "CODE";
+  /* "Confirm on exit" only matters if confirmations are asked at all */
+  EnableWindow( GetDlgItem( hwndDlg, IDC_OPT_GENERAL_CONFIRM_EXIT ),
+                IsDlgButtonChecked( hwndDlg,
+                                    IDC_OPT_GENERAL_CONFIRM_ACTIONS ) ==
+                  BST_CHECKED );
+CODE
+    }
+    print "}\n\n";
+
+    print << "CODE";
 static BOOL CALLBACK
 menu_options_$_->{name}_proc( HWND hwndDlg, UINT msg, WPARAM wParam GCC_UNUSED,
                               LPARAM lParam GCC_UNUSED )
@@ -308,11 +324,15 @@ menu_options_$_->{name}_proc( HWND hwndDlg, UINT msg, WPARAM wParam GCC_UNUSED,
 
       /* initialize the controls with current settings */
       menu_options_$_->{name}_init( hwndDlg );
+      menu_options_$_->{name}_dependencies( hwndDlg );
 
       return TRUE;
     }
 
     case WM_COMMAND:
+      if( HIWORD( wParam ) == BN_CLICKED )
+        menu_options_$_->{name}_dependencies( hwndDlg );
+
       switch( LOWORD( wParam ) )
       {
         case IDOK:

@@ -349,8 +349,7 @@ create_dialog( int width, int height )
   return dialog;
 }
 
-/* The window's place and size, and whether it was open when Fuse exited,
-   are kept in a file next to the settings */
+/* The window's place and size are kept in a file next to the settings */
 static int
 geometry_path( char *path, size_t length )
 {
@@ -362,7 +361,7 @@ geometry_path( char *path, size_t length )
 }
 
 static void
-save_geometry( HWND dialog, int open )
+save_geometry( HWND dialog )
 {
   char path[ PATH_MAX ];
   RECT rect;
@@ -373,33 +372,32 @@ save_geometry( HWND dialog, int open )
 
   f = fopen( path, "w" );
   if( !f ) return;
-  fprintf( f, "x=%ld\ny=%ld\nwidth=%ld\nheight=%ld\nopen=%d\n",
+  fprintf( f, "x=%ld\ny=%ld\nwidth=%ld\nheight=%ld\n",
            (long)rect.left, (long)rect.top, (long)( rect.right - rect.left ),
-           (long)( rect.bottom - rect.top ), open );
+           (long)( rect.bottom - rect.top ) );
   fclose( f );
 }
 
 /* Read the saved geometry; returns 0 if there is one */
 static int
-load_geometry( RECT *rect, int *open )
+load_geometry( RECT *rect )
 {
   char path[ PATH_MAX ];
   long x, y, width, height;
-  int is_open = 0, ok;
+  int ok;
   FILE *f;
 
   if( geometry_path( path, sizeof( path ) ) ) return 1;
 
   f = fopen( path, "r" );
   if( !f ) return 1;
-  ok = fscanf( f, "x=%ld y=%ld width=%ld height=%ld open=%d",
-               &x, &y, &width, &height, &is_open ) >= 4;
+  ok = fscanf( f, "x=%ld y=%ld width=%ld height=%ld",
+               &x, &y, &width, &height ) == 4;
   fclose( f );
   if( !ok || width <= 0 || height <= 0 ) return 1;
 
   rect->left = x; rect->top = y;
   rect->right = x + width; rect->bottom = y + height;
-  if( open ) *open = is_open;
   return 0;
 }
 
@@ -410,7 +408,7 @@ restore_geometry( HWND dialog )
 {
   RECT rect, title;
 
-  if( load_geometry( &rect, NULL ) ) return;
+  if( load_geometry( &rect ) ) return;
 
   title = rect;
   title.bottom = rect.top + GetSystemMetrics( SM_CYCAPTION );
@@ -424,23 +422,12 @@ restore_geometry( HWND dialog )
                 rect.bottom - rect.top, SWP_NOZORDER | SWP_NOACTIVATE );
 }
 
-/* Was the window open when Fuse last exited? */
-int
-win32ui_picture_was_open( void )
-{
-  RECT rect;
-  int open = 0;
-
-  return !load_geometry( &rect, &open ) && open;
-}
-
 static void
 destroy_dialog( void )
 {
   HWND dialog = hDialogPicture;
 
-  /* Closed by the user: remember where, but not to open it next time */
-  save_geometry( dialog, 0 );
+  save_geometry( dialog );
   hDialogPicture = NULL;
   DestroyWindow( dialog );
 
@@ -584,10 +571,9 @@ picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       return 0;
 
     case WM_DESTROY:
-      /* Destroyed with the main window, as Fuse exits: open it again next
-         time */
+      /* Destroyed with the main window, as Fuse exits */
       if( hWnd == hDialogPicture ) {
-        save_geometry( hWnd, 1 );
+        save_geometry( hWnd );
         hDialogPicture = NULL;
       }
       break;

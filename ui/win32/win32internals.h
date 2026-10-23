@@ -126,7 +126,6 @@ typedef enum win32ui_picture_format {
 } win32ui_picture_format;
 
 int win32ui_picture( const char *filename, win32ui_picture_format format );
-int win32ui_picture_was_open( void );
 
 int win32ui_get_monospaced_font( HFONT *font );
 void win32ui_set_font( HWND hDlg, int nIDDlgItem, HFONT font );

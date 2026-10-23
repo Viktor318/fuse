@@ -217,12 +217,14 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       return 0;
 
     case WM_SYSKEYDOWN:
-      /* The left Alt as Caps Shift for the number keys */
-      if( win32keyboard_syskeypress( wParam, lParam ) ) return 0;
+      /* The left Alt as Caps Shift for the number keys. Windows still sees
+         the key, so it knows Alt wasn't pressed alone: no menu bar, and the
+         underlined menu letters go away when Alt is released */
+      win32keyboard_syskeypress( wParam, lParam );
       break;
 
     case WM_SYSKEYUP:
-      if( win32keyboard_syskeyrelease( wParam, lParam ) ) return 0;
+      if( win32keyboard_syskeyrelease( wParam, lParam ) ) break;
       /* A key released while Alt is down, or Alt itself once Ctrl is
          already up (e.g. the end of AltGr). Release it in the emulated
          machine too, then let Windows handle it as usual (menus) */
@@ -470,9 +472,6 @@ ui_init( int *argc, char ***argv )
   /* show the window finally */
   ShowWindow( fuse_hWnd, fuse_nCmdShow );
   UpdateWindow( fuse_hWnd );
-
-  /* the keyboard picture, if it was open when Fuse last exited */
-  if( win32ui_picture_was_open() ) menu_help_keyboard( 0 );
 
   /* window will accept dragging and dropping */
   DragAcceptFiles( fuse_hWnd, TRUE );

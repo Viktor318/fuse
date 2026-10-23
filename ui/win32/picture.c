@@ -33,6 +33,7 @@
 #include <zlib.h>
 #endif
 
+#include "compat.h"
 #include "display.h"
 #include "picture.h"
 #include "utils.h"
@@ -57,6 +58,7 @@ static LRESULT WINAPI picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPAR
 static int show_system_picture( const char *filename );
 static HBITMAP load_picture( const char *filename, int *width, int *height );
 static void draw_bitmap( HBITMAP bitmap, int width, int height );
+static void restore_geometry( HWND dialog );
 
 #ifdef PNG_SIMPLIFIED_READ_SUPPORTED
 
@@ -317,6 +319,7 @@ create_dialog( int width, int height )
 
   inflate_dialog( dialog, width, height );
   move_dialog( dialog, fuse_hWnd );
+  restore_geometry( dialog );
 
   /* Create the picture buffer */
   BITMAPINFO picture_BMI;
@@ -346,11 +349,100 @@ create_dialog( int width, int height )
   return dialog;
 }
 
+/* The window's place and size, and whether it was open when Fuse exited,
+   are kept in a file next to the settings */
+static int
+geometry_path( char *path, size_t length )
+{
+  const char *dir = compat_get_config_path();
+
+  if( !dir ) return 1;
+  snprintf( path, length, "%s/fuse-keyboard-window.txt", dir );
+  return 0;
+}
+
+static void
+save_geometry( HWND dialog, int open )
+{
+  char path[ PATH_MAX ];
+  RECT rect;
+  FILE *f;
+
+  if( IsIconic( dialog ) || !GetWindowRect( dialog, &rect ) ) return;
+  if( geometry_path( path, sizeof( path ) ) ) return;
+
+  f = fopen( path, "w" );
+  if( !f ) return;
+  fprintf( f, "x=%ld\ny=%ld\nwidth=%ld\nheight=%ld\nopen=%d\n",
+           (long)rect.left, (long)rect.top, (long)( rect.right - rect.left ),
+           (long)( rect.bottom - rect.top ), open );
+  fclose( f );
+}
+
+/* Read the saved geometry; returns 0 if there is one */
+static int
+load_geometry( RECT *rect, int *open )
+{
+  char path[ PATH_MAX ];
+  long x, y, width, height;
+  int is_open = 0, ok;
+  FILE *f;
+
+  if( geometry_path( path, sizeof( path ) ) ) return 1;
+
+  f = fopen( path, "r" );
+  if( !f ) return 1;
+  ok = fscanf( f, "x=%ld y=%ld width=%ld height=%ld open=%d",
+               &x, &y, &width, &height, &is_open ) >= 4;
+  fclose( f );
+  if( !ok || width <= 0 || height <= 0 ) return 1;
+
+  rect->left = x; rect->top = y;
+  rect->right = x + width; rect->bottom = y + height;
+  if( open ) *open = is_open;
+  return 0;
+}
+
+/* Put the window where it was last time, if its title bar would be on a
+   monitor (which may have been disconnected since) */
+static void
+restore_geometry( HWND dialog )
+{
+  RECT rect, title;
+
+  if( load_geometry( &rect, NULL ) ) return;
+
+  title = rect;
+  title.bottom = rect.top + GetSystemMetrics( SM_CYCAPTION );
+  if( !MonitorFromRect( &title, MONITOR_DEFAULTTONULL ) ) return;
+
+  if( rect.right - rect.left < min_width ) rect.right = rect.left + min_width;
+  if( rect.bottom - rect.top < min_height )
+    rect.bottom = rect.top + min_height;
+
+  SetWindowPos( dialog, NULL, rect.left, rect.top, rect.right - rect.left,
+                rect.bottom - rect.top, SWP_NOZORDER | SWP_NOACTIVATE );
+}
+
+/* Was the window open when Fuse last exited? */
+int
+win32ui_picture_was_open( void )
+{
+  RECT rect;
+  int open = 0;
+
+  return !load_geometry( &rect, &open ) && open;
+}
+
 static void
 destroy_dialog( void )
 {
-  DestroyWindow( hDialogPicture );
+  HWND dialog = hDialogPicture;
+
+  /* Closed by the user: remember where, but not to open it next time */
+  save_geometry( dialog, 0 );
   hDialogPicture = NULL;
+  DestroyWindow( dialog );
 
   DeleteObject( picture_BMP );
   picture_BMP = NULL;
@@ -490,6 +582,15 @@ picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     case WM_CLOSE:
       destroy_dialog();
       return 0;
+
+    case WM_DESTROY:
+      /* Destroyed with the main window, as Fuse exits: open it again next
+         time */
+      if( hWnd == hDialogPicture ) {
+        save_geometry( hWnd, 1 );
+        hDialogPicture = NULL;
+      }
+      break;
 
     case WM_MOUSEACTIVATE:
       /* Clicking the picture (or its Close button) doesn't take the focus

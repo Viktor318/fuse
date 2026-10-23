@@ -326,6 +326,16 @@ static int alt_digit_count = 0;
    activate the menu bar */
 static int alt_used = 0;
 
+/* Pressing Alt shows the underlined menu letters; once Alt was used for a
+   number key, hide them again */
+static void
+hide_menu_underlines( void )
+{
+  SendMessage( fuse_hWnd, WM_CHANGEUISTATE,
+               MAKEWPARAM( UIS_SET, UISF_HIDEACCEL | UISF_HIDEFOCUS ), 0 );
+  DrawMenuBar( fuse_hWnd );
+}
+
 static void
 send_alt( int press )
 {
@@ -384,6 +394,7 @@ win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam )
     return 0;
 
   alt_used = 1;
+  hide_menu_underlines();
 
   if( find_alt_digit( wParam ) < 0 ) {
     if( alt_digit_count == 0 ) send_alt( 1 );
@@ -419,6 +430,7 @@ win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam )
   /* Alt itself: no menu bar if it was used for a number key */
   if( wParam == VK_MENU && alt_used ) {
     alt_used = 0;
+    hide_menu_underlines();
     return 1;
   }
 

@@ -471,6 +471,9 @@ ui_init( int *argc, char ***argv )
   ShowWindow( fuse_hWnd, fuse_nCmdShow );
   UpdateWindow( fuse_hWnd );
 
+  /* the keyboard picture, if it was open when Fuse last exited */
+  if( win32ui_picture_was_open() ) menu_help_keyboard( 0 );
+
   /* window will accept dragging and dropping */
   DragAcceptFiles( fuse_hWnd, TRUE );
 

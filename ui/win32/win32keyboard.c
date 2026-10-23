@@ -61,6 +61,12 @@ oem_keysyms_remap( WPARAM wParam )
   if( !mapped_code ) return INPUT_KEY_NONE;
 
   unshifted_char = LOWORD( mapped_code );
+
+  /* On some layouts a digit is on an OEM key (e.g. 0 left of 1 on the
+     Hungarian layout); it is still that digit, also with Caps Shift */
+  if( unshifted_char >= '0' && unshifted_char <= '9' )
+    return keysyms_remap( unshifted_char );
+
   ptr = g_hash_table_lookup( oem_keysyms_hash, &unshifted_char );
 
   return ptr ? *ptr : INPUT_KEY_NONE;

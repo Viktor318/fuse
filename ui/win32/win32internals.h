@@ -98,10 +98,7 @@ int win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam );
 int win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam );
 int win32keyboard_alt_digit_keyrelease( WPARAM wParam, LPARAM lParam );
 int win32keyboard_alt_digit_char( WPARAM wParam );
-void win32keyboard_hide_menu_underlines( void );
-
-/* Posted to the main window to hide the underlined menu letters */
-#define WM_FUSE_HIDE_UNDERLINES ( WM_APP + 0x100 )
+void win32keyboard_alt_not_alone( void );
 
 /*
  * Mouse routines (win32mouse.c)

@@ -208,6 +208,7 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       return 0;
 
     case WM_KEYDOWN:
+      win32keyboard_alt_not_alone();
       win32keyboard_keypress( wParam, lParam );
       return 0;
 
@@ -217,23 +218,22 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       return 0;
 
     case WM_SYSKEYDOWN:
-      /* The left Alt as Caps Shift for the number keys. Windows still sees
-         the key, so it knows Alt wasn't pressed alone: no menu bar, and the
-         underlined menu letters go away when Alt is released */
-      win32keyboard_syskeypress( wParam, lParam );
+      /* The left Alt as Caps Shift for the number keys */
+      if( win32keyboard_syskeypress( wParam, lParam ) ) return 0;
       break;
 
     case WM_SYSKEYUP:
-      if( win32keyboard_syskeyrelease( wParam, lParam ) ) break;
-      /* A key released while Alt is down, or Alt itself once Ctrl is
-         already up (e.g. the end of AltGr). Release it in the emulated
-         machine too, then let Windows handle it as usual (menus) */
-      win32keyboard_keyrelease( wParam, lParam );
+      switch( win32keyboard_syskeyrelease( wParam, lParam ) ) {
+      case 2: return 0;
+      case 1: break;
+      default:
+        /* A key released while Alt is down, or Alt itself once Ctrl is
+           already up (e.g. the end of AltGr). Release it in the emulated
+           machine too, then let Windows handle it as usual (menus) */
+        win32keyboard_keyrelease( wParam, lParam );
+        break;
+      }
       break;
-
-    case WM_FUSE_HIDE_UNDERLINES:
-      win32keyboard_hide_menu_underlines();
-      return 0;
 
     case WM_SYSCHAR:
       if( win32keyboard_alt_digit_char( wParam ) ) return 0;

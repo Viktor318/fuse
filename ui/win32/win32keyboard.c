@@ -315,36 +315,24 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
 
 /* "Use left Alt as Caps Shift with number keys": the left Alt and a number
    key of the main block give Caps Shift + that number (EDIT, cursors,
-   DELETE...), which the character based typing can't produce. Alt keeps
-   its normal Windows meaning (menus, Alt+F4) for every other key */
+   DELETE...), which the character based typing can't produce.
+
+   With this on, the left Alt key itself is kept from Windows: otherwise
+   Windows underlines the menu letters as soon as Alt goes down, and keeps
+   them underlined after Alt was used with a number. Alt still works for
+   the menus: Alt + letter and Alt+F4 are handled by Windows as usual (they
+   don't need the Alt press itself), and Alt pressed and released alone
+   activates the menu bar, as Windows would do */
 
 /* Number keys currently held as Caps Shift + number */
 static WPARAM alt_digits[10];
 static int alt_digit_count = 0;
 
-/* Alt was used for a number key since it went down: its release must not
-   activate the menu bar */
+/* Alt was used for a number key since it went down */
 static int alt_used = 0;
 
-/* Pressing Alt shows the underlined menu letters; once Alt was used for a
-   number key, hide them. Asking Windows with WM_CHANGEUISTATE isn't enough,
-   it may refuse to hide them right after keyboard input; so set the state
-   of the main window directly and redraw the menu bar, now and once more
-   after Windows has handled the current key */
-void
-win32keyboard_hide_menu_underlines( void )
-{
-  SendMessage( fuse_hWnd, WM_UPDATEUISTATE,
-               MAKEWPARAM( UIS_SET, UISF_HIDEACCEL | UISF_HIDEFOCUS ), 0 );
-  DrawMenuBar( fuse_hWnd );
-}
-
-static void
-hide_menu_underlines( void )
-{
-  win32keyboard_hide_menu_underlines();
-  PostMessage( fuse_hWnd, WM_FUSE_HIDE_UNDERLINES, 0, 0 );
-}
+/* No other key was pressed since Alt went down */
+static int alt_alone = 0;
 
 static void
 send_alt( int press )
@@ -361,6 +349,13 @@ send_alt( int press )
   keyboard_alt_caps_shift = 1;
   input_event( &fuse_event );
   if( !press ) keyboard_alt_caps_shift = 0;
+}
+
+static int
+is_left_alt( WPARAM wParam, LPARAM lParam )
+{
+  /* The right Alt (AltGr) has the extended key flag */
+  return wParam == VK_MENU && !( lParam & ( 1 << 24 ) );
 }
 
 /* Is this a number key of the main block? (Also when the digit is on an
@@ -387,15 +382,17 @@ find_alt_digit( WPARAM wParam )
   return -1;
 }
 
-/* WM_SYSKEYDOWN. Returns 1 if handled here (keep it from Windows) */
+/* WM_SYSKEYDOWN. Returns 1 if Windows mustn't see it */
 int
 win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam )
 {
   if( wParam == VK_MENU ) {
     /* A new press of Alt (not autorepeat) */
-    if( !( lParam & ( 1 << 30 ) ) ) alt_used = 0;
-    return 0;
+    if( !( lParam & ( 1 << 30 ) ) ) { alt_used = 0; alt_alone = 1; }
+    return settings_current.alt_caps_shift && is_left_alt( wParam, lParam );
   }
+
+  alt_alone = 0;
 
   if( !settings_current.alt_caps_shift || !is_number_key( wParam ) ||
       !( GetKeyState( VK_LMENU ) & 0x8000 ) ||
@@ -404,7 +401,6 @@ win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam )
     return 0;
 
   alt_used = 1;
-  hide_menu_underlines();
 
   if( find_alt_digit( wParam ) < 0 ) {
     if( alt_digit_count == 0 ) send_alt( 1 );
@@ -413,7 +409,7 @@ win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam )
   }
 
   win32keyboard_keypress( wParam, lParam );
-  return 1;
+  return 0;
 }
 
 /* A number key released (with or without Alt still held) */
@@ -431,17 +427,23 @@ alt_digit_release( WPARAM wParam, LPARAM lParam )
   return 1;
 }
 
-/* WM_SYSKEYUP. Returns 1 if handled here */
+/* WM_SYSKEYUP. Returns 0 if not handled here, 1 if handled but Windows
+   should see it too, 2 if Windows mustn't see it */
 int
 win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam )
 {
   if( alt_digit_release( wParam, lParam ) ) return 1;
 
-  /* Alt itself, after it was used for a number key: Windows doesn't
-     activate the menu bar, but make sure the underlines go away too */
-  if( wParam == VK_MENU && alt_used ) {
-    alt_used = 0;
-    hide_menu_underlines();
+  if( is_left_alt( wParam, lParam ) && settings_current.alt_caps_shift ) {
+    int alone = alt_alone && !alt_used;
+
+    win32keyboard_keyrelease( wParam, lParam );
+    alt_alone = alt_used = 0;
+
+    /* Alt pressed and released alone activates the menu bar */
+    if( alone ) PostMessage( fuse_hWnd, WM_SYSCOMMAND, SC_KEYMENU, 0 );
+
+    return 2;
   }
 
   return 0;
@@ -459,4 +461,11 @@ int
 win32keyboard_alt_digit_char( WPARAM wParam )
 {
   return alt_used && wParam >= '0' && wParam <= '9';
+}
+
+/* Any ordinary key pressed while Alt is down: Alt isn't alone */
+void
+win32keyboard_alt_not_alone( void )
+{
+  alt_alone = 0;
 }

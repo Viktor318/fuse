@@ -378,31 +378,6 @@ win32ui_menubar_from_keyboard( void )
   menubar_keyboard = 1;
 }
 
-/* Left from the first menu: Windows would go to the system menu, and can't
-   be told to select the last item instead. So leave the menus, and open
-   the last one again with its access letter */
-static int menubar_reopening = 0;
-
-static int
-menubar_open_last( void )
-{
-  HMENU menu = GetMenu( fuse_hWnd );
-  char text[ 256 ];
-  const char *amp;
-  int last = GetMenuItemCount( menu ) - 1;
-
-  if( last < 0 || menubar_text( last, text, sizeof( text ) ) ) return 0;
-  for( amp = strchr( text, '&' ); amp && amp[1] == '&';
-       amp = strchr( amp + 2, '&' ) ) ;
-  if( !amp || !amp[1] ) return 0;
-
-  menubar_reopening = 1;
-  EndMenu();
-  PostMessage( fuse_hWnd, WM_SYSCOMMAND, SC_KEYMENU,
-               (unsigned char)amp[1] );
-  return 1;
-}
-
 static LRESULT WINAPI
 fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
@@ -475,14 +450,12 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     case WM_NEXTMENU:
       /* The arrow keys go round the menu bar, from Help to File and back,
          without the system menu in between */
-      if( wParam == VK_RIGHT ) {
-        /* Windows then selects the first item */
+      if( wParam == VK_LEFT || wParam == VK_RIGHT ) {
         MDINEXTMENU *next = (MDINEXTMENU*)lParam;
         next->hmenuNext = GetMenu( hWnd );
         next->hwndNext = hWnd;
         return 0;
       }
-      if( wParam == VK_LEFT && menubar_open_last() ) return 0;
       break;
 
     case WM_MENUCHAR:
@@ -516,10 +489,8 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       return 0;
 
     case WM_ENTERMENULOOP:
-      /* Opened with Alt (e.g. Alt+F), or reopened from the keyboard */
-      if( ( GetKeyState( VK_MENU ) & 0x8000 ) || menubar_reopening )
-        menubar_keyboard = 1;
-      menubar_reopening = 0;
+      /* Opened with Alt (e.g. Alt+F) */
+      if( GetKeyState( VK_MENU ) & 0x8000 ) menubar_keyboard = 1;
       fuse_emulation_pause();
       return 0;
 
@@ -530,7 +501,7 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     }
 
     case WM_EXITMENULOOP:
-      if( menubar_keyboard && !menubar_reopening ) {
+      if( menubar_keyboard ) {
         menubar_keyboard = 0;
         DrawMenuBar( hWnd );
       }

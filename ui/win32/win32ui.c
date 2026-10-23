@@ -231,6 +231,10 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       win32keyboard_keyrelease( wParam, lParam );
       break;
 
+    case WM_FUSE_HIDE_UNDERLINES:
+      win32keyboard_hide_menu_underlines();
+      return 0;
+
     case WM_SYSCHAR:
       if( win32keyboard_alt_digit_char( wParam ) ) return 0;
       break;

@@ -327,13 +327,23 @@ static int alt_digit_count = 0;
 static int alt_used = 0;
 
 /* Pressing Alt shows the underlined menu letters; once Alt was used for a
-   number key, hide them again */
+   number key, hide them. Asking Windows with WM_CHANGEUISTATE isn't enough,
+   it may refuse to hide them right after keyboard input; so set the state
+   of the main window directly and redraw the menu bar, now and once more
+   after Windows has handled the current key */
+void
+win32keyboard_hide_menu_underlines( void )
+{
+  SendMessage( fuse_hWnd, WM_UPDATEUISTATE,
+               MAKEWPARAM( UIS_SET, UISF_HIDEACCEL | UISF_HIDEFOCUS ), 0 );
+  DrawMenuBar( fuse_hWnd );
+}
+
 static void
 hide_menu_underlines( void )
 {
-  /* Posted, so that it comes after Windows has handled the Alt release */
-  PostMessage( fuse_hWnd, WM_CHANGEUISTATE,
-               MAKEWPARAM( UIS_SET, UISF_HIDEACCEL | UISF_HIDEFOCUS ), 0 );
+  win32keyboard_hide_menu_underlines();
+  PostMessage( fuse_hWnd, WM_FUSE_HIDE_UNDERLINES, 0, 0 );
 }
 
 static void
@@ -394,6 +404,7 @@ win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam )
     return 0;
 
   alt_used = 1;
+  hide_menu_underlines();
 
   if( find_alt_digit( wParam ) < 0 ) {
     if( alt_digit_count == 0 ) send_alt( 1 );

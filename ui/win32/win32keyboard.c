@@ -104,6 +104,34 @@ get_character( void )
   return character;
 }
 
+/* Left Alt used as Caps Shift: is it held at the moment? */
+static int left_alt_held = 0;
+
+static int
+is_left_alt( WPARAM wParam, LPARAM lParam )
+{
+  /* The right Alt (AltGr) has the extended key flag */
+  return wParam == VK_MENU && !( lParam & ( 1 << 24 ) );
+}
+
+/* If the left Alt went up while another window had the focus (e.g. after
+   Alt+Tab), Caps Shift must not stay pressed */
+static void
+sync_left_alt( void )
+{
+  input_event_t fuse_event;
+
+  if( !left_alt_held || ( GetKeyState( VK_LMENU ) & 0x8000 ) ) return;
+
+  left_alt_held = 0;
+  fuse_event.type = INPUT_EVENT_KEYRELEASE;
+  fuse_event.types.key.native_key = INPUT_KEY_Alt_L;
+  fuse_event.types.key.spectrum_key = INPUT_KEY_Alt_L;
+  fuse_event.types.key.character = 0;
+  fuse_event.types.key.physical_key = 0;
+  input_event( &fuse_event );
+}
+
 /* Windows doesn't always tell us when a modifier is released. In
    particular, AltGr is sent as Ctrl + Alt, and when Ctrl goes up first the
    Alt release comes as WM_SYSKEYUP. If character based typing still
@@ -160,6 +188,7 @@ win32keyboard_keypress( WPARAM wParam, LPARAM lParam )
   input_event_t fuse_event;
   libspectrum_dword character;
 
+  sync_left_alt();
   sync_modifiers();
 
   switch( wParam ) {
@@ -204,6 +233,7 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
   input_key fuse_keysym;
   input_event_t fuse_event;
 
+  sync_left_alt();
   sync_modifiers();
 
   switch( wParam ) {
@@ -239,4 +269,48 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
   fuse_event.types.key.physical_key = physical_key( lParam );
 
   input_event( &fuse_event );
+}
+
+/* With "Use left Alt as Caps Shift too", the left Alt and the keys pressed
+   together with it come as system keys (WM_SYSKEYDOWN/UP). Pass them to the
+   emulated machine, and keep them away from Windows, so that Alt doesn't
+   activate the menu bar. Returns 1 if the key was handled here */
+int
+win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam )
+{
+  if( is_left_alt( wParam, lParam ) ) {
+    if( !settings_current.alt_caps_shift ) return 0;
+    if( !left_alt_held ) {
+      win32keyboard_keypress( wParam, lParam );
+      left_alt_held = 1;
+    }
+    return 1;
+  }
+
+  if( !left_alt_held ) return 0;
+
+  win32keyboard_keypress( wParam, lParam );
+  return 1;
+}
+
+int
+win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam )
+{
+  if( !left_alt_held ) return 0;
+
+  if( is_left_alt( wParam, lParam ) ) {
+    win32keyboard_keyrelease( wParam, lParam );
+    left_alt_held = 0;
+    return 1;
+  }
+
+  win32keyboard_keyrelease( wParam, lParam );
+  return 1;
+}
+
+/* Characters typed with the left Alt held mustn't select menu items */
+int
+win32keyboard_left_alt_held( void )
+{
+  return left_alt_held;
 }

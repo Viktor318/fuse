@@ -94,6 +94,9 @@ void win32keyboard_init( void );
 void win32keyboard_end( void );
 void win32keyboard_keypress( WPARAM wParam, LPARAM lParam );
 void win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam );
+int win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam );
+int win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam );
+int win32keyboard_left_alt_held( void );
 
 /*
  * Mouse routines (win32mouse.c)

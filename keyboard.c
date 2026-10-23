@@ -34,6 +34,7 @@
 #include "infrastructure/startup_manager.h"
 #include "input.h"
 #include "keyboard.h"
+#include "settings.h"
 #include "ui/ui.h"
 
 /* Bit masks for each of the eight keyboard half-rows; `AND' the selected
@@ -418,6 +419,13 @@ keyboard_synthetic_release_all( keyboard_synthetic_source source )
 const keyboard_spectrum_keys_t*
 keyboard_get_spectrum_keys( input_key keysym )
 {
+  static const keyboard_spectrum_keys_t alt_caps_shift =
+    { KEYBOARD_NONE, KEYBOARD_Caps };
+
+  /* Optionally the left Alt key is Caps Shift instead of Symbol Shift */
+  if( keysym == INPUT_KEY_Alt_L && settings_current.alt_caps_shift )
+    return &alt_caps_shift;
+
   return g_hash_table_lookup( spectrum_keys, &keysym );
 }
 

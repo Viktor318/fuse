@@ -69,12 +69,12 @@ static int read_png_file( const char *filename, png_bytep *buffer,
 int
 win32ui_picture( const char *filename, win32ui_picture_format format )
 {
-  /* Dialog already open? Bring it back to the front */
+  /* Dialog already open? Show it again, without taking the focus */
   if( hDialogPicture != NULL ) {
-    if( IsIconic( hDialogPicture ) ) ShowWindow( hDialogPicture, SW_RESTORE );
+    if( IsIconic( hDialogPicture ) )
+      ShowWindow( hDialogPicture, SW_SHOWNOACTIVATE );
     SetWindowPos( hDialogPicture, HWND_TOP, 0, 0, 0, 0,
-                  SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW );
-    SetForegroundWindow( hDialogPicture );
+                  SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE );
     return 0;
   }
 
@@ -134,12 +134,9 @@ win32ui_picture( const char *filename, win32ui_picture_format format )
 
   }
 
-  ShowWindow( hDialogPicture, SW_SHOW );
-
-  /* Show the picture in front; clicking the main window brings Fuse back */
-  SetWindowPos( hDialogPicture, HWND_TOP, 0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE );
-  SetForegroundWindow( hDialogPicture );
+  /* Show it without taking the focus, so typing keeps going to the
+     emulated machine */
+  ShowWindow( hDialogPicture, SW_SHOWNOACTIVATE );
 
   return 0;
 }
@@ -303,11 +300,17 @@ create_dialog( int width, int height )
 {
   HWND dialog;
 
-  /* Not owned by Fuse's main window, so that clicking the main window brings
-     it in front of the picture (an owned window always stays above its
-     owner). The picture has its own taskbar button to bring it back */
+  /* Owned by Fuse's main window, so it always stays above it (and is
+     minimized and restored with it), but never activated, so the keyboard
+     focus stays with the main window and typing goes to the emulated
+     machine even while the picture is being looked at, moved or closed */
   dialog = CreateDialog( fuse_hInstance, MAKEINTRESOURCE( IDD_PICTURE ),
-                         NULL, (DLGPROC)picture_wnd_proc );
+                         fuse_hWnd, (DLGPROC)picture_wnd_proc );
+
+  if( dialog != NULL )
+    SetWindowLongPtr( dialog, GWL_EXSTYLE,
+                      GetWindowLongPtr( dialog, GWL_EXSTYLE ) |
+                      WS_EX_NOACTIVATE );
 
   if( dialog == NULL )
     return NULL;
@@ -346,12 +349,7 @@ create_dialog( int width, int height )
 static void
 destroy_dialog( void )
 {
-  /* Give the focus back to Fuse's main window, not to another program:
-     make the main window the owner just before closing, as Windows
-     activates the owner when an owned window goes away */
-  SetWindowLongPtr( hDialogPicture, GWLP_HWNDPARENT, (LONG_PTR)fuse_hWnd );
   DestroyWindow( hDialogPicture );
-  SetForegroundWindow( fuse_hWnd );
   hDialogPicture = NULL;
 
   DeleteObject( picture_BMP );
@@ -492,6 +490,12 @@ picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     case WM_CLOSE:
       destroy_dialog();
       return 0;
+
+    case WM_MOUSEACTIVATE:
+      /* Clicking the picture (or its Close button) doesn't take the focus
+         from the main window */
+      SetWindowLongPtr( hWnd, DWLP_MSGRESULT, MA_NOACTIVATE );
+      return TRUE;
   }
 
   return FALSE;

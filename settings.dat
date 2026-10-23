@@ -152,6 +152,7 @@ joystick_keyboard_right, numeric, 112
 joystick_keyboard_fire, numeric, 32
 
 keyboard_arrows_shifted, boolean, 1
+alt_caps_shift, boolean, 0
 
 rzx_compression, boolean, 1,, compress-rzx
 competition_mode, boolean, 0

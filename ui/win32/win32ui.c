@@ -215,11 +215,21 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       win32keyboard_keyrelease( wParam, lParam );
       return 0;
 
+    case WM_SYSKEYDOWN:
+      /* The left Alt as Caps Shift, and keys pressed together with it */
+      if( win32keyboard_syskeypress( wParam, lParam ) ) return 0;
+      break;
+
     case WM_SYSKEYUP:
+      if( win32keyboard_syskeyrelease( wParam, lParam ) ) return 0;
       /* A key released while Alt is down, or Alt itself once Ctrl is
          already up (e.g. the end of AltGr). Release it in the emulated
          machine too, then let Windows handle it as usual (menus) */
       win32keyboard_keyrelease( wParam, lParam );
+      break;
+
+    case WM_SYSCHAR:
+      if( win32keyboard_left_alt_held() ) return 0;
       break;
 
     case WM_PAINT:

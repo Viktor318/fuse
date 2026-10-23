@@ -127,6 +127,8 @@ typedef struct keyboard_spectrum_keys_t {
 
 const keyboard_spectrum_keys_t* keyboard_get_spectrum_keys( input_key keysym );
 
+extern int keyboard_alt_caps_shift;
+
 /* The mapping from UI layer keysyms to Fuse input layer keysyms */
 
 typedef struct keysyms_map_t {

@@ -153,9 +153,9 @@ group	context	english	hungarian
 2 Beállítások (Options)	IDD_OPT_GENERAL: LTEXT	F&rame rate (1:n)	&Képfrissítés (1:n)
 2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Issue &2 keyboard	Issue &2 billentyűzet
 2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Recrea&ted ZX Spectrum	Recrea&ted ZX Spectrum
-2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Hungarian ke&yboard	Ma&gyar billentyűzet
+2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Type using the Windows ke&yboard layout	&Gépelés a Windows billentyűkiosztása szerint
 2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Use shift with &arrow keys	Shift használata a &nyílbillentyűknél
-2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Use le&ft Alt as Caps Shift too	A &bal Alt is Caps Shiftként működjön
+2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Use le&ft Alt as Caps Shift with number keys	&Bal Alt használata Caps Shiftként a számbillentyűknél
 2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Allow &writes to ROM	Írás engedélyezése a &ROM-ba
 2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	Late t&imings	Késleltetett &időzítés
 2 Beállítások (Options)	IDD_OPT_GENERAL: AUTOCHECKBOX	&Z80 is CMOS	CMOS &Z80

@@ -72,6 +72,25 @@ oem_keysyms_remap( WPARAM wParam )
   return ptr ? *ptr : INPUT_KEY_NONE;
 }
 
+/* The numeric keypad with Num Lock on: digits and the operators, in every
+   typing mode */
+static input_key
+numpad_keysym( WPARAM wParam )
+{
+  if( wParam >= VK_NUMPAD0 && wParam <= VK_NUMPAD9 )
+    return keysyms_remap( '0' + ( wParam - VK_NUMPAD0 ) );
+
+  switch( wParam ) {
+  case VK_ADD:      return INPUT_KEY_plus;
+  case VK_SUBTRACT: return INPUT_KEY_minus;
+  case VK_MULTIPLY: return INPUT_KEY_asterisk;
+  case VK_DIVIDE:   return INPUT_KEY_slash;
+  case VK_DECIMAL:  return INPUT_KEY_period;
+  }
+
+  return INPUT_KEY_NONE;
+}
+
 /* Identifier of the physical key, the same on press and release: the
    scan code, plus the extended key flag */
 static int
@@ -108,34 +127,6 @@ get_character( void )
   }
 
   return character;
-}
-
-/* Left Alt used as Caps Shift: is it held at the moment? */
-static int left_alt_held = 0;
-
-static int
-is_left_alt( WPARAM wParam, LPARAM lParam )
-{
-  /* The right Alt (AltGr) has the extended key flag */
-  return wParam == VK_MENU && !( lParam & ( 1 << 24 ) );
-}
-
-/* If the left Alt went up while another window had the focus (e.g. after
-   Alt+Tab), Caps Shift must not stay pressed */
-static void
-sync_left_alt( void )
-{
-  input_event_t fuse_event;
-
-  if( !left_alt_held || ( GetKeyState( VK_LMENU ) & 0x8000 ) ) return;
-
-  left_alt_held = 0;
-  fuse_event.type = INPUT_EVENT_KEYRELEASE;
-  fuse_event.types.key.native_key = INPUT_KEY_Alt_L;
-  fuse_event.types.key.spectrum_key = INPUT_KEY_Alt_L;
-  fuse_event.types.key.character = 0;
-  fuse_event.types.key.physical_key = 0;
-  input_event( &fuse_event );
 }
 
 /* Windows doesn't always tell us when a modifier is released. In
@@ -194,7 +185,6 @@ win32keyboard_keypress( WPARAM wParam, LPARAM lParam )
   input_event_t fuse_event;
   libspectrum_dword character;
 
-  sync_left_alt();
   sync_modifiers();
 
   switch( wParam ) {
@@ -214,7 +204,8 @@ win32keyboard_keypress( WPARAM wParam, LPARAM lParam )
     fuse_keysym = oem_keysyms_remap( wParam );
     break;
   default:
-    fuse_keysym = keysyms_remap( wParam );
+    fuse_keysym = numpad_keysym( wParam );
+    if( fuse_keysym == INPUT_KEY_NONE ) fuse_keysym = keysyms_remap( wParam );
     break;
   }
 
@@ -239,7 +230,6 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
   input_key fuse_keysym;
   input_event_t fuse_event;
 
-  sync_left_alt();
   sync_modifiers();
 
   switch( wParam ) {
@@ -259,7 +249,8 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
     fuse_keysym = oem_keysyms_remap( wParam );
     break;
   default:
-    fuse_keysym = keysyms_remap( wParam );
+    fuse_keysym = numpad_keysym( wParam );
+    if( fuse_keysym == INPUT_KEY_NONE ) fuse_keysym = keysyms_remap( wParam );
     break;
   }
 
@@ -277,46 +268,129 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
   input_event( &fuse_event );
 }
 
-/* With "Use left Alt as Caps Shift too", the left Alt and the keys pressed
-   together with it come as system keys (WM_SYSKEYDOWN/UP). Pass them to the
-   emulated machine, and keep them away from Windows, so that Alt doesn't
-   activate the menu bar. Returns 1 if the key was handled here */
+
+/* "Use left Alt as Caps Shift with number keys": the left Alt and a number
+   key of the main block give Caps Shift + that number (EDIT, cursors,
+   DELETE...), which the character based typing can't produce. Alt keeps
+   its normal Windows meaning (menus, Alt+F4) for every other key */
+
+/* Number keys currently held as Caps Shift + number */
+static WPARAM alt_digits[10];
+static int alt_digit_count = 0;
+
+/* Alt was used for a number key since it went down: its release must not
+   activate the menu bar */
+static int alt_used = 0;
+
+static void
+send_alt( int press )
+{
+  input_event_t fuse_event;
+
+  fuse_event.type = press ? INPUT_EVENT_KEYPRESS : INPUT_EVENT_KEYRELEASE;
+  fuse_event.types.key.native_key = INPUT_KEY_Alt_L;
+  fuse_event.types.key.spectrum_key = INPUT_KEY_Alt_L;
+  fuse_event.types.key.character = 0;
+  fuse_event.types.key.physical_key = 0;
+
+  /* The left Alt is Caps Shift for this press and its release */
+  keyboard_alt_caps_shift = 1;
+  input_event( &fuse_event );
+  if( !press ) keyboard_alt_caps_shift = 0;
+}
+
+/* Is this a number key of the main block? (Also when the digit is on an
+   OEM key, like 0 on the Hungarian layout) */
+static int
+is_number_key( WPARAM wParam )
+{
+  unsigned int c;
+
+  if( wParam >= '0' && wParam <= '9' ) return 1;
+
+  c = LOWORD( MapVirtualKey( wParam, MAPVK_VK_TO_CHAR ) );
+  return wParam >= VK_OEM_1 && c >= '0' && c <= '9';
+}
+
+static int
+find_alt_digit( WPARAM wParam )
+{
+  int i;
+
+  for( i = 0; i < alt_digit_count; i++ )
+    if( alt_digits[i] == wParam ) return i;
+
+  return -1;
+}
+
+/* WM_SYSKEYDOWN. Returns 1 if handled here (keep it from Windows) */
 int
 win32keyboard_syskeypress( WPARAM wParam, LPARAM lParam )
 {
-  if( is_left_alt( wParam, lParam ) ) {
-    if( !settings_current.alt_caps_shift ) return 0;
-    if( !left_alt_held ) {
-      win32keyboard_keypress( wParam, lParam );
-      left_alt_held = 1;
-    }
-    return 1;
+  if( wParam == VK_MENU ) {
+    /* A new press of Alt (not autorepeat) */
+    if( !( lParam & ( 1 << 30 ) ) ) alt_used = 0;
+    return 0;
   }
 
-  if( !left_alt_held ) return 0;
+  if( !settings_current.alt_caps_shift || !is_number_key( wParam ) ||
+      !( GetKeyState( VK_LMENU ) & 0x8000 ) ||
+      ( GetKeyState( VK_RMENU ) & 0x8000 ) ||
+      ( GetKeyState( VK_CONTROL ) & 0x8000 ) )
+    return 0;
+
+  alt_used = 1;
+
+  if( find_alt_digit( wParam ) < 0 ) {
+    if( alt_digit_count == 0 ) send_alt( 1 );
+    if( alt_digit_count < (int)ARRAY_SIZE( alt_digits ) )
+      alt_digits[ alt_digit_count++ ] = wParam;
+  }
 
   win32keyboard_keypress( wParam, lParam );
   return 1;
 }
 
-int
-win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam )
+/* A number key released (with or without Alt still held) */
+static int
+alt_digit_release( WPARAM wParam, LPARAM lParam )
 {
-  if( !left_alt_held ) return 0;
+  int i = find_alt_digit( wParam );
 
-  if( is_left_alt( wParam, lParam ) ) {
-    win32keyboard_keyrelease( wParam, lParam );
-    left_alt_held = 0;
-    return 1;
-  }
+  if( i < 0 ) return 0;
 
   win32keyboard_keyrelease( wParam, lParam );
+  alt_digits[i] = alt_digits[ --alt_digit_count ];
+  if( alt_digit_count == 0 ) send_alt( 0 );
+
   return 1;
 }
 
-/* Characters typed with the left Alt held mustn't select menu items */
+/* WM_SYSKEYUP. Returns 1 if handled here */
 int
-win32keyboard_left_alt_held( void )
+win32keyboard_syskeyrelease( WPARAM wParam, LPARAM lParam )
 {
-  return left_alt_held;
+  if( alt_digit_release( wParam, lParam ) ) return 1;
+
+  /* Alt itself: no menu bar if it was used for a number key */
+  if( wParam == VK_MENU && alt_used ) {
+    alt_used = 0;
+    return 1;
+  }
+
+  return 0;
+}
+
+/* WM_KEYUP of a number key after Alt went up first */
+int
+win32keyboard_alt_digit_keyrelease( WPARAM wParam, LPARAM lParam )
+{
+  return alt_digit_release( wParam, lParam );
+}
+
+/* WM_SYSCHAR: the digit typed with Alt mustn't make Windows beep */
+int
+win32keyboard_alt_digit_char( WPARAM wParam )
+{
+  return alt_used && wParam >= '0' && wParam <= '9';
 }

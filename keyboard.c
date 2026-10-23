@@ -148,6 +148,10 @@ static struct spectrum_keys_wrapper spectrum_keys_table[] = {
 
 static GHashTable *spectrum_keys;
 
+/* Set by the UI while the left Alt acts as Caps Shift (see
+   settings_current.alt_caps_shift) */
+int keyboard_alt_caps_shift = 0;
+
 /* When each Spectrum key is pressed, twiddle this {port,bit} pair
    in `keyboard_return_values'. 
 */
@@ -422,8 +426,8 @@ keyboard_get_spectrum_keys( input_key keysym )
   static const keyboard_spectrum_keys_t alt_caps_shift =
     { KEYBOARD_NONE, KEYBOARD_Caps };
 
-  /* Optionally the left Alt key is Caps Shift instead of Symbol Shift */
-  if( keysym == INPUT_KEY_Alt_L && settings_current.alt_caps_shift )
+  /* While the UI uses the left Alt as Caps Shift for a number key */
+  if( keysym == INPUT_KEY_Alt_L && keyboard_alt_caps_shift )
     return &alt_caps_shift;
 
   return g_hash_table_lookup( spectrum_keys, &keysym );

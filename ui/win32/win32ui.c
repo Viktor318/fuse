@@ -212,11 +212,12 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       return 0;
 
     case WM_KEYUP:
-      win32keyboard_keyrelease( wParam, lParam );
+      if( !win32keyboard_alt_digit_keyrelease( wParam, lParam ) )
+        win32keyboard_keyrelease( wParam, lParam );
       return 0;
 
     case WM_SYSKEYDOWN:
-      /* The left Alt as Caps Shift, and keys pressed together with it */
+      /* The left Alt as Caps Shift for the number keys */
       if( win32keyboard_syskeypress( wParam, lParam ) ) return 0;
       break;
 
@@ -229,7 +230,7 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       break;
 
     case WM_SYSCHAR:
-      if( win32keyboard_left_alt_held() ) return 0;
+      if( win32keyboard_alt_digit_char( wParam ) ) return 0;
       break;
 
     case WM_PAINT:

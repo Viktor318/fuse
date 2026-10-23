@@ -377,6 +377,24 @@ make_units( tokenizer_t *t, const unsigned int *text, size_t length,
       units[n].c = 0x80 | block_half( c, 2, 8 ) | right;
       units[n].raw = 1; n++;
       i++;
+    } else if( c == '{' && i + 1 < length &&
+               ( text[ i + 1 ] == 'i' || text[ i + 1 ] == 'p' ||
+                 text[ i + 1 ] == 'f' || text[ i + 1 ] == 'b' ) ) {
+      /* BASin colour controls: \{i3} INK 3, \{p5} PAPER 5, \{f1} FLASH 1,
+         \{b1} BRIGHT 1 */
+      unsigned int control = text[ ++i ] == 'i' ? 0x10 :
+                             text[i] == 'p' ? 0x11 :
+                             text[i] == 'f' ? 0x12 : 0x13;
+      unsigned long value = 0;
+      int digits = 0;
+      for( i++; i < length && text[i] >= '0' && text[i] <= '9'; i++ ) {
+        value = value * 10 + ( text[i] - '0' );
+        digits++;
+      }
+      if( i == length || text[i] != '}' || !digits || value > 9 )
+        return tokenizer_error( t, "bad \\{...} colour escape" );
+      units[n].c = control; units[n].raw = 1; n++;
+      units[n].c = value; units[n].raw = 1; n++;
     } else if( c == '{' ) {
       unsigned long value = 0;
       int digits = 0, base = 10;

@@ -255,8 +255,8 @@ menubar_init( void )
 }
 
 /* The texts of the menu bar changed (language change): Windows keeps the
-   size it measured for owner drawn items, so make it measure them again by
-   switching them to normal items and back */
+   size it measured for owner drawn items, also when their type is changed,
+   so take the items out and put them back; new items are always measured */
 void
 win32ui_menubar_texts_changed( void )
 {
@@ -268,19 +268,23 @@ win32ui_menubar_texts_changed( void )
   count = GetMenuItemCount( menu );
   for( i = 0; i < count; i++ ) {
     MENUITEMINFOA info;
+    char text[ 256 ];
 
     memset( &info, 0, sizeof( info ) );
     info.cbSize = sizeof( info );
-    info.fMask = MIIM_FTYPE | MIIM_DATA;
+    info.fMask = MIIM_FTYPE | MIIM_DATA | MIIM_ID | MIIM_STATE |
+                 MIIM_SUBMENU | MIIM_STRING;
+    info.dwTypeData = text;
+    info.cch = sizeof( text );
     if( !GetMenuItemInfoA( menu, i, TRUE, &info ) ) continue;
     if( ( info.dwItemData & MENUBAR_MAGIC_MASK ) != MENUBAR_MAGIC ) continue;
+    text[ sizeof( text ) - 1 ] = '\0';
 
-    info.fMask = MIIM_FTYPE;
-    info.fType &= ~MFT_OWNERDRAW;
-    SetMenuItemInfoA( menu, i, TRUE, &info );
-
-    info.fType |= MFT_OWNERDRAW;
-    SetMenuItemInfoA( menu, i, TRUE, &info );
+    /* RemoveMenu keeps the drop down menu, it goes back in the new item */
+    if( !RemoveMenu( menu, i, MF_BYPOSITION ) ) continue;
+    info.dwTypeData = text;
+    info.cch = strlen( text );
+    InsertMenuItemA( menu, i, TRUE, &info );
   }
 
   DrawMenuBar( fuse_hWnd );

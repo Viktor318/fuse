@@ -61,6 +61,11 @@
 #include "display.h"
 #include "event.h"
 #include "fuse.h"
+#include "ayplayer.h"
+
+#ifdef UI_WIN32
+void win32_ayplayer_show( void );
+#endif
 #include "infrastructure/startup_manager.h"
 #include "keyboard.h"
 #include "machine.h"
@@ -157,6 +162,8 @@ typedef struct start_files_t {
   const char *divmmc;
   const char *zxmmc;
   utils_file mdr[8];
+
+  const char *ay;		/* AY music file, played by the AY player */
 
 } start_files_t;
 
@@ -695,6 +702,7 @@ setup_start_files( start_files_t *start_files )
   utils_file_init( &start_files->if2, settings_current.if2_file );
   utils_file_init( &start_files->playback, settings_current.playback_file );
   start_files->recording = settings_current.record_file;
+  start_files->ay = NULL;
   utils_file_init( &start_files->snapshot, settings_current.snapshot );
   utils_file_init( &start_files->tape, settings_current.tape_file );
 
@@ -748,7 +756,7 @@ start_files_given( const start_files_t *start_files )
       start_files->zxatasp_master || start_files->zxatasp_slave ||
       start_files->zxcf || start_files->divide_master ||
       start_files->divide_slave || start_files->divmmc ||
-      start_files->zxmmc )
+      start_files->zxmmc || start_files->ay )
     return 1;
 
   for( i = 0; i < 8; i++ )
@@ -797,6 +805,12 @@ parse_nonoption_args( int argc, char **argv, int first_arg,
   for( i = first_arg; i < (size_t)argc; i++ ) {
 
     filename = argv[i];
+
+    /* AY music files are not known to libspectrum */
+    if( ayplayer_is_ay_file( filename ) ) {
+      start_files->ay = filename;
+      continue;
+    }
 
     utils_file_init( &file, filename );
     error = utils_file_identify( &file );
@@ -1111,6 +1125,13 @@ do_start_files( start_files_t *start_files )
     error = rzx_start_recording( start_files->recording,
 				 settings_current.embed_snapshot );
     if( error ) return error;
+  }
+
+  if( start_files->ay ) {
+    if( ayplayer_open( start_files->ay ) ) return 1;
+#ifdef UI_WIN32
+    win32_ayplayer_show();
+#endif
   }
 
   return 0;

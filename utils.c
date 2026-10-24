@@ -60,6 +60,11 @@
 #include "snapshot.h"
 #include "tape.h"
 #include "utils.h"
+#include "ayplayer.h"
+
+#ifdef UI_WIN32
+void win32_ayplayer_show( void );
+#endif
 #include "ui/uimedia.h"
 
 static void init_path_context( path_context *ctx, utils_aux_type type );
@@ -107,6 +112,16 @@ utils_open_file( const char *filename, int autoload,
 {
   utils_file file;
   int error;
+
+  /* AY music files: open the AY player */
+  if( ayplayer_is_ay_file( filename ) ) {
+    if( type_ptr ) *type_ptr = LIBSPECTRUM_ID_UNKNOWN;
+    if( ayplayer_open( filename ) ) return 1;
+#ifdef UI_WIN32
+    win32_ayplayer_show();
+#endif
+    return 0;
+  }
 
   utils_file_init( &file, filename );
   error = utils_open_loaded_file( &file, autoload, type_ptr );

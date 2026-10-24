@@ -25,6 +25,7 @@
 
 #include "libspectrum.h"
 
+#include "ayplayer.h"
 #include "basic_text.h"
 #include "compat.h"
 #include "debugger/debugger.h"
@@ -173,6 +174,7 @@ spectrum_frame( void )
   phantom_typist_frame();
   hungarian_keyboard_frame();
   basic_text_frame();
+  ayplayer_frame();
 
   frames_since_reset++;
 

@@ -36,6 +36,8 @@ CLEANFILES += $(ui_win32_built)
 ui_win32_files = \
                  ui/win32/about.c \
                  ui/win32/about.h \
+                 ui/win32/ayplayer.c \
+                 ui/win32/ayplayer.h \
                  ui/win32/binary.c \
                  ui/win32/binary.h \
                  ui/win32/browse.c \
@@ -79,6 +81,7 @@ ui_win32_files = \
 
 ui_win32_rc_files = \
                  ui/win32/about.rc \
+                 ui/win32/ayplayer.rc \
                  ui/win32/binary.rc \
                  ui/win32/browse.rc \
                  ui/win32/debugger.rc \

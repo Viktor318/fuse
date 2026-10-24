@@ -1688,10 +1688,16 @@ win32ui_process_messages( int process_queue_once )
 {
   MSG msg;
   int i, processMsg;
-  HWND hModelessDlgs[] = { fuse_hPFWnd, fuse_hDBGWnd, fuse_hABOWnd };
+  HWND hModelessDlgs[4];
 
   while( 1 ) {
     while( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) ) {
+      /* The windows can be opened and closed while this loop runs */
+      hModelessDlgs[0] = fuse_hPFWnd;
+      hModelessDlgs[1] = fuse_hDBGWnd;
+      hModelessDlgs[2] = fuse_hABOWnd;
+      hModelessDlgs[3] = fuse_hAYWnd;
+
       /* FIXME: rethink this loop, IsDialogMessage in particular */
       processMsg = TRUE;
 

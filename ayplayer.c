@@ -371,14 +371,24 @@ ayplayer_stop( void )
   z80.halted = 0;
 }
 
+static void ( *frame_hook )( void ) = NULL;
+
+void
+ayplayer_set_frame_hook( void ( *hook )( void ) )
+{
+  frame_hook = hook;
+}
+
 void
 ayplayer_frame( void )
 {
-  if( ay_current < 0 || fuse_emulation_paused ) return;
+  if( ay_current >= 0 && !fuse_emulation_paused ) {
+    ay_frames_played++;
+    if( ay_song_frames && ay_frames_played >= ay_song_frames )
+      ay_song_ended = 1;
+  }
 
-  ay_frames_played++;
-  if( ay_song_frames && ay_frames_played >= ay_song_frames )
-    ay_song_ended = 1;
+  if( frame_hook ) frame_hook();
 }
 
 /* ------------------------------------------------------------------------

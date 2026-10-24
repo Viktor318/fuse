@@ -27,6 +27,7 @@
 #include "../../ayplayer.h"
 #include "fuse.h"
 #include "i18n.h"
+#include "menu.h"
 #include "win32internals.h"
 
 HWND fuse_hAYWnd = NULL;
@@ -34,8 +35,12 @@ HWND fuse_hAYWnd = NULL;
 #define AYPLAYER_TIMER 1
 #define AYPLAYER_TIMER_MS 200
 
-/* The player paused the emulation (Pause button) */
-static int paused_by_player = 0;
+/* Pausing works as Machine > Pause (the emulation really stops) */
+static int
+player_paused( void )
+{
+  return win32ui_machine_paused();
+}
 
 static void
 set_text( int id, const char *text )
@@ -59,7 +64,7 @@ update_pause_button( void )
   const char *label;
 
   if( ayplayer_current_song() < 0 ) label = "&Play";
-  else if( paused_by_player ) label = "&Resume";
+  else if( player_paused() ) label = "&Resume";
   else label = "&Pause";
 
   set_text( IDC_AY_PAUSE, i18n( label ) );
@@ -122,10 +127,7 @@ update_all( void )
 static void
 resume_if_paused( void )
 {
-  if( paused_by_player ) {
-    paused_by_player = 0;
-    fuse_emulation_unpause();
-  }
+  if( player_paused() ) menu_machine_pause( 0 );
 }
 
 static void
@@ -142,6 +144,7 @@ close_window( void )
   if( !fuse_hAYWnd ) return;
 
   KillTimer( fuse_hAYWnd, AYPLAYER_TIMER );
+  ayplayer_set_frame_hook( NULL );
   resume_if_paused();
   DestroyWindow( fuse_hAYWnd );
   fuse_hAYWnd = NULL;
@@ -180,11 +183,11 @@ command( WORD id, WORD code )
       int song = SendDlgItemMessage( fuse_hAYWnd, IDC_AY_SONG, CB_GETCURSEL,
                                      0, 0 );
       play( song >= 0 ? song : 0 );
-    } else if( paused_by_player ) {
-      resume_if_paused();
     } else {
-      paused_by_player = 1;
-      fuse_emulation_pause();
+      /* Pause or resume. When pausing, this returns only after resuming,
+         so show the new label first */
+      if( !player_paused() ) set_text( IDC_AY_PAUSE, i18n( "&Resume" ) );
+      menu_machine_pause( 0 );
     }
     update_pause_button();
     break;
@@ -203,6 +206,51 @@ command( WORD id, WORD code )
   }
 }
 
+/* Called by the emulation every frame: update the window every 10 frames
+   and go to the next song at the end. Does not depend on WM_TIMER, which
+   Windows does not always send while the emulation keeps the message
+   queue busy */
+#define WM_AYPLAYER_SONG_END ( WM_APP + 1 )
+
+static int song_end_posted = 0;
+
+static void
+frame_update( void )
+{
+  static int counter = 0;
+  int current;
+
+  if( !fuse_hAYWnd || ++counter < 10 ) return;
+  counter = 0;
+
+  current = ayplayer_current_song();
+  if( current >= 0 && ayplayer_song_ended() && !song_end_posted &&
+      IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_AUTO ) == BST_CHECKED ) {
+    /* Not here, in the middle of a frame: the window does it */
+    song_end_posted = 1;
+    PostMessage( fuse_hAYWnd, WM_AYPLAYER_SONG_END, 0, 0 );
+  }
+  update_time();
+}
+
+/* End of the song: next one, or stop after the last one */
+static void
+song_end( void )
+{
+  int current = ayplayer_current_song();
+
+  song_end_posted = 0;
+  if( current < 0 || !ayplayer_song_ended() ) return;
+
+  if( current + 1 < ayplayer_song_count() ) {
+    play( current + 1 );
+  } else {
+    ayplayer_stop();
+    update_pause_button();
+    update_time();
+  }
+}
+
 static INT_PTR CALLBACK
 ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
@@ -214,23 +262,16 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     return TRUE;
 
   case WM_TIMER:
+    /* Only for the paused state; while playing the frames update it */
     if( wParam == AYPLAYER_TIMER ) {
-      int current = ayplayer_current_song();
-
-      /* End of the song: next one, or stop after the last one */
-      if( current >= 0 && ayplayer_song_ended() &&
-          IsDlgButtonChecked( hWnd, IDC_AY_AUTO ) == BST_CHECKED ) {
-        if( current + 1 < ayplayer_song_count() ) {
-          play( current + 1 );
-        } else {
-          ayplayer_stop();
-          update_pause_button();
-        }
-      }
-      update_time();
+      update_pause_button();
       return 0;
     }
     break;
+
+  case WM_AYPLAYER_SONG_END:
+    song_end();
+    return 0;
 
   case WM_COMMAND:
     command( LOWORD( wParam ), HIWORD( wParam ) );
@@ -257,6 +298,7 @@ win32_ayplayer_show( void )
     }
   }
 
+  ayplayer_set_frame_hook( frame_update );
   resume_if_paused();
   update_all();
   ShowWindow( fuse_hAYWnd, SW_SHOW );

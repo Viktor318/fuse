@@ -38,6 +38,9 @@ void ayplayer_stop( void );
 /* Called once every frame */
 void ayplayer_frame( void );
 
+/* The user interface can be called every frame (NULL: not) */
+void ayplayer_set_frame_hook( void ( *hook )( void ) );
+
 int ayplayer_is_open( void );
 int ayplayer_song_count( void );
 int ayplayer_current_song( void );	/* -1: stopped */

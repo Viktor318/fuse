@@ -925,6 +925,13 @@ menu_get_scaler( scaler_available_fn selector )
   return selected_scaler;
 }
 
+/* Is the emulation paused with Machine/Pause? */
+int
+win32ui_machine_paused( void )
+{
+  return paused;
+}
+
 /* Machine/Pause */
 void
 menu_machine_pause( int action )

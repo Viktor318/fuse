@@ -63,6 +63,7 @@ extern HWND fuse_hABOWnd;
 /* AY player window (ayplayer.c) */
 extern HWND fuse_hAYWnd;
 void win32_ayplayer_show( void );
+int win32ui_machine_paused( void );
 
 /*
  * Display routines (win32display.c)

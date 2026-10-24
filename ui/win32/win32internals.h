@@ -101,6 +101,7 @@ int win32keyboard_alt_digit_char( WPARAM wParam );
 void win32keyboard_alt_not_alone( void );
 int win32keyboard_menu_underline( void );
 void win32ui_menubar_redraw( void );
+void win32ui_menubar_texts_changed( void );
 void win32ui_menubar_from_keyboard( void );
 
 /*

@@ -241,6 +241,38 @@ menubar_init( void )
   DrawMenuBar( fuse_hWnd );
 }
 
+/* The texts of the menu bar changed (language change): Windows keeps the
+   size it measured for owner drawn items, so make it measure them again by
+   switching them to normal items and back */
+void
+win32ui_menubar_texts_changed( void )
+{
+  HMENU menu = GetMenu( fuse_hWnd );
+  int count, i;
+
+  if( !menu ) return;
+
+  count = GetMenuItemCount( menu );
+  for( i = 0; i < count; i++ ) {
+    MENUITEMINFOA info;
+
+    memset( &info, 0, sizeof( info ) );
+    info.cbSize = sizeof( info );
+    info.fMask = MIIM_FTYPE | MIIM_DATA;
+    if( !GetMenuItemInfoA( menu, i, TRUE, &info ) ) continue;
+    if( ( info.dwItemData & MENUBAR_MAGIC_MASK ) != MENUBAR_MAGIC ) continue;
+
+    info.fMask = MIIM_FTYPE;
+    info.fType &= ~MFT_OWNERDRAW;
+    SetMenuItemInfoA( menu, i, TRUE, &info );
+
+    info.fType |= MFT_OWNERDRAW;
+    SetMenuItemInfoA( menu, i, TRUE, &info );
+  }
+
+  DrawMenuBar( fuse_hWnd );
+}
+
 static int
 menubar_text( int position, char *text, size_t length )
 {

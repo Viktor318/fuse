@@ -118,7 +118,8 @@ translate_menu( void )
                       &info );
   }
 
-  DrawMenuBar( fuse_hWnd );
+  /* The menu bar items must be measured again for the new texts */
+  win32ui_menubar_texts_changed();
 }
 
 /* ------------------------------------------------------------------------

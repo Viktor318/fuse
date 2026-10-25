@@ -45,20 +45,16 @@ static HFONT hBoldFont;
 void
 menu_help_about( int action )
 {
-  /* Firstly, stop emulation */
-  fuse_emulation_pause();
-
+  /* The box is modeless and doesn't need the emulation paused. Pausing
+     stops the sound and starts it again, which made the music jump */
   if( !IsWindow( fuse_hABOWnd ) ) {
     fuse_hABOWnd = CreateDialog( fuse_hInstance,
 	                             MAKEINTRESOURCE( IDD_ABOUT ),
                                  fuse_hWnd, dialog_proc );
-    if( fuse_hABOWnd == NULL ) { fuse_emulation_unpause(); return; }
+    if( fuse_hABOWnd == NULL ) return;
   }
 
   ShowWindow( fuse_hABOWnd, SW_SHOW );
-
-  /* Carry on with emulation */
-  fuse_emulation_unpause();
 }
 
 static void

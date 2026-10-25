@@ -558,3 +558,5 @@ extra	AY player	middle	közép
 extra	AY player	right	jobb
 extra	AY player	BAC	BAC
 extra	AY player	Length: %d:%02d (default)	Hossz: %d:%02d (alapértelmezett)
+extra	AY player	Reading the length of the song	A dal hosszának beolvasása
+extra	AY player	Length: %d:%02d (measured)	Hossz: %d:%02d (mért)

@@ -55,6 +55,18 @@ long ayplayer_frames_played( void );
 int ayplayer_song_ended( void );
 /* The file gives no length: the default one (5 minutes) is used */
 int ayplayer_length_is_default( void );
+/* The length was measured (by the repetition of the music) */
+int ayplayer_length_is_measured( void );
+
+/* Measuring the length of a song, the first time it is played: the user
+   interface shows the progress (0-100) and, when it is over, plays the
+   song again with ayplayer_play() */
+int ayplayer_scanning( void );
+int ayplayer_scan_progress( void );
+long ayplayer_scan_frames( void );
+int ayplayer_scan_take_finished( void );	/* over since the last call? */
+void ayplayer_scan_cancel( void );		/* plays without measuring */
+
 /* Fade out at the end of default length songs (going on to the next) */
 void ayplayer_set_fade_enabled( int enabled );
 const char *ayplayer_filename( void );

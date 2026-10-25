@@ -49,3 +49,7 @@
 #define IDC_AY_VOLUME_TEXT  4229
 #define IDC_AY_STEREO_LABEL 4230
 #define IDC_AY_STEREO       4231
+#define IDD_AYSCAN          4240
+#define IDC_AYSCAN_TEXT     4241
+#define IDC_AYSCAN_SONG     4242
+#define IDC_AYSCAN_PROGRESS 4243

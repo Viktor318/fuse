@@ -48,6 +48,7 @@
 #include "machines/specplus3.h"
 #include "memory_pages.h"
 #include "periph.h"
+#include "compat.h"
 #include "settings.h"
 #include "sound.h"
 #include "sound/ay_engine.h"
@@ -87,6 +88,28 @@ static int ay_song_ended = 0;
 #define AY_FADE_FRAMES ( 5 * 50 )
 static int ay_length_default = 0;
 static int ay_fade_enabled = 1;
+
+/* Measuring the length of a song: the first time a song is played, it runs
+   without sound and without waiting (and without drawing the screen) while
+   the AY registers of every frame are kept, until the music repeats. The
+   lengths are kept in a file next to the settings, by file checksum */
+#define AY_SCAN_SECONDS 15.0
+#define AY_SCAN_MAX_FRAMES ( 60L * 60 * 50 )	/* an hour of music */
+#define AY_SCAN_MIN_PERIOD 250			/* 5 seconds */
+#define AY_SCAN_CONFIRM 3000			/* a minute */
+#define AY_SCAN_CHECK_EVERY 250
+#define AY_LENGTHS_FILE "fuse_ay_lengths.txt"
+
+static int ay_scanning = 0;
+static int ay_scan_finished = 0;
+static int ay_scan_skip_once = 0;
+static long ay_scan_count;
+static double ay_scan_start;
+static int ay_scan_frame_rate;
+static libspectrum_dword *ay_scan_hash = NULL;
+static libspectrum_byte *ay_scan_silent = NULL;
+static int ay_length_measured = 0;
+static libspectrum_dword ay_file_checksum = 0;
 
 /* Machine before the player was opened, to go back to it */
 /* Seeking: the emulation runs without sound and without waiting until this
@@ -179,6 +202,69 @@ free_file( void )
   ay_current = -1;
 }
 
+/* CRC-32 of the file: identifies it in the lengths file */
+static libspectrum_dword
+checksum( const libspectrum_byte *data, size_t length )
+{
+  libspectrum_dword crc = 0xffffffff;
+  size_t i;
+  int bit;
+
+  for( i = 0; i < length; i++ ) {
+    crc ^= data[i];
+    for( bit = 0; bit < 8; bit++ )
+      crc = ( crc >> 1 ) ^ ( 0xedb88320 & -( crc & 1 ) );
+  }
+  return ~crc;
+}
+
+static void
+lengths_path( char *path, size_t size )
+{
+  snprintf( path, size, "%s" FUSE_DIR_SEP_STR "%s", compat_get_config_path(),
+            AY_LENGTHS_FILE );
+}
+
+/* Lines: checksum (hex), song (0 based), length in frames (0: not found,
+   the default length is used). The last line of a song counts */
+static int
+lengths_lookup( libspectrum_dword sum, int song, long *frames )
+{
+  char path[ 1024 ], line[ 128 ];
+  unsigned long file_sum;
+  int file_song, found = 0;
+  long file_frames;
+  FILE *f;
+
+  lengths_path( path, sizeof( path ) );
+  f = fopen( path, "r" );
+  if( !f ) return 0;
+
+  while( fgets( line, sizeof( line ), f ) ) {
+    if( sscanf( line, "%lx %d %ld", &file_sum, &file_song, &file_frames ) != 3 )
+      continue;
+    if( (libspectrum_dword)file_sum == sum && file_song == song ) {
+      *frames = file_frames;
+      found = 1;
+    }
+  }
+  fclose( f );
+  return found;
+}
+
+static void
+lengths_store( libspectrum_dword sum, int song, long frames )
+{
+  char path[ 1024 ];
+  FILE *f;
+
+  lengths_path( path, sizeof( path ) );
+  f = fopen( path, "a" );
+  if( !f ) return;
+  fprintf( f, "%08lx %d %ld\n", (unsigned long)sum, song, frames );
+  fclose( f );
+}
+
 int
 ayplayer_open( const char *filename )
 {
@@ -200,6 +286,7 @@ ayplayer_open( const char *filename )
   memcpy( ay_data, file.buffer, file.length );
   ay_length = file.length;
   utils_close_file( &file );
+  ay_file_checksum = checksum( ay_data, ay_length );
 
   name = filename;
   for( p = filename; *p; p++ )
@@ -273,7 +360,169 @@ seek_finish( void )
 int
 ayplayer_seeking( void )
 {
-  return ay_seek_target >= 0;
+  /* Measuring runs without waiting too */
+  return ay_seek_target >= 0 || ay_scanning;
+}
+
+static void
+silence( void )
+{
+  int reg;
+
+  for( reg = 0; reg < 14; reg++ ) {
+    writeport_internal( 0xfffd, reg );
+    writeport_internal( 0xbffd, 0 );
+  }
+  poke( 0x0000, 0xf3 );
+  poke( 0x0001, 0x76 );
+  PC = 0x0000;
+  IFF1 = IFF2 = 0;
+  z80.halted = 0;
+}
+
+static void
+scan_begin( void )
+{
+  if( !ay_scan_hash ) {
+    ay_scan_hash = libspectrum_new( libspectrum_dword, AY_SCAN_MAX_FRAMES );
+    ay_scan_silent = libspectrum_new( libspectrum_byte, AY_SCAN_MAX_FRAMES );
+  }
+
+  ay_scanning = 1;
+  ay_scan_finished = 0;
+  ay_scan_count = 0;
+  ay_scan_start = timer_get_time();
+
+  /* No screen drawing meanwhile */
+  ay_scan_frame_rate = settings_current.frame_rate;
+  settings_current.frame_rate = 1000;
+
+  sound_pause();
+}
+
+/* store: keep the length (0: default) */
+static void
+scan_end( int store, long frames )
+{
+  if( !ay_scanning ) return;
+
+  ay_scanning = 0;
+  ay_scan_finished = 1;
+  settings_current.frame_rate = ay_scan_frame_rate;
+
+  if( store && ay_current >= 0 )
+    lengths_store( ay_file_checksum, ay_current, frames );
+
+  /* Quiet until the song starts again */
+  silence();
+  sound_unpause();
+  timer_estimate_reset();
+}
+
+/* Has the music started again? The smallest period P for which the last
+   max(P, a minute) frames are the same as P frames before; then back to the
+   first frame S of the repetition. The song lasts until S + P; if what
+   repeats is silence, the music ended at S. -1: not yet */
+static long
+scan_find( void )
+{
+  long n = ay_scan_count, period, need, k, start, i;
+  int silent;
+
+  for( period = AY_SCAN_MIN_PERIOD; ; period++ ) {
+    need = period > AY_SCAN_CONFIRM ? period : AY_SCAN_CONFIRM;
+    if( period + need > n ) return -1;
+
+    for( k = 0; k < need; k++ )
+      if( ay_scan_hash[ n - 1 - k ] != ay_scan_hash[ n - 1 - k - period ] )
+        break;
+    if( k < need ) continue;
+
+    start = n - need - period;
+    while( start > 0 &&
+           ay_scan_hash[ start - 1 ] == ay_scan_hash[ start - 1 + period ] )
+      start--;
+
+    silent = 1;
+    for( i = start; i < start + period; i++ )
+      if( !ay_scan_silent[ i ] ) { silent = 0; break; }
+
+    if( silent ) return start;
+    return start + period;
+  }
+}
+
+static void
+scan_frame( void )
+{
+  const libspectrum_byte *r = machine_current->ay.registers;
+  libspectrum_dword hash = 2166136261U;
+  long length;
+  int i;
+
+  for( i = 0; i < 14; i++ ) {
+    hash ^= r[i];
+    hash *= 16777619U;
+  }
+  ay_scan_hash[ ay_scan_count ] = hash;
+  ay_scan_silent[ ay_scan_count ] = !( ( r[8] | r[9] | r[10] ) & 0x1f );
+  ay_scan_count++;
+
+  if( sound_enabled ) sound_pause();
+
+  if( ay_scan_count % AY_SCAN_CHECK_EVERY == 0 ) {
+    length = scan_find();
+    if( length >= 0 ) {
+      /* Nothing but silence: no length */
+      scan_end( 1, length >= 50 ? length : 0 );
+      return;
+    }
+  }
+
+  if( ay_scan_count >= AY_SCAN_MAX_FRAMES ||
+      timer_get_time() - ay_scan_start > AY_SCAN_SECONDS )
+    scan_end( 1, 0 );
+}
+
+int
+ayplayer_scanning( void )
+{
+  return ay_scanning;
+}
+
+int
+ayplayer_scan_progress( void )
+{
+  double elapsed;
+
+  if( !ay_scanning ) return 100;
+  elapsed = timer_get_time() - ay_scan_start;
+  if( elapsed < 0 ) elapsed = 0;
+  if( elapsed > AY_SCAN_SECONDS ) elapsed = AY_SCAN_SECONDS;
+  return elapsed * 100 / AY_SCAN_SECONDS;
+}
+
+int
+ayplayer_scan_take_finished( void )
+{
+  int finished = ay_scan_finished;
+  ay_scan_finished = 0;
+  return finished;
+}
+
+void
+ayplayer_scan_cancel( void )
+{
+  if( !ay_scanning ) return;
+  scan_end( 0, 0 );
+  /* The song starts again: this time without measuring */
+  ay_scan_skip_once = 1;
+}
+
+long
+ayplayer_scan_frames( void )
+{
+  return ay_scan_count;
 }
 
 int
@@ -315,6 +564,8 @@ ayplayer_play( int song )
   if( !ay_data || song < 0 || song >= ay_songs ) return 1;
 
   seek_finish();
+  if( ay_scanning ) scan_end( 0, 0 );
+  ay_scan_finished = 0;
 
   data = song_data( song );
   if( data < 0 ) return 1;
@@ -433,11 +684,27 @@ ayplayer_play( int song )
 
   length = word_at( data + 4 );
   ay_length_default = length <= 0;
+  ay_length_measured = 0;
   ay_song_frames = length > 0 ? length : AY_DEFAULT_LENGTH;
   ay_frames_played = 0;
   ay_engine_set_fade( 100 );
   ay_song_ended = 0;
   ay_current = song;
+
+  /* The measured length, or measure it now */
+  {
+    long measured;
+
+    if( lengths_lookup( ay_file_checksum, song, &measured ) ) {
+      ay_length_measured = measured > 0;
+      ay_length_default = measured <= 0;
+      ay_song_frames = measured > 0 ? measured : AY_DEFAULT_LENGTH;
+    } else if( ay_scan_skip_once ) {
+      ay_scan_skip_once = 0;
+    } else {
+      scan_begin();
+    }
+  }
 
   return 0;
 }
@@ -448,6 +715,8 @@ ayplayer_stop( void )
   int reg;
 
   seek_finish();
+  if( ay_scanning ) scan_end( 0, 0 );
+  ay_scan_finished = 0;
   ay_engine_set_fade( 100 );
   if( ay_current < 0 ) return;
   ay_current = -1;
@@ -476,6 +745,12 @@ ayplayer_set_frame_hook( void ( *hook )( void ) )
 void
 ayplayer_frame( void )
 {
+  if( ay_scanning ) {
+    if( ay_current >= 0 ) scan_frame();
+    if( frame_hook ) frame_hook();
+    return;
+  }
+
   if( ay_current >= 0 ) {
     ay_frames_played++;
     if( ay_song_frames && ay_frames_played >= ay_song_frames )
@@ -512,6 +787,7 @@ long ayplayer_song_frames( void ) { return ay_song_frames; }
 long ayplayer_frames_played( void ) { return ay_frames_played; }
 int ayplayer_song_ended( void ) { return ay_song_ended; }
 int ayplayer_length_is_default( void ) { return ay_length_default; }
+int ayplayer_length_is_measured( void ) { return ay_length_measured; }
 
 void
 ayplayer_set_fade_enabled( int enabled )

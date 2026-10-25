@@ -56,7 +56,7 @@ static int meter_order[ 3 ] = { 0, 1, 2 };
 static const char * const stereo_names[] = { "None", "ACB", "ABC", "BAC" };
 #define STEREO_COUNT 4
 
-/* The window shown while the length of a song is measured */
+/* The length of a song is being measured (the status line shows it) */
 static HWND scan_window = NULL;
 static void scan_window_close( void );
 
@@ -526,73 +526,30 @@ static int song_end_posted = 0;
 
 #define WM_AYPLAYER_SCAN_DONE ( WM_APP + 2 )
 
-static INT_PTR CALLBACK
-scan_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
-{
-  switch( msg ) {
-  case WM_INITDIALOG:
-    SendDlgItemMessage( hWnd, IDC_AYSCAN_PROGRESS, PBM_SETRANGE32, 0, 100 );
-    return TRUE;
-
-  case WM_COMMAND:
-    if( LOWORD( wParam ) == IDCANCEL ) {
-      ayplayer_scan_cancel();
-      return TRUE;
-    }
-    break;
-
-  case WM_CLOSE:
-    ayplayer_scan_cancel();
-    return TRUE;
-  }
-  return FALSE;
-}
-
+/* While measuring: a line at the bottom of the window */
 static void
 scan_window_close( void )
 {
   if( !scan_window ) return;
-  DestroyWindow( scan_window );
   scan_window = NULL;
-  EnableWindow( fuse_hAYWnd, TRUE );
+  if( fuse_hAYWnd ) set_text( IDC_AY_STATUS, "" );
 }
 
 /* Called every frame while measuring, and once when it is over */
 static void
 scan_update( void )
 {
-  static int counter = 0;
-
   if( ayplayer_scanning() ) {
     if( !scan_window ) {
-      char text[ 512 ], name[ 256 ];
-      int current = ayplayer_current_song();
-
-      scan_window = CreateDialog( fuse_hInstance, MAKEINTRESOURCE( IDD_AYSCAN ),
-                                  fuse_hAYWnd, (DLGPROC)scan_proc );
-      if( !scan_window ) return;
-      ayplayer_song_name( current, name, sizeof( name ) );
-      _snprintf( text, sizeof( text ), "%d / %d - %s", current + 1,
-                 ayplayer_song_count(), name );
-      text[ sizeof( text ) - 1 ] = '\0';
-      SetDlgItemTextA( scan_window, IDC_AYSCAN_SONG, text );
-      EnableWindow( fuse_hAYWnd, FALSE );
-      ShowWindow( scan_window, SW_SHOW );
-      counter = 0;
-    }
-    if( ++counter >= 25 ) {
-      counter = 0;
-      SendDlgItemMessage( scan_window, IDC_AYSCAN_PROGRESS, PBM_SETPOS,
-                          ayplayer_scan_progress(), 0 );
+      scan_window = fuse_hAYWnd;
+      set_text( IDC_AY_STATUS, i18n( "Reading the length of the song..." ) );
     }
     return;
   }
 
   /* Over: play the song from the start, with its length */
-  if( ayplayer_scan_take_finished() ) {
-    SendDlgItemMessage( scan_window, IDC_AYSCAN_PROGRESS, PBM_SETPOS, 100, 0 );
+  if( ayplayer_scan_take_finished() )
     PostMessage( fuse_hAYWnd, WM_AYPLAYER_SCAN_DONE, 0, 0 );
-  }
 }
 
 static void

@@ -1522,6 +1522,9 @@ static int
 win32ui_window_resize( HWND hWnd, WPARAM wParam, LPARAM lParam )
 {
   if( wParam == SIZE_MINIMIZED ) {
+    /* The AY player goes on playing in the background */
+    if( !size_paused && ayplayer_current_song() >= 0 && !paused ) return 0;
+
     if( !size_paused ) {
       size_paused = 1;
       fuse_emulation_pause();

@@ -109,8 +109,13 @@ extern int sound_framesiz;
 #define SOUND_STEREO_AY_NONE	0
 #define SOUND_STEREO_AY_ACB	1
 #define SOUND_STEREO_AY_ABC	2
+#define SOUND_STEREO_AY_BAC	3
 
 extern int sound_stereo_ay;
+
+/* settings_current.stereo_ay / volume_ay changed: apply while playing */
+void sound_ay_stereo_changed( void );
+void sound_ay_volume_changed( void );
 
 /* The low-level sound interface */
 

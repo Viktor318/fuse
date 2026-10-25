@@ -65,6 +65,10 @@ extern HWND fuse_hAYWnd;
 void win32_ayplayer_show( void );
 int win32ui_machine_paused( void );
 
+/* A Windows modal loop (menu, moving or resizing a window) starts / ends */
+void win32ui_modal_enter( void );
+void win32ui_modal_exit( void );
+
 /*
  * Display routines (win32display.c)
  */

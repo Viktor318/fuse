@@ -35,6 +35,12 @@ void ayplayer_close( void );
 int ayplayer_play( int song );
 void ayplayer_stop( void );
 
+/* Go to a frame of the current song: the emulation runs there without
+   sound and without waiting (backwards: from the start of the song) */
+int ayplayer_seek( long frame );
+int ayplayer_seeking( void );
+long ayplayer_seek_target( void );	/* -1: not seeking */
+
 /* Called once every frame */
 void ayplayer_frame( void );
 

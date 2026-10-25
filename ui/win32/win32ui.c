@@ -32,6 +32,10 @@
 #include "debugger/debugger.h"
 #include "display.h"
 #include "fuse.h"
+#include "../../ayplayer.h"
+#include "event.h"
+#include "spectrum.h"
+#include "z80/z80.h"
 #include "i18n.h"
 #include "keyboard.h"
 #include "menu.h"
@@ -50,6 +54,11 @@
 #include "utils.h"
 #include "win32internals.h"
 #include "win32joystick.h"
+
+#define MODAL_EMULATION_TIMER 0x4f55
+/* Frames are being run from a timer inside a modal loop */
+static int modal_emulating = 0;
+static void modal_emulation_tick( void );
 
 /* Window handler */
 HWND fuse_hWnd;
@@ -532,26 +541,33 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     case WM_ENTERMENULOOP:
       /* Opened with Alt (e.g. Alt+F) */
       if( GetKeyState( VK_MENU ) & 0x8000 ) menubar_keyboard = 1;
-      fuse_emulation_pause();
+      win32ui_modal_enter();
       return 0;
 
     case WM_ENTERSIZEMOVE:
     {
-      fuse_emulation_pause();
+      win32ui_modal_enter();
       return 0;
     }
+
+    case WM_TIMER:
+      if( wParam == MODAL_EMULATION_TIMER ) {
+        modal_emulation_tick();
+        return 0;
+      }
+      break;
 
     case WM_EXITMENULOOP:
       if( menubar_keyboard ) {
         menubar_keyboard = 0;
         DrawMenuBar( hWnd );
       }
-      fuse_emulation_unpause();
+      win32ui_modal_exit();
       return 0;
 
     case WM_EXITSIZEMOVE:
     {
-      fuse_emulation_unpause();
+      win32ui_modal_exit();
       return 0;
     }
     
@@ -778,6 +794,9 @@ win32ui_make_menu( void )
 int
 ui_event( void )
 {
+  /* Frames run from inside a Windows modal loop: its messages are its own */
+  if( modal_emulating ) return 0;
+
   display_timing_input_begin();
   win32ui_process_messages( 1 );
   display_timing_input_end();
@@ -930,6 +949,77 @@ int
 win32ui_machine_paused( void )
 {
   return paused;
+}
+
+/* While Windows runs a modal loop (a menu is open, a window is moved or
+   resized), the main loop does not run. Normally the emulation is paused
+   meanwhile; while the AY player plays, the frames are run from a timer
+   instead, so the music goes on */
+static int modal_depth = 0;
+static int modal_running = 0;
+static long modal_frames;
+static LARGE_INTEGER modal_start, modal_frequency;
+
+void
+win32ui_modal_enter( void )
+{
+  if( modal_depth++ ) return;
+
+  modal_running = ayplayer_current_song() >= 0 && !paused;
+  if( modal_running ) {
+    QueryPerformanceFrequency( &modal_frequency );
+    QueryPerformanceCounter( &modal_start );
+    modal_frames = 0;
+    SetTimer( fuse_hWnd, MODAL_EMULATION_TIMER, 5, NULL );
+  } else {
+    fuse_emulation_pause();
+  }
+}
+
+void
+win32ui_modal_exit( void )
+{
+  if( modal_depth <= 0 ) return;
+  if( --modal_depth ) return;
+
+  if( modal_running ) {
+    KillTimer( fuse_hWnd, MODAL_EMULATION_TIMER );
+    modal_running = 0;
+  } else {
+    fuse_emulation_unpause();
+  }
+}
+
+static void
+modal_emulation_tick( void )
+{
+  LARGE_INTEGER now;
+  long due;
+  int run = 0;
+
+  if( !modal_depth || !modal_running || modal_emulating || paused ||
+      fuse_exiting || !modal_frequency.QuadPart )
+    return;
+
+  /* 50 frames a second, a little ahead; the sound output (or the timer
+     without sound) holds the emulation back if it runs too fast */
+  QueryPerformanceCounter( &now );
+  due = (long)( (double)( now.QuadPart - modal_start.QuadPart ) * 50.0 /
+                modal_frequency.QuadPart ) + 2;
+
+  modal_emulating = 1;
+  while( modal_frames < due && run < 4 && !fuse_exiting ) {
+    libspectrum_dword frame = spectrum_get_frame_count();
+    while( spectrum_get_frame_count() == frame && !fuse_exiting ) {
+      z80_do_opcodes();
+      event_do_events();
+    }
+    modal_frames++;
+    run++;
+  }
+  /* After a long stall do not try to catch up */
+  if( modal_frames < due - 10 ) modal_frames = due - 10;
+  modal_emulating = 0;
 }
 
 /* Machine/Pause */

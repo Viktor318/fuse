@@ -527,3 +527,33 @@ extra	Debugger window: menu > View	&Disassembly	Vissza&fejtés
 extra	Debugger window: menu > View	&Stack	&Verem
 extra	Debugger window: menu > View	&Events	&Események
 4 Üzenetek	kérdés (OK/Mégse)	Some options need to reset the machine. Reset?	Néhány beállításhoz újra kell indítani a gépet. Újraindítod?
+extra	AY player	&Automatically go to the next song at the end	&Automatikus továbblépés a dal végén
+extra	AY player	&Next	&Következő
+extra	AY player	&Resume	&Folytatás
+extra	AY player	&Song:	&Dal:
+extra	AY player	'%s' is not a valid AY music file	A(z) '%s' nem érvényes AY zenefájl
+extra	AY player	'%s' is not an AY music file	A(z) '%s' nem AY zenefájl
+extra	AY player	AY Music Files (*.ay)	AY zenefájlok (*.ay)
+extra	AY player	Author:	Szerző:
+extra	AY player	Elapsed: %d:%02d	Eltelt: %d:%02d
+extra	AY player	F&ull screen	Teljes &képernyő
+extra	AY player	File	Fájl
+extra	AY player	File:	Fájl:
+extra	AY player	Full &screen	Teljes ké&pernyő
+extra	AY player	Fuse - AY Player	Fuse - AY lejátszó
+extra	AY player	Length: %d:%02d	Hossz: %d:%02d
+extra	AY player	Length: unknown	Hossz: ismeretlen
+extra	AY player	Misc:	Egyéb:
+extra	AY player	Pre&vious	&Előző
+extra	AY player	S&top	Leállí&tás
+extra	AY player	Song	Dal
+extra	AY player	Song %d of the AY file has no init routine	Az AY fájl %d. dalának nincs indító rutinja
+extra	AY player	Song %d of the AY file is damaged	Az AY fájl %d. dala sérült
+extra	AY player	Levels	Szintek
+extra	AY player	Sound	Hang
+extra	AY player	&Volume:	&Hangerő:
+extra	AY player	Ste&reo:	Szte&reó:
+extra	AY player	left	bal
+extra	AY player	middle	közép
+extra	AY player	right	jobb
+extra	AY player	BAC	BAC

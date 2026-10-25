@@ -57,6 +57,13 @@ static int rng = 1, noise_toggle, env_first = 1, env_reverse;
 static int env_counter = AY_ENV_STEPS - 1;
 static Blip_Synth *synths[AY_CHANNELS];
 static Blip_Synth *right_synths[AY_CHANNELS];
+/* Channels heard on both sides (the middle one of a stereo mode) */
+static int both_sides[AY_CHANNELS];
+/* AY volume in percent; applied to the amplitudes so that it can be changed
+   while playing (changing a Blip_Synth's volume would leave a DC step) */
+static int ay_volume = 100;
+/* Highest level (0-15) of each channel since the last query */
+static int meter_peak[AY_CHANNELS];
 
 static void
 ay_state_reset( void )
@@ -96,27 +103,54 @@ int
 ay_engine_init( int volume, int stereo )
 {
   int i;
-  double gain = volume < 0 ? 0.0 : volume > 100 ? 1.0 : volume / 100.0;
 
   change_position = 0;
   next_tick = 0;
   memset( previous, 0, sizeof( previous ) );
   ay_levels_init();
+  ay_engine_set_volume( volume );
+  /* Every channel has a right side synth too, so the stereo mode can be
+     changed while playing */
   for( i = 0; i < AY_CHANNELS; i++ ) {
     synths[i] = new_Blip_Synth();
-    blip_synth_set_volume( synths[i], gain );
+    blip_synth_set_volume( synths[i], 1.0 );
     blip_synth_set_treble_eq( synths[i], 0.0 );
-    right_synths[i] = NULL;
+    right_synths[i] = new_Blip_Synth();
+    blip_synth_set_volume( right_synths[i], 1.0 );
+    blip_synth_set_treble_eq( right_synths[i], 0.0 );
+    both_sides[i] = 0;
+    meter_peak[i] = 0;
   }
-
-  if( stereo == SOUND_STEREO_AY_ACB ) i = 2;
-  else if( stereo == SOUND_STEREO_AY_ABC ) i = 1;
-  else return 0;
-
-  right_synths[i] = new_Blip_Synth();
-  blip_synth_set_volume( right_synths[i], gain );
-  blip_synth_set_treble_eq( right_synths[i], 0.0 );
+  ( void )stereo;
   return 0;
+}
+
+void
+ay_engine_set_volume( int volume )
+{
+  ay_volume = volume < 0 ? 0 : volume > 100 ? 100 : volume;
+}
+
+/* The channels on the left, in the middle and on the right */
+void
+ay_engine_stereo_order( int stereo, int order[ AY_CHANNELS ] )
+{
+  switch( stereo ) {
+  case SOUND_STEREO_AY_ACB: order[0] = 0; order[1] = 2; order[2] = 1; break;
+  case SOUND_STEREO_AY_BAC: order[0] = 1; order[1] = 0; order[2] = 2; break;
+  default:                  order[0] = 0; order[1] = 1; order[2] = 2; break;
+  }
+}
+
+int
+ay_engine_channel_peak( int channel )
+{
+  int peak;
+
+  if( channel < 0 || channel >= AY_CHANNELS ) return 0;
+  peak = meter_peak[ channel ];
+  meter_peak[ channel ] = 0;
+  return peak;
 }
 
 void
@@ -132,20 +166,37 @@ ay_engine_end( void )
 void
 ay_engine_set_outputs( Blip_Buffer *left, Blip_Buffer *right, int stereo )
 {
-  int middle = stereo == SOUND_STEREO_AY_ACB ? 2 : 1;
-  int right_channel = stereo == SOUND_STEREO_AY_ACB ? 1 : 2;
+  int order[ AY_CHANNELS ];
   int i;
 
-  if( stereo == SOUND_STEREO_AY_NONE ) {
-    for( i = 0; i < AY_CHANNELS; i++ )
+  /* Take every channel back to zero where it was, at the start of the
+     current interval, so that moving it leaves no DC step behind */
+  for( i = 0; i < AY_CHANNELS; i++ ) {
+    if( synths[i] && synths[i]->impl.buf && synths[i]->impl.last_amp )
+      blip_synth_update( synths[i], 0, 0 );
+    if( right_synths[i] && right_synths[i]->impl.buf &&
+        right_synths[i]->impl.last_amp )
+      blip_synth_update( right_synths[i], 0, 0 );
+    both_sides[i] = 0;
+  }
+  memset( previous, 0, sizeof( previous ) );
+
+  if( stereo == SOUND_STEREO_AY_NONE || !right ) {
+    for( i = 0; i < AY_CHANNELS; i++ ) {
       blip_synth_set_output( synths[i], left );
+      blip_synth_set_output( right_synths[i], left );
+    }
     return;
   }
 
-  blip_synth_set_output( synths[0], left );
-  blip_synth_set_output( synths[middle], left );
-  blip_synth_set_output( synths[right_channel], right );
-  blip_synth_set_output( right_synths[middle], right );
+  ay_engine_stereo_order( stereo, order );
+  blip_synth_set_output( synths[ order[0] ], left );
+  blip_synth_set_output( right_synths[ order[0] ], right );
+  blip_synth_set_output( synths[ order[1] ], left );
+  blip_synth_set_output( right_synths[ order[1] ], right );
+  both_sides[ order[1] ] = 1;
+  blip_synth_set_output( synths[ order[2] ], right );
+  blip_synth_set_output( right_synths[ order[2] ], left );
 }
 
 static void
@@ -250,7 +301,7 @@ ay_channel_output( int channel, int envelope_level, unsigned int tone_count )
     if( !tone_high[channel] ) output = 0;
   }
   if( !( mixer & ( 0x08 << channel ) ) && noise_toggle ) output = 0;
-  return output;
+  return output * ay_volume / 100;
 }
 
 static void
@@ -259,7 +310,7 @@ ay_emit_channel( int channel, libspectrum_dword at_tstates, int output,
 {
   if( *previous == output ) return;
   blip_synth_update( synths[channel], at_tstates, output );
-  if( right_synths[channel] )
+  if( both_sides[channel] )
     blip_synth_update( right_synths[channel], at_tstates, output );
   *previous = output;
 }
@@ -303,6 +354,15 @@ ay_engine_render( libspectrum_dword endpoint )
     tone_cycles += AY_CLOCK_DIVISOR;
     tone_count = tone_cycles >> 3;
     tone_cycles &= 7;
+
+    for( channel = 0; channel < AY_CHANNELS; channel++ ) {
+      /* Level meter: the selected level, nothing when both tone and noise
+         are off for the channel */
+      int volume = registers[8 + channel];
+      int level = volume & 16 ? env_counter : volume & 15;
+      if( ( ( registers[7] >> channel ) & 9 ) == 9 ) level = 0;
+      if( level > meter_peak[channel] ) meter_peak[channel] = level;
+    }
 
     for( channel = 0; channel < AY_CHANNELS; channel++ )
       ay_emit_channel(

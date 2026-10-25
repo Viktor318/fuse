@@ -70,6 +70,8 @@ Blip_Buffer *left_buf = NULL;
 Blip_Buffer *right_buf = NULL;
 blip_sample_t *samples = NULL;
 static int sound_tv_route = -1;
+/* The AY stereo mode changed while playing */
+static int sound_ay_route_pending = 0;
 static libspectrum_dword audio_position;
 /* Advance audio at the ordinary time cadence, independently of FIFO latency
    policy. Test builds may override the interval in CPU T-states. */
@@ -152,7 +154,8 @@ sound_init( const char *device )
     return;
   if( sound_stereo_ay != SOUND_STEREO_AY_NONE &&
       sound_stereo_ay != SOUND_STEREO_AY_ACB &&
-      sound_stereo_ay != SOUND_STEREO_AY_ABC ) {
+      sound_stereo_ay != SOUND_STEREO_AY_ABC &&
+      sound_stereo_ay != SOUND_STEREO_AY_BAC ) {
     ui_error( UI_ERROR_ERROR, "unknown AY stereo separation type: %d",
               sound_stereo_ay );
     fuse_abort();
@@ -246,6 +249,34 @@ sound_register_startup( void )
 }
 
 void
+sound_ay_stereo_changed( void )
+{
+  int stereo = option_enumerate_sound_stereo_ay();
+
+  if( !sound_enabled ) return;	/* sound_init() reads it */
+  if( stereo == sound_stereo_ay ) return;
+
+  if( ( stereo == SOUND_STEREO_AY_NONE ) !=
+      ( sound_stereo_ay == SOUND_STEREO_AY_NONE ) ) {
+    /* Mono <-> stereo: the output has to be opened again */
+    sound_end();
+    sound_unpause();
+    return;
+  }
+
+  /* Between stereo modes: the channels are routed again at the start of
+     the next interval */
+  sound_stereo_ay = stereo;
+  sound_ay_route_pending = 1;
+}
+
+void
+sound_ay_volume_changed( void )
+{
+  ay_engine_set_volume( settings_current.volume_ay );
+}
+
+void
 sound_ay_write( int reg, int val, libspectrum_dword now )
 {
   sound_interval_time( now );
@@ -307,7 +338,13 @@ sound_update_source_routes( void )
   Blip_Buffer *speech_left = tv_route ? output_mixer_tv_left() : left_buf;
   Blip_Buffer *speech_right = tv_route ? output_mixer_tv_right() : right_buf;
 
-  if( sound_tv_route == tv_route ) return;
+  if( sound_tv_route == tv_route ) {
+    if( sound_ay_route_pending )
+      ay_engine_set_outputs( ay_left, ay_right, sound_stereo_ay );
+    sound_ay_route_pending = 0;
+    return;
+  }
+  sound_ay_route_pending = 0;
 
   ay_engine_set_outputs( ay_left, ay_right, sound_stereo_ay );
 

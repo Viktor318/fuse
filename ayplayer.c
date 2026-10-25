@@ -49,6 +49,8 @@
 #include "memory_pages.h"
 #include "periph.h"
 #include "settings.h"
+#include "sound.h"
+#include "timer/timer.h"
 #include "ui/ui.h"
 #include "utils.h"
 #include "z80/z80.h"
@@ -78,6 +80,10 @@ static long ay_frames_played = 0;
 static int ay_song_ended = 0;
 
 /* Machine before the player was opened, to go back to it */
+/* Seeking: the emulation runs without sound and without waiting until this
+   frame of the song is reached (-1: not seeking) */
+static long ay_seek_target = -1;
+
 static libspectrum_machine ay_previous_machine = LIBSPECTRUM_MACHINE_UNKNOWN;
 
 /* ------------------------------------------------------------------------
@@ -238,6 +244,56 @@ poke( libspectrum_word address, libspectrum_byte value )
   writebyte_internal( address, value );
 }
 
+static void
+seek_finish( void )
+{
+  int reg;
+
+  if( ay_seek_target < 0 ) return;
+  ay_seek_target = -1;
+
+  sound_unpause();
+  timer_estimate_reset();
+
+  /* The sound generator did not see the register writes while seeking */
+  if( sound_enabled )
+    for( reg = 0; reg < 14; reg++ )
+      sound_ay_write( reg, machine_current->ay.registers[ reg ], 0 );
+}
+
+int
+ayplayer_seeking( void )
+{
+  return ay_seek_target >= 0;
+}
+
+int
+ayplayer_seek( long frame )
+{
+  if( ay_current < 0 || !ay_song_frames ) return 1;
+
+  if( frame < 0 ) frame = 0;
+  if( frame >= ay_song_frames ) frame = ay_song_frames - 1;
+
+  /* Backwards: from the start of the song again */
+  if( frame < ay_frames_played ) {
+    if( ayplayer_play( ay_current ) ) return 1;
+  }
+
+  if( frame > ay_frames_played ) {
+    ay_seek_target = frame;
+    sound_pause();
+  }
+
+  return 0;
+}
+
+long
+ayplayer_seek_target( void )
+{
+  return ay_seek_target;
+}
+
 int
 ayplayer_play( int song )
 {
@@ -249,6 +305,8 @@ ayplayer_play( int song )
   int i;
 
   if( !ay_data || song < 0 || song >= ay_songs ) return 1;
+
+  seek_finish();
 
   data = song_data( song );
   if( data < 0 ) return 1;
@@ -374,6 +432,7 @@ ayplayer_stop( void )
 {
   int reg;
 
+  seek_finish();
   if( ay_current < 0 ) return;
   ay_current = -1;
 
@@ -405,6 +464,13 @@ ayplayer_frame( void )
     ay_frames_played++;
     if( ay_song_frames && ay_frames_played >= ay_song_frames )
       ay_song_ended = 1;
+  }
+
+  if( ay_seek_target >= 0 ) {
+    if( ay_current < 0 || ay_frames_played >= ay_seek_target )
+      seek_finish();
+    else if( sound_enabled )
+      sound_pause();	/* someone turned it on again meanwhile */
   }
 
   if( frame_hook ) frame_hook();

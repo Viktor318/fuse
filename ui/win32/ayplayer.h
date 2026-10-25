@@ -36,3 +36,16 @@
 #define IDC_AY_STOP         4216
 #define IDC_AY_NEXT         4217
 #define IDC_AY_AUTO         4218
+#define IDC_AY_LEVEL_GROUP  4219
+#define IDC_AY_LEVEL_LABEL1 4220
+#define IDC_AY_LEVEL_LABEL2 4221
+#define IDC_AY_LEVEL_LABEL3 4222
+#define IDC_AY_LEVEL1       4223
+#define IDC_AY_LEVEL2       4224
+#define IDC_AY_LEVEL3       4225
+#define IDC_AY_SOUND_GROUP  4226
+#define IDC_AY_VOLUME_LABEL 4227
+#define IDC_AY_VOLUME       4228
+#define IDC_AY_VOLUME_TEXT  4229
+#define IDC_AY_STEREO_LABEL 4230
+#define IDC_AY_STEREO       4231

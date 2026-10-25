@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <windows.h>
 #include <commctrl.h> /* windows.h must be included prior to commctrl.h */
 
@@ -27,13 +28,36 @@
 #include "../../ayplayer.h"
 #include "fuse.h"
 #include "i18n.h"
+#include "machine.h"
 #include "menu.h"
+#include "options.h"
+#include "settings.h"
+#include "sound.h"
+#include "sound/ay_engine.h"
 #include "win32internals.h"
 
 HWND fuse_hAYWnd = NULL;
 
 #define AYPLAYER_TIMER 1
 #define AYPLAYER_TIMER_MS 200
+
+/* The position slider is being moved by the user: do not move it */
+static int seek_dragging = 0;
+/* Length shown on the position slider */
+static long slider_length = -1;
+
+/* Level meters: the shown level of each channel, in 1/4 steps */
+#define METER_STEPS 15
+static int meter_shown[ 3 ];
+/* The channel shown in each row */
+static int meter_order[ 3 ] = { 0, 1, 2 };
+
+/* The stereo modes in the order of the combo box (and of the options) */
+static const char * const stereo_names[] = { "None", "ACB", "ABC", "BAC" };
+#define STEREO_COUNT 4
+
+static int shown_volume = -1;
+static int shown_stereo = -1;
 
 /* Pausing works as Machine > Pause (the emulation really stops) */
 static int
@@ -74,27 +98,268 @@ static void
 update_time( void )
 {
   char text[ 128 ];
+  HWND slider = GetDlgItem( fuse_hAYWnd, IDC_AY_PROGRESS );
   long played = ayplayer_frames_played();
   long length = ayplayer_song_frames();
+  int current = ayplayer_current_song();
 
-  if( ayplayer_current_song() < 0 ) played = 0;
+  if( current < 0 ) played = 0;
+  if( ayplayer_seeking() ) played = ayplayer_seek_target();
+  if( seek_dragging ) played = SendMessage( slider, TBM_GETPOS, 0, 0 );
+  if( length && played > length ) played = length;
 
   format_time( text, sizeof( text ), "Elapsed: %d:%02d", played );
   set_text( IDC_AY_ELAPSED, text );
 
+  if( length != slider_length ) {
+    slider_length = length;
+    SendMessage( slider, TBM_SETRANGEMIN, FALSE, 0 );
+    SendMessage( slider, TBM_SETRANGEMAX, TRUE, length ? length : 1 );
+    SendMessage( slider, TBM_SETPAGESIZE, 0, 50 * 10 );
+    SendMessage( slider, TBM_SETLINESIZE, 0, 50 * 2 );
+  }
+  EnableWindow( slider, length && current >= 0 );
+  if( !seek_dragging ) SendMessage( slider, TBM_SETPOS, TRUE, played );
+
   if( length ) {
     format_time( text, sizeof( text ), "Length: %d:%02d", length );
-    SendDlgItemMessage( fuse_hAYWnd, IDC_AY_PROGRESS, PBM_SETRANGE32, 0,
-                        length );
-    SendDlgItemMessage( fuse_hAYWnd, IDC_AY_PROGRESS, PBM_SETPOS,
-                        played < length ? played : length, 0 );
   } else {
     _snprintf( text, sizeof( text ), "%s", i18n( "Length: unknown" ) );
     text[ sizeof( text ) - 1 ] = '\0';
-    SendDlgItemMessage( fuse_hAYWnd, IDC_AY_PROGRESS, PBM_SETRANGE32, 0, 1 );
-    SendDlgItemMessage( fuse_hAYWnd, IDC_AY_PROGRESS, PBM_SETPOS, 0, 0 );
   }
   set_text( IDC_AY_LENGTH, text );
+}
+
+/* ------------------------------------------------------------------------
+   Level meters
+   ------------------------------------------------------------------------ */
+
+static void
+update_level_labels( void )
+{
+  static const char * const sides[] = { "left", "middle", "right" };
+  int stereo = option_enumerate_sound_stereo_ay();
+  char text[ 64 ];
+  int row;
+
+  ay_engine_stereo_order( stereo, meter_order );
+  for( row = 0; row < 3; row++ ) {
+    if( stereo == SOUND_STEREO_AY_NONE )
+      _snprintf( text, sizeof( text ), "%c", 'A' + meter_order[ row ] );
+    else
+      _snprintf( text, sizeof( text ), "%c  %s", 'A' + meter_order[ row ],
+                 i18n( sides[ row ] ) );
+    text[ sizeof( text ) - 1 ] = '\0';
+    set_text( IDC_AY_LEVEL_LABEL1 + row, text );
+    InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + row ), NULL,
+                    FALSE );
+  }
+}
+
+/* The level of a channel. Without sound output the sound generator does
+   not run: then the volume registers (envelope: full) */
+static int
+channel_level( int channel )
+{
+  int volume, mixer;
+
+  if( sound_enabled ) return ay_engine_channel_peak( channel );
+
+  volume = machine_current->ay.registers[ 8 + channel ];
+  mixer = machine_current->ay.registers[ 7 ];
+  if( ( ( mixer >> channel ) & 9 ) == 9 ) return 0;
+  return volume & 16 ? 15 : volume & 15;
+}
+
+/* Fast up, slowly down */
+static void
+update_meters( int clear )
+{
+  int channel, row;
+
+  for( channel = 0; channel < 3; channel++ ) {
+    int target = clear ? 0 : channel_level( channel ) * 4;
+    int old = meter_shown[ channel ], shown;
+
+    if( target >= old ) shown = target;
+    else shown = old - 3 > target ? old - 3 : target;
+    meter_shown[ channel ] = shown;
+
+    if( ( shown + 3 ) / 4 != ( old + 3 ) / 4 ) {
+      for( row = 0; row < 3; row++ )
+        if( meter_order[ row ] == channel )
+          InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + row ),
+                          NULL, FALSE );
+    }
+  }
+}
+
+static void
+draw_meter( const DRAWITEMSTRUCT *item )
+{
+  int row = item->CtlID - IDC_AY_LEVEL1;
+  int level = ( meter_shown[ meter_order[ row ] ] + 3 ) / 4;
+  RECT area = item->rcItem, segment;
+  int width = area.right - area.left, height = area.bottom - area.top;
+  int gap = 2, border = 2, i;
+  HDC dc;
+  HBITMAP bitmap, old_bitmap;
+  HBRUSH brush;
+
+  dc = CreateCompatibleDC( item->hDC );
+  bitmap = CreateCompatibleBitmap( item->hDC, width, height );
+  old_bitmap = SelectObject( dc, bitmap );
+
+  segment.left = 0; segment.top = 0;
+  segment.right = width; segment.bottom = height;
+  brush = CreateSolidBrush( RGB( 17, 22, 26 ) );
+  FillRect( dc, &segment, brush );
+  DeleteObject( brush );
+
+  for( i = 0; i < METER_STEPS; i++ ) {
+    COLORREF colour;
+    int inner = width - 2 * border - ( METER_STEPS - 1 ) * gap;
+
+    segment.left = border + i * inner / METER_STEPS + i * gap;
+    segment.right = border + ( i + 1 ) * inner / METER_STEPS + i * gap;
+    segment.top = border;
+    segment.bottom = height - border;
+
+    if( i >= level ) colour = RGB( 40, 46, 52 );
+    else if( i < 10 ) colour = RGB( 45, 184, 77 );
+    else if( i < 13 ) colour = RGB( 224, 192, 32 );
+    else colour = RGB( 224, 64, 48 );
+
+    brush = CreateSolidBrush( colour );
+    FillRect( dc, &segment, brush );
+    DeleteObject( brush );
+  }
+
+  BitBlt( item->hDC, area.left, area.top, width, height, dc, 0, 0, SRCCOPY );
+  SelectObject( dc, old_bitmap );
+  DeleteObject( bitmap );
+  DeleteDC( dc );
+}
+
+/* ------------------------------------------------------------------------
+   Volume and stereo
+   ------------------------------------------------------------------------ */
+
+static void
+show_volume( void )
+{
+  char text[ 16 ];
+  int volume = settings_current.volume_ay;
+
+  if( volume < 0 ) volume = 0;
+  if( volume > 100 ) volume = 100;
+  shown_volume = settings_current.volume_ay;
+
+  SendDlgItemMessage( fuse_hAYWnd, IDC_AY_VOLUME, TBM_SETPOS, TRUE, volume );
+  _snprintf( text, sizeof( text ), "%d%%", volume );
+  text[ sizeof( text ) - 1 ] = '\0';
+  set_text( IDC_AY_VOLUME_TEXT, text );
+}
+
+static void
+volume_changed( void )
+{
+  char text[ 16 ];
+  int volume = SendDlgItemMessage( fuse_hAYWnd, IDC_AY_VOLUME, TBM_GETPOS,
+                                   0, 0 );
+
+  if( volume == settings_current.volume_ay ) return;
+  settings_current.volume_ay = volume;
+  shown_volume = volume;
+  sound_ay_volume_changed();
+
+  _snprintf( text, sizeof( text ), "%d%%", volume );
+  text[ sizeof( text ) - 1 ] = '\0';
+  set_text( IDC_AY_VOLUME_TEXT, text );
+}
+
+static void
+show_stereo( void )
+{
+  shown_stereo = option_enumerate_sound_stereo_ay();
+  SendDlgItemMessage( fuse_hAYWnd, IDC_AY_STEREO, CB_SETCURSEL, shown_stereo,
+                      0 );
+  update_level_labels();
+}
+
+static void
+stereo_changed( void )
+{
+  int stereo = SendDlgItemMessage( fuse_hAYWnd, IDC_AY_STEREO, CB_GETCURSEL,
+                                   0, 0 );
+
+  if( stereo < 0 || stereo >= STEREO_COUNT ) return;
+  settings_set_string( &settings_current.stereo_ay, stereo_names[ stereo ] );
+  sound_ay_stereo_changed();
+  shown_stereo = stereo;
+  update_level_labels();
+}
+
+/* Changed in the options meanwhile? */
+static void
+sync_sound_settings( void )
+{
+  if( settings_current.volume_ay != shown_volume ) show_volume();
+  if( option_enumerate_sound_stereo_ay() != shown_stereo ) show_stereo();
+}
+
+/* ------------------------------------------------------------------------
+   Seeking with the position slider
+   ------------------------------------------------------------------------ */
+
+/* A click beside the thumb: go to where the click was, not a page away */
+static void
+slider_to_mouse( HWND slider )
+{
+  POINT point;
+  RECT channel;
+  long maximum = SendMessage( slider, TBM_GETRANGEMAX, 0, 0 );
+  long position;
+
+  GetCursorPos( &point );
+  ScreenToClient( slider, &point );
+  SendMessage( slider, TBM_GETCHANNELRECT, 0, (LPARAM)&channel );
+  if( channel.right <= channel.left ) return;
+
+  position = (long)( (double)( point.x - channel.left ) * maximum /
+                     ( channel.right - channel.left ) + 0.5 );
+  if( position < 0 ) position = 0;
+  if( position > maximum ) position = maximum;
+  SendMessage( slider, TBM_SETPOS, TRUE, position );
+}
+
+static void
+slider_scroll( HWND slider, WORD code )
+{
+  switch( code ) {
+  case TB_PAGEUP:
+  case TB_PAGEDOWN:
+    slider_to_mouse( slider );
+    seek_dragging = 1;
+    break;
+
+  case TB_THUMBTRACK:
+  case TB_THUMBPOSITION:
+  case TB_LINEUP:
+  case TB_LINEDOWN:
+  case TB_TOP:
+  case TB_BOTTOM:
+    seek_dragging = 1;
+    break;
+
+  case TB_ENDTRACK:
+    if( seek_dragging ) {
+      seek_dragging = 0;
+      ayplayer_seek( SendMessage( slider, TBM_GETPOS, 0, 0 ) );
+    }
+    break;
+  }
+  update_time();
 }
 
 /* Everything shown, after a new file or song */
@@ -122,6 +387,7 @@ update_all( void )
 
   update_pause_button();
   update_time();
+  sync_sound_settings();
 }
 
 static void
@@ -192,6 +458,10 @@ command( WORD id, WORD code )
     update_pause_button();
     break;
 
+  case IDC_AY_STEREO:
+    if( code == CBN_SELCHANGE ) stereo_changed();
+    break;
+
   case IDC_AY_STOP:
     resume_if_paused();
     ayplayer_stop();
@@ -217,10 +487,17 @@ static int song_end_posted = 0;
 static void
 frame_update( void )
 {
-  static int counter = 0;
+  static int counter = 0, meter_counter = 0;
   int current;
 
-  if( !fuse_hAYWnd || ++counter < 10 ) return;
+  if( !fuse_hAYWnd ) return;
+
+  if( ++meter_counter >= 2 ) {
+    meter_counter = 0;
+    update_meters( 0 );
+  }
+
+  if( ++counter < 10 ) return;
   counter = 0;
 
   current = ayplayer_current_song();
@@ -257,17 +534,65 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   switch( msg ) {
 
   case WM_INITDIALOG:
-    CheckDlgButton( hWnd, IDC_AY_AUTO, BST_CHECKED );
-    SetTimer( hWnd, AYPLAYER_TIMER, AYPLAYER_TIMER_MS, NULL );
+    {
+      int i;
+
+      fuse_hAYWnd = hWnd;
+      CheckDlgButton( hWnd, IDC_AY_AUTO, BST_CHECKED );
+      SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETRANGE, FALSE,
+                          MAKELPARAM( 0, 100 ) );
+      SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETPAGESIZE, 0, 10 );
+      for( i = 0; i < STEREO_COUNT; i++ )
+        SendDlgItemMessageA( hWnd, IDC_AY_STEREO, CB_ADDSTRING, 0,
+                             (LPARAM)i18n( stereo_names[ i ] ) );
+      slider_length = -1;
+      seek_dragging = 0;
+      memset( meter_shown, 0, sizeof( meter_shown ) );
+      show_volume();
+      show_stereo();
+      SetTimer( hWnd, AYPLAYER_TIMER, AYPLAYER_TIMER_MS, NULL );
+    }
     return TRUE;
 
   case WM_TIMER:
     /* Only for the paused state; while playing the frames update it */
     if( wParam == AYPLAYER_TIMER ) {
       update_pause_button();
+      sync_sound_settings();
+      if( player_paused() || ayplayer_current_song() < 0 )
+        update_meters( 1 );
       return 0;
     }
     break;
+
+  case WM_HSCROLL:
+    if( (HWND)lParam == GetDlgItem( hWnd, IDC_AY_PROGRESS ) ) {
+      slider_scroll( (HWND)lParam, LOWORD( wParam ) );
+      return 0;
+    }
+    if( (HWND)lParam == GetDlgItem( hWnd, IDC_AY_VOLUME ) ) {
+      volume_changed();
+      return 0;
+    }
+    break;
+
+  case WM_DRAWITEM:
+    if( wParam >= IDC_AY_LEVEL1 && wParam <= IDC_AY_LEVEL3 ) {
+      draw_meter( (const DRAWITEMSTRUCT *)lParam );
+      return TRUE;
+    }
+    break;
+
+  /* Moving the window: the music goes on */
+  case WM_ENTERSIZEMOVE:
+  case WM_ENTERMENULOOP:
+    win32ui_modal_enter();
+    return 0;
+
+  case WM_EXITSIZEMOVE:
+  case WM_EXITMENULOOP:
+    win32ui_modal_exit();
+    return 0;
 
   case WM_AYPLAYER_SONG_END:
     song_end();

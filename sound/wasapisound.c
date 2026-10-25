@@ -182,7 +182,7 @@ service_prepare( unsigned int channels, uint64_t startup,
   service.format = geometry.format;
   service.capacity = geometry.capacity;
   service.channels = channels;
-  service.quantize = settings_current.sound_force_8bit;
+  service.quantize = 0; /* 8-bit output was retired upstream */
   service.scratch = malloc( (size_t)geometry.capacity * width );
   service.begin = begin; service.finish = finish; service.negative = negative;
   *operation = "allocate packet scratch";

@@ -50,6 +50,7 @@
 #include "periph.h"
 #include "settings.h"
 #include "sound.h"
+#include "sound/ay_engine.h"
 #include "timer/timer.h"
 #include "ui/ui.h"
 #include "utils.h"
@@ -78,6 +79,14 @@ static long ay_frames_played = 0;
 
 /* The current song ended (its length was reached) */
 static int ay_song_ended = 0;
+
+/* Songs without a length in the file go on for ever: as NEZplug does,
+   they get a default length (5 minutes) and fade out in the last
+   5 seconds, when the player goes on to the next song at the end */
+#define AY_DEFAULT_LENGTH ( 5 * 60 * 50 )
+#define AY_FADE_FRAMES ( 5 * 50 )
+static int ay_length_default = 0;
+static int ay_fade_enabled = 1;
 
 /* Machine before the player was opened, to go back to it */
 /* Seeking: the emulation runs without sound and without waiting until this
@@ -423,8 +432,10 @@ ayplayer_play( int song )
   z80.halted = 0;
 
   length = word_at( data + 4 );
-  ay_song_frames = length > 0 ? length : 0;
+  ay_length_default = length <= 0;
+  ay_song_frames = length > 0 ? length : AY_DEFAULT_LENGTH;
   ay_frames_played = 0;
+  ay_engine_set_fade( 100 );
   ay_song_ended = 0;
   ay_current = song;
 
@@ -437,6 +448,7 @@ ayplayer_stop( void )
   int reg;
 
   seek_finish();
+  ay_engine_set_fade( 100 );
   if( ay_current < 0 ) return;
   ay_current = -1;
 
@@ -468,6 +480,15 @@ ayplayer_frame( void )
     ay_frames_played++;
     if( ay_song_frames && ay_frames_played >= ay_song_frames )
       ay_song_ended = 1;
+
+    /* Fade out at the end of a song of default length */
+    if( ay_length_default && ay_fade_enabled &&
+        ay_frames_played > ay_song_frames - AY_FADE_FRAMES ) {
+      long left = ay_song_frames - ay_frames_played;
+      ay_engine_set_fade( left > 0 ? left * 100 / AY_FADE_FRAMES : 0 );
+    } else {
+      ay_engine_set_fade( 100 );
+    }
   }
 
   if( ay_seek_target >= 0 ) {
@@ -490,6 +511,14 @@ int ayplayer_current_song( void ) { return ay_current; }
 long ayplayer_song_frames( void ) { return ay_song_frames; }
 long ayplayer_frames_played( void ) { return ay_frames_played; }
 int ayplayer_song_ended( void ) { return ay_song_ended; }
+int ayplayer_length_is_default( void ) { return ay_length_default; }
+
+void
+ayplayer_set_fade_enabled( int enabled )
+{
+  ay_fade_enabled = enabled;
+  if( !enabled ) ay_engine_set_fade( 100 );
+}
 const char *ayplayer_filename( void ) { return ay_filename; }
 const char *ayplayer_author( void ) { return ay_author; }
 const char *ayplayer_misc( void ) { return ay_misc; }

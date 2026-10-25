@@ -62,6 +62,8 @@ static int both_sides[AY_CHANNELS];
 /* AY volume in percent; applied to the amplitudes so that it can be changed
    while playing (changing a Blip_Synth's volume would leave a DC step) */
 static int ay_volume = 100;
+/* Fading out, in percent of the volume */
+static int ay_fade = 100;
 /* Channels not heard (the level meters still see them) */
 static int channel_muted[AY_CHANNELS];
 /* Highest level (0-15) of each channel since the last query */
@@ -125,6 +127,12 @@ ay_engine_init( int volume, int stereo )
   }
   ( void )stereo;
   return 0;
+}
+
+void
+ay_engine_set_fade( int percent )
+{
+  ay_fade = percent < 0 ? 0 : percent > 100 ? 100 : percent;
 }
 
 void
@@ -317,7 +325,7 @@ ay_channel_output( int channel, int envelope_level, unsigned int tone_count )
   }
   if( !( mixer & ( 0x08 << channel ) ) && noise_toggle ) output = 0;
   if( channel_muted[channel] ) return 0;
-  return output * ay_volume / 100;
+  return output * ay_volume * ay_fade / 10000;
 }
 
 static void

@@ -121,7 +121,9 @@ update_time( void )
   EnableWindow( slider, length && current >= 0 );
   if( !seek_dragging ) SendMessage( slider, TBM_SETPOS, TRUE, played );
 
-  if( length ) {
+  if( length && ayplayer_length_is_default() ) {
+    format_time( text, sizeof( text ), "Length: %d:%02d (default)", length );
+  } else if( length ) {
     format_time( text, sizeof( text ), "Length: %d:%02d", length );
   } else {
     _snprintf( text, sizeof( text ), "%s", i18n( "Length: unknown" ) );
@@ -480,6 +482,11 @@ command( WORD id, WORD code )
     }
     break;
 
+  case IDC_AY_AUTO:
+    ayplayer_set_fade_enabled(
+      IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_AUTO ) == BST_CHECKED );
+    break;
+
   case IDC_AY_STEREO:
     if( code == CBN_SELCHANGE ) stereo_changed();
     break;
@@ -561,6 +568,7 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 
       fuse_hAYWnd = hWnd;
       CheckDlgButton( hWnd, IDC_AY_AUTO, BST_CHECKED );
+      ayplayer_set_fade_enabled( 1 );
       SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETRANGE, FALSE,
                           MAKELPARAM( 0, 100 ) );
       SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETPAGESIZE, 0, 10 );

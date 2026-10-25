@@ -17,6 +17,8 @@ void ay_engine_reset( void );
 
 /* AY volume in percent, can be changed while playing */
 void ay_engine_set_volume( int volume );
+/* Fade out: percent of the volume (100: none) */
+void ay_engine_set_fade( int percent );
 /* The channels (0=A, 1=B, 2=C) on the left, in the middle and on the right
    in a stereo mode (in order A, B, C without stereo) */
 void ay_engine_stereo_order( int stereo, int order[ 3 ] );

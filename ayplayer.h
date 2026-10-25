@@ -53,6 +53,10 @@ int ayplayer_current_song( void );	/* -1: stopped */
 long ayplayer_song_frames( void );	/* 0: length not known */
 long ayplayer_frames_played( void );
 int ayplayer_song_ended( void );
+/* The file gives no length: the default one (5 minutes) is used */
+int ayplayer_length_is_default( void );
+/* Fade out at the end of default length songs (going on to the next) */
+void ayplayer_set_fade_enabled( int enabled );
 const char *ayplayer_filename( void );
 const char *ayplayer_author( void );
 const char *ayplayer_misc( void );

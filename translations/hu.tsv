@@ -557,3 +557,4 @@ extra	AY player	left	bal
 extra	AY player	middle	közép
 extra	AY player	right	jobb
 extra	AY player	BAC	BAC
+extra	AY player	Length: %d:%02d (default)	Hossz: %d:%02d (alapértelmezett)

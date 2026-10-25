@@ -587,6 +587,8 @@ const i18n_entry i18n_hu_table[] = {
     "A hossz 1 és 65536 között lehet" },
   { "Length: %d:%02d",
     "Hossz: %d:%02d" },
+  { "Length: %d:%02d (default)",
+    "Hossz: %d:%02d (alapértelmezett)" },
   { "Length: unknown",
     "Hossz: ismeretlen" },
   { "Levels",

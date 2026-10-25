@@ -108,7 +108,9 @@ ay_engine_init( int volume, int stereo )
 {
   int i;
 
-  change_position = 0;
+  /* Writes queued while the sound was off belong to no timeline: drop
+     them (sound_init() queues the AY's current registers afterwards) */
+  change_count = change_position = 0;
   next_tick = 0;
   memset( previous, 0, sizeof( previous ) );
   ay_levels_init();

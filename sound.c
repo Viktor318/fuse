@@ -287,6 +287,9 @@ sound_ay_volume_changed( void )
 void
 sound_ay_write( int reg, int val, libspectrum_dword now )
 {
+  /* Without sound nothing is queued: the queue would fill up, and its old
+     writes would be played when the sound starts again */
+  if( !sound_enabled ) return;
   sound_interval_time( now );
   ay_engine_write( reg, val, now );
 }

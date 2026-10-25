@@ -54,6 +54,7 @@
 #include "utils.h"
 #include "win32internals.h"
 #include "win32joystick.h"
+#include "winstate.h"
 
 #define MODAL_EMULATION_TIMER 0x4f55
 /* Frames are being run from a timer inside a modal loop */
@@ -156,51 +157,27 @@ handle_drop( HDROP hDrop )
   DragFinish( hDrop );
 }
 
-/* The main window's position is kept in a file next to the settings, so
-   that it is remembered even without saving the settings */
-static int
-window_position_path( char *path, size_t length )
-{
-  const char *dir = compat_get_config_path();
-
-  if( !dir ) return 1;
-  snprintf( path, length, "%s/fuse-window.txt", dir );
-  return 0;
-}
-
+/* The main window's position is kept in fuse-windows.ini, so that it is
+   remembered even without saving the settings */
 static void
 save_window_position( void )
 {
-  char path[ PATH_MAX ];
   RECT rect;
-  FILE *f;
 
   /* A minimised window has no useful position */
   if( IsIconic( fuse_hWnd ) || !GetWindowRect( fuse_hWnd, &rect ) ) return;
-  if( window_position_path( path, sizeof( path ) ) ) return;
-
-  f = fopen( path, "w" );
-  if( !f ) return;
-  fprintf( f, "x=%ld\ny=%ld\n", (long)rect.left, (long)rect.top );
-  fclose( f );
+  winstate_set( "main", "x", rect.left );
+  winstate_set( "main", "y", rect.top );
 }
 
 static void
 restore_window_position( void )
 {
-  char path[ PATH_MAX ];
   RECT rect;
   long x, y;
-  FILE *f;
-  int ok;
 
-  if( window_position_path( path, sizeof( path ) ) ) return;
-
-  f = fopen( path, "r" );
-  if( !f ) return;
-  ok = fscanf( f, "x=%ld y=%ld", &x, &y ) == 2;
-  fclose( f );
-  if( !ok ) return;
+  if( !winstate_get( "main", "x", &x ) || !winstate_get( "main", "y", &y ) )
+    return;
 
   /* Only if the title bar would be on a monitor, which may have been
      disconnected since */

@@ -496,6 +496,24 @@ settings_var( settings_info *settings, unsigned char *name, unsigned char *last,
   if( *next < last) (*next)++;		/* set after '=' */
 /*  ui_error( UI_ERROR_WARNING, "Config: (%5s): ", name ); */
 
+  /* Settings of earlier versions that are kept elsewhere now
+     (fuse-windows.ini): read and forgotten without a warning */
+  {
+    static const char * const retired[] = {
+      "ayplayerautonext", "ayplayerrepeat", "ayplayerwindowx", "ayplayerwindowy"
+    };
+    static int retired_value;
+    size_t i;
+
+    for( i = 0; i < sizeof( retired ) / sizeof( retired[0] ); i++ ) {
+      if( n == strlen( retired[i] ) &&
+          !strncmp( (const char *)name, retired[i], n ) ) {
+        *val_int = &retired_value;
+        return 0;
+      }
+    }
+  }
+
 CODE
 my %type = ('null' => 0, 'boolean' => 1, 'numeric' => 1, 'string' => 2 );
 foreach my $name ( sort keys %options ) {

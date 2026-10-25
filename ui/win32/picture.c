@@ -38,6 +38,7 @@
 #include "picture.h"
 #include "utils.h"
 #include "win32internals.h"
+#include "winstate.h"
 
 /* An RGB image of the keyboard picture */
 /* the memory will be allocated by Windows ( height * width * 4 bytes ) */
@@ -349,52 +350,31 @@ create_dialog( int width, int height )
   return dialog;
 }
 
-/* The window's place and size are kept in a file next to the settings */
-static int
-geometry_path( char *path, size_t length )
-{
-  const char *dir = compat_get_config_path();
-
-  if( !dir ) return 1;
-  snprintf( path, length, "%s/fuse-keyboard-window.txt", dir );
-  return 0;
-}
-
+/* The window's place and size are kept in fuse-windows.ini */
 static void
 save_geometry( HWND dialog )
 {
-  char path[ PATH_MAX ];
   RECT rect;
-  FILE *f;
 
   if( IsIconic( dialog ) || !GetWindowRect( dialog, &rect ) ) return;
-  if( geometry_path( path, sizeof( path ) ) ) return;
-
-  f = fopen( path, "w" );
-  if( !f ) return;
-  fprintf( f, "x=%ld\ny=%ld\nwidth=%ld\nheight=%ld\n",
-           (long)rect.left, (long)rect.top, (long)( rect.right - rect.left ),
-           (long)( rect.bottom - rect.top ) );
-  fclose( f );
+  winstate_set( "keyboard", "x", rect.left );
+  winstate_set( "keyboard", "y", rect.top );
+  winstate_set( "keyboard", "width", rect.right - rect.left );
+  winstate_set( "keyboard", "height", rect.bottom - rect.top );
 }
 
 /* Read the saved geometry; returns 0 if there is one */
 static int
 load_geometry( RECT *rect )
 {
-  char path[ PATH_MAX ];
   long x, y, width, height;
-  int ok;
-  FILE *f;
 
-  if( geometry_path( path, sizeof( path ) ) ) return 1;
-
-  f = fopen( path, "r" );
-  if( !f ) return 1;
-  ok = fscanf( f, "x=%ld y=%ld width=%ld height=%ld",
-               &x, &y, &width, &height ) == 4;
-  fclose( f );
-  if( !ok || width <= 0 || height <= 0 ) return 1;
+  if( !winstate_get( "keyboard", "x", &x ) ||
+      !winstate_get( "keyboard", "y", &y ) ||
+      !winstate_get( "keyboard", "width", &width ) ||
+      !winstate_get( "keyboard", "height", &height ) ||
+      width <= 0 || height <= 0 )
+    return 1;
 
   rect->left = x; rect->top = y;
   rect->right = x + width; rect->bottom = y + height;

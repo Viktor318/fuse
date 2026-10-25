@@ -35,6 +35,7 @@
 #include "sound.h"
 #include "sound/ay_engine.h"
 #include "win32internals.h"
+#include "winstate.h"
 
 HWND fuse_hAYWnd = NULL;
 
@@ -604,8 +605,8 @@ end_options_changed( void )
   int repeat =
     IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_REPEAT ) == BST_CHECKED;
 
-  settings_current.ayplayer_auto_next = auto_next;
-  settings_current.ayplayer_repeat = repeat;
+  winstate_set( "ayplayer", "auto_next", auto_next );
+  winstate_set( "ayplayer", "repeat", repeat );
   ayplayer_set_repeat_song( repeat && !auto_next );
 }
 
@@ -649,12 +650,16 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   case WM_INITDIALOG:
     {
       int i;
+      long auto_next = 1, repeat = 0;
 
       fuse_hAYWnd = hWnd;
-      CheckDlgButton( hWnd, IDC_AY_AUTO, settings_current.ayplayer_auto_next ?
-                      BST_CHECKED : BST_UNCHECKED );
-      CheckDlgButton( hWnd, IDC_AY_REPEAT, settings_current.ayplayer_repeat ?
-                      BST_CHECKED : BST_UNCHECKED );
+
+      winstate_get( "ayplayer", "auto_next", &auto_next );
+      winstate_get( "ayplayer", "repeat", &repeat );
+      CheckDlgButton( hWnd, IDC_AY_AUTO, auto_next ? BST_CHECKED :
+                                                     BST_UNCHECKED );
+      CheckDlgButton( hWnd, IDC_AY_REPEAT, repeat ? BST_CHECKED :
+                                                    BST_UNCHECKED );
       end_options_changed();
       SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETRANGE, FALSE,
                           MAKELPARAM( 0, 100 ) );
@@ -736,8 +741,7 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   return FALSE;
 }
 
-/* The place of the window is kept in the settings */
-#define NO_POSITION -32768
+/* The place of the window is kept in fuse-windows.ini */
 
 static void
 remember_position( void )
@@ -747,18 +751,19 @@ remember_position( void )
   if( !fuse_hAYWnd || IsIconic( fuse_hAYWnd ) ||
       !GetWindowRect( fuse_hAYWnd, &rect ) )
     return;
-  settings_current.ayplayer_window_x = rect.left;
-  settings_current.ayplayer_window_y = rect.top;
+  winstate_set( "ayplayer", "x", rect.left );
+  winstate_set( "ayplayer", "y", rect.top );
 }
 
 static void
 restore_position( void )
 {
   POINT title;
-  int x = settings_current.ayplayer_window_x;
-  int y = settings_current.ayplayer_window_y;
+  long x, y;
 
-  if( x == NO_POSITION || y == NO_POSITION ) return;
+  if( !winstate_get( "ayplayer", "x", &x ) ||
+      !winstate_get( "ayplayer", "y", &y ) )
+    return;
 
   /* Only if the title bar is on a screen (one may have been removed) */
   title.x = x + 40;

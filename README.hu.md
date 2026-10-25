@@ -16,7 +16,6 @@ a [ChangeLog](ChangeLog) fájlban vannak (angolul). Ennek a változatnak a
 módosításai a [CHANGELOG-fork.hu.md](CHANGELOG-fork.hu.md) fájlban
 olvashatók.
 
-![A magyar felület](docs/images/main-window.png)
 
 ## Letöltés
 
@@ -65,7 +64,6 @@ mappába, és indítsd el a `fuse.exe`-t. Telepíteni nem kell semmit.
 
 ### AY zenelejátszó
 
-![Az AY lejátszó és a lejátszási lista](docs/images/ay-player.png)
 
 `.ay` (ZXAYEMUL) zenefájlokat játszik le – sok Spectrum-játék és demó zenéje
 megvan ebben a formában – egy emulált Spectrum +2A-n.

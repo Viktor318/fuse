@@ -14,7 +14,6 @@ user interface around it. The original Fuse documentation is in
 [README](README) and the original change log in [ChangeLog](ChangeLog).
 The changes of this fork are listed in [CHANGELOG-fork.md](CHANGELOG-fork.md).
 
-![The Hungarian user interface](docs/images/main-window.png)
 
 ## Download
 
@@ -59,7 +58,6 @@ folder of your choice and start `fuse.exe`. Nothing has to be installed.
 
 ### AY music player
 
-![The AY player and its playlist](docs/images/ay-player.png)
 
 Plays `.ay` (ZXAYEMUL) music files – the music of many Spectrum games and
 demos – on an emulated Spectrum +2A.

@@ -92,6 +92,10 @@ cp "/usr/$HOST/lib/zlib1.dll" "/usr/$HOST/lib/libwinpthread-1.dll" "$NAME/"
 cp roms/*.rom roms/README.copyright "$NAME/roms/"
 cp lib/*.bmp lib/*.png lib/*.jpg lib/*.scr "$NAME/lib/"
 cp COPYING README AUTHORS "$NAME/"
+# The descriptions of this edition / A kiadás leírásai
+for doc in README.md README.hu.md CHANGELOG-fork.md CHANGELOG-fork.hu.md; do
+  [ -f "$doc" ] && cp "$doc" "$NAME/"
+done
 
 mkdir -p "$OUTDIR"
 rm -rf "$OUTDIR/$NAME" "$OUTDIR/$NAME.zip"

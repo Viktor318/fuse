@@ -300,7 +300,6 @@ ayplayer_play( int song )
   long data, points, blocks;
   int hi_reg, lo_reg, stack, init, interrupt, length, block;
   libspectrum_dword address;
-  libspectrum_word start_pc = 0x0000;
   libspectrum_byte player[ 18 ];
   int i;
 
@@ -396,8 +395,13 @@ ayplayer_play( int song )
       poke( block_address + j, ay_data[ block_data + j ] );
     }
 
-    /* No init routine: start at the first block */
-    if( !init && block == 0 ) start_pc = block_address;
+    /* No init routine: the player calls the first block instead (as the
+       AY format describes; ZEsarUX started the processor there, which
+       then returned to nowhere) */
+    if( !init && block == 0 ) {
+      poke( 0x0002, block_address & 0xff );
+      poke( 0x0003, block_address >> 8 );
+    }
   }
 
   /* Registers, as in ZEsarUX: the cold start values, A and F from the
@@ -415,7 +419,7 @@ ayplayer_play( int song )
   R = R7 = 0;
   IFF1 = IFF2 = 0;
   IM = 0;
-  PC = start_pc;
+  PC = 0x0000;
   z80.halted = 0;
 
   length = word_at( data + 4 );

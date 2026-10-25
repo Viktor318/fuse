@@ -892,7 +892,8 @@ layout_play_row( void )
     SetWindowPos( control, NULL, x, corner.y, width,
                   rect.bottom - rect.top, SWP_NOZORDER | SWP_NOACTIVATE );
 
-    x += width + ( i ? 12 : 8 );
+    /* The repeat box a little apart from the two choices */
+    x += width + ( i == 2 ? 24 : i ? 12 : 8 );
   }
 
   SelectObject( dc, old_font );

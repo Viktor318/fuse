@@ -48,7 +48,7 @@ static const int button_ids[ BUTTONS ] = {
 static int button_right[ BUTTONS ], button_top[ BUTTONS ];
 static int list_right_gap, list_bottom_gap, status_bottom_gap;
 static int number_width, author_width, length_width;
-static SIZE minimum_size;
+static SIZE minimum_size, default_size;
 static HFONT bold_font = NULL;
 
 static HWND
@@ -323,8 +323,8 @@ remember_place( void )
     return;
   winstate_set( "playlist", "x", rect.left );
   winstate_set( "playlist", "y", rect.top );
-  winstate_set( "playlist", "cx", rect.right - rect.left );
-  winstate_set( "playlist", "cy", rect.bottom - rect.top );
+  winstate_set( "playlist", "w", rect.right - rect.left );
+  winstate_set( "playlist", "h", rect.bottom - rect.top );
 }
 
 static void
@@ -333,9 +333,11 @@ restore_place( void )
   long x, y, width, height;
   RECT title;
 
-  /* The first version kept a size of its wider default: forget it */
+  /* Earlier versions kept sizes that grew at every start: forget them */
   winstate_remove( "playlist", "width" );
   winstate_remove( "playlist", "height" );
+  winstate_remove( "playlist", "cx" );
+  winstate_remove( "playlist", "cy" );
 
   if( !winstate_get( "playlist", "x", &x ) ||
       !winstate_get( "playlist", "y", &y ) ) {
@@ -347,10 +349,10 @@ restore_place( void )
     return;
   }
 
-  if( !winstate_get( "playlist", "cx", &width ) ||
-      !winstate_get( "playlist", "cy", &height ) ) {
-    width = minimum_size.cx;
-    height = minimum_size.cy;
+  if( !winstate_get( "playlist", "w", &width ) ||
+      !winstate_get( "playlist", "h", &height ) ) {
+    width = default_size.cx;
+    height = default_size.cy;
   }
 
   /* Only if the title bar is on a screen */
@@ -417,18 +419,17 @@ add_column( HWND list, int index, const char *title, int width, int format )
   SendMessageA( list, LVM_INSERTCOLUMNA, index, (LPARAM)&column );
 }
 
+/* After the texts were translated (which may make the buttons and the
+   window wider): where everything is, the smallest size, the place and
+   size of last time */
 static void
-init_dialog( HWND dialog )
+setup_geometry( void )
 {
-  HWND list;
+  HWND dialog = fuse_hAYListWnd, list = item( IDC_AYL_LIST );
   RECT client, rect, window;
-  RECT units = { 0, 0, 4, 8 };
   int i;
 
-  fuse_hAYListWnd = dialog;
-  list = item( IDC_AYL_LIST );
-
-  /* Where everything is in the resource: keep the distances */
+  /* Where everything is: keep the distances */
   GetClientRect( dialog, &client );
   for( i = 0; button_ids[i]; i++ ) {
     POINT corner;
@@ -451,9 +452,27 @@ init_dialog( HWND dialog )
     ScreenToClient( dialog, &top_left );
     status_bottom_gap = client.bottom - top_left.y;
   }
+  /* At least the buttons and a list of 150 pixels */
   GetWindowRect( dialog, &window );
-  minimum_size.cx = window.right - window.left;
+  GetWindowRect( list, &rect );
+  minimum_size.cx = window.right - window.left - ( rect.right - rect.left ) +
+                    150;
   minimum_size.cy = window.bottom - window.top;
+  default_size.cx = window.right - window.left;
+  default_size.cy = window.bottom - window.top;
+
+  restore_place();
+  layout();
+}
+
+static void
+init_dialog( HWND dialog )
+{
+  HWND list;
+  RECT units = { 0, 0, 4, 8 };
+
+  fuse_hAYListWnd = dialog;
+  list = item( IDC_AYL_LIST );
 
   /* Column widths in dialog units, as the rest of the window */
   MapDialogRect( dialog, &units );
@@ -477,9 +496,6 @@ init_dialog( HWND dialog )
   }
 
   DragAcceptFiles( dialog, TRUE );
-  restore_place();
-  layout();
-  win32_ayplaylist_update();
 }
 
 /* The song being played in bold */
@@ -512,7 +528,8 @@ playlist_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     return TRUE;
 
   case WM_SIZE:
-    if( wParam != SIZE_MINIMIZED && fuse_hAYListWnd ) layout();
+    if( wParam != SIZE_MINIMIZED && fuse_hAYListWnd && minimum_size.cx )
+      layout();
     return 0;
 
   case WM_GETMINMAXINFO:
@@ -617,6 +634,8 @@ create( void )
     win32_verror( 1 );
     return 1;
   }
+  setup_geometry();
+  win32_ayplaylist_update();
   return 0;
 }
 

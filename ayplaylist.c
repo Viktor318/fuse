@@ -411,34 +411,11 @@ ayplaylist_length( int index, long *frames )
   return ayplayer_known_length( e->checksum, e->song, frames );
 }
 
-/* The same file? Windows file names do not mind the case of the letters,
-   nor / or \ */
-static int
-same_path( const char *a, const char *b )
-{
-  for( ; *a && *b; a++, b++ ) {
-    char x = *a == '/' ? '\\' : *a, y = *b == '/' ? '\\' : *b;
-#ifdef WIN32
-    if( x >= 'A' && x <= 'Z' ) x += 'a' - 'A';
-    if( y >= 'A' && y <= 'Z' ) y += 'a' - 'A';
-#endif
-    if( x != y ) return 0;
-  }
-  return *a == *b;
-}
-
 int
 ayplaylist_open_file( const char *path )
 {
-  int i, first;
+  int first = ayplaylist_add_file( path );
 
-  /* Already in the list: play it from there (its first song in the list) */
-  load_saved();
-  for( i = 0; i < entry_count; i++ )
-    if( same_path( entries[i].path, path ) )
-      return ayplaylist_play( i );
-
-  first = ayplaylist_add_file( path );
   if( first < 0 ) return 1;
   return ayplaylist_play( first );
 }

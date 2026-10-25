@@ -63,8 +63,7 @@ int ayplaylist_play( int index );
    repetition found, the default length); 0 if not known yet */
 int ayplaylist_length( int index, long *frames );
 
-/* File > Open of an .ay file: add its songs and play the first one; if
-   the file is in the list already, play it from there */
+/* File > Open of an .ay file: add its songs and play the first one */
 int ayplaylist_open_file( const char *path );
 
 #endif

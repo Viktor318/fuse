@@ -17,9 +17,9 @@
 
 */
 
-/* The places of the windows and the like are kept in fuse-windows.ini in
-   the settings folder, written whenever something changes: unlike the
-   settings (fuse.cfg), they are remembered without saving the settings.
+/* The places of the windows are kept in fuse-windows.ini in the settings
+   folder, written whenever one changes: unlike the settings (fuse.cfg),
+   they are remembered without saving the settings.
 
      [main]
      x=120
@@ -98,7 +98,7 @@ save( void )
   f = fopen( path, "w" );
   if( !f ) return;
 
-  fprintf( f, "; Fuse: places of the windows and the like\n" );
+  fprintf( f, "; Fuse: places of the windows\n" );
 
   /* Section by section, in the order they first appeared */
   for( i = 0; i < entry_count; i++ ) {
@@ -179,6 +179,18 @@ winstate_get( const char *section, const char *key, long *value )
   if( !e ) return 0;
   *value = e->value;
   return 1;
+}
+
+void
+winstate_remove( const char *section, const char *key )
+{
+  entry *e;
+
+  load();
+  e = find( section, key );
+  if( !e ) return;
+  *e = entries[ --entry_count ];
+  save();
 }
 
 void

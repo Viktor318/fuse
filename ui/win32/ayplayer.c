@@ -605,8 +605,8 @@ end_options_changed( void )
   int repeat =
     IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_REPEAT ) == BST_CHECKED;
 
-  winstate_set( "ayplayer", "auto_next", auto_next );
-  winstate_set( "ayplayer", "repeat", repeat );
+  settings_current.ayplayer_auto_next = auto_next;
+  settings_current.ayplayer_repeat = repeat;
   ayplayer_set_repeat_song( repeat && !auto_next );
 }
 
@@ -650,16 +650,24 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   case WM_INITDIALOG:
     {
       int i;
-      long auto_next = 1, repeat = 0;
+      long value;
 
       fuse_hAYWnd = hWnd;
 
-      winstate_get( "ayplayer", "auto_next", &auto_next );
-      winstate_get( "ayplayer", "repeat", &repeat );
-      CheckDlgButton( hWnd, IDC_AY_AUTO, auto_next ? BST_CHECKED :
-                                                     BST_UNCHECKED );
-      CheckDlgButton( hWnd, IDC_AY_REPEAT, repeat ? BST_CHECKED :
-                                                    BST_UNCHECKED );
+      /* The previous version kept these in fuse-windows.ini */
+      if( winstate_get( "ayplayer", "auto_next", &value ) ) {
+        settings_current.ayplayer_auto_next = value;
+        winstate_remove( "ayplayer", "auto_next" );
+      }
+      if( winstate_get( "ayplayer", "repeat", &value ) ) {
+        settings_current.ayplayer_repeat = value;
+        winstate_remove( "ayplayer", "repeat" );
+      }
+
+      CheckDlgButton( hWnd, IDC_AY_AUTO, settings_current.ayplayer_auto_next ?
+                      BST_CHECKED : BST_UNCHECKED );
+      CheckDlgButton( hWnd, IDC_AY_REPEAT, settings_current.ayplayer_repeat ?
+                      BST_CHECKED : BST_UNCHECKED );
       end_options_changed();
       SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETRANGE, FALSE,
                           MAKELPARAM( 0, 100 ) );

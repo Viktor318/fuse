@@ -500,7 +500,7 @@ settings_var( settings_info *settings, unsigned char *name, unsigned char *last,
      (fuse-windows.ini): read and forgotten without a warning */
   {
     static const char * const retired[] = {
-      "ayplayerautonext", "ayplayerrepeat", "ayplayerwindowx", "ayplayerwindowy"
+      "ayplayerwindowx", "ayplayerwindowy"
     };
     static int retired_value;
     size_t i;

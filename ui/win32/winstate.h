@@ -20,8 +20,10 @@
 #ifndef FUSE_WIN32_WINSTATE_H
 #define FUSE_WIN32_WINSTATE_H
 
-/* Values kept in fuse-windows.ini (written at once when changed) */
+/* Places of the windows, kept in fuse-windows.ini (written at once when
+   changed) */
 int winstate_get( const char *section, const char *key, long *value );
 void winstate_set( const char *section, const char *key, long value );
+void winstate_remove( const char *section, const char *key );
 
 #endif

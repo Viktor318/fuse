@@ -33,7 +33,7 @@ jobs:
       LIBSPECTRUM_REF: ${{ inputs.libspectrum_ref }}
       EMSCRIPTEN_VERSION: 6.0.12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Validate source selection
         id: refs
@@ -54,14 +54,14 @@ jobs:
           fi
 
       - name: Check out selected Fuse source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.refs.outputs.fuse }}
           path: sources/fuse
           persist-credentials: false
 
       - name: Check out selected libspectrum source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: fuse-emulator/libspectrum
           ref: ${{ steps.refs.outputs.libspectrum }}

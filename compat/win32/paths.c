@@ -47,13 +47,86 @@ compat_get_temp_path( void )
   return ".";
 }
 
-const char*
-compat_get_config_path( void )
+/* Where earlier versions kept their files */
+static const char*
+old_config_path( void )
 {
   const char *dir;
   dir = getenv( "USERPROFILE" ); if( dir ) return dir;
   dir = getenv( "WINDIR" ); if( dir ) return dir;
   return ".";
+}
+
+static void
+move_file( const char *from_dir, const char *to_dir, const char *name )
+{
+  char from[ MAX_PATH ], to[ MAX_PATH ];
+
+  snprintf( from, sizeof( from ), "%s\\%s", from_dir, name );
+  snprintf( to, sizeof( to ), "%s\\%s", to_dir, name );
+  if( GetFileAttributesA( from ) == INVALID_FILE_ATTRIBUTES ) return;
+  if( GetFileAttributesA( to ) != INVALID_FILE_ATTRIBUTES ) return;
+  MoveFileExA( from, to, MOVEFILE_COPY_ALLOWED );
+}
+
+/* The files of earlier versions from the user's folder into the new one */
+static void
+move_old_files( const char *to_dir )
+{
+  static const char * const names[] = {
+    "fuse.cfg", "fuse-windows.ini", "fuse-window.txt",
+    "fuse-keyboard-window.txt", "fuse_ay_lengths.txt",
+    "fuse-ay-playlist.m3u", NULL
+  };
+  const char *from_dir = old_config_path();
+  char pattern[ MAX_PATH ];
+  WIN32_FIND_DATAA found;
+  HANDLE find;
+  int i;
+
+  for( i = 0; names[i]; i++ ) move_file( from_dir, to_dir, names[i] );
+
+  /* The log of a test version is not needed any more */
+  snprintf( pattern, sizeof( pattern ), "%s\\fuse-ay-debug.log", from_dir );
+  DeleteFileA( pattern );
+
+  snprintf( pattern, sizeof( pattern ), "%s\\fuse-last-session.*",
+            from_dir );
+  find = FindFirstFileA( pattern, &found );
+  if( find != INVALID_HANDLE_VALUE ) {
+    do {
+      if( !( found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) )
+        move_file( from_dir, to_dir, found.cFileName );
+    } while( FindNextFileA( find, &found ) );
+    FindClose( find );
+  }
+}
+
+/* The settings and every file Fuse keeps go to the Fuse folder in the
+   user's Roaming folder (%APPDATA%\Fuse) */
+const char*
+compat_get_config_path( void )
+{
+  static char path[ MAX_PATH ];
+  static int found = 0;
+  const char *appdata;
+  DWORD attributes;
+
+  if( found ) return path;
+
+  appdata = getenv( "APPDATA" );
+  if( !appdata || !*appdata ) return old_config_path();
+
+  snprintf( path, sizeof( path ), "%s\\Fuse", appdata );
+  CreateDirectoryA( path, NULL );
+  attributes = GetFileAttributesA( path );
+  if( attributes == INVALID_FILE_ATTRIBUTES ||
+      !( attributes & FILE_ATTRIBUTE_DIRECTORY ) )
+    return old_config_path();
+
+  move_old_files( path );
+  found = 1;
+  return path;
 }
 
 const char*

@@ -820,7 +820,9 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 
       update_pause_button();
       sync_sound_settings();
-      if( player_paused() || ayplayer_current_song() < 0 )
+      /* Stopped: the meters go down. Paused: they stay where the music
+         stopped, like a still picture, and go on when it goes on */
+      if( ayplayer_current_song() < 0 && !player_paused() )
         update_meters( 1 );
       return 0;
     }

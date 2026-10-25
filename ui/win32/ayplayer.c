@@ -849,6 +849,56 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   return FALSE;
 }
 
+/* "Play: (o) 1 song ( ) Whole list [x] Repeat": one after the other, as
+   wide as their texts are (in either language) */
+static void
+layout_play_row( void )
+{
+  static const int ids[] = { IDC_AY_MODE_LABEL, IDC_AY_MODE_SINGLE,
+                             IDC_AY_MODE_LIST, IDC_AY_REPEAT };
+  HDC dc;
+  HFONT font, old_font;
+  RECT rect;
+  POINT corner;
+  int i, x, box = GetSystemMetrics( SM_CXMENUCHECK );
+
+  dc = GetDC( fuse_hAYWnd );
+  font = (HFONT)SendMessage( fuse_hAYWnd, WM_GETFONT, 0, 0 );
+  old_font = SelectObject( dc, font );
+
+  GetWindowRect( GetDlgItem( fuse_hAYWnd, ids[0] ), &rect );
+  corner.x = rect.left; corner.y = rect.top;
+  ScreenToClient( fuse_hAYWnd, &corner );
+  x = corner.x;
+
+  for( i = 0; i < 4; i++ ) {
+    HWND control = GetDlgItem( fuse_hAYWnd, ids[i] );
+    char text[ 128 ], plain[ 128 ];
+    SIZE size;
+    int j, k, width;
+
+    GetWindowTextA( control, text, sizeof( text ) );
+    for( j = k = 0; text[j] && k < (int)sizeof( plain ) - 1; j++ )
+      if( text[j] != '&' ) plain[ k++ ] = text[j];
+    plain[k] = '\0';
+    GetTextExtentPoint32A( dc, plain, k, &size );
+
+    /* A radio button or tick box: the box and the room after it too */
+    width = size.cx + ( i ? box + 6 : 0 );
+
+    GetWindowRect( control, &rect );
+    corner.x = rect.left; corner.y = rect.top;
+    ScreenToClient( fuse_hAYWnd, &corner );
+    SetWindowPos( control, NULL, x, corner.y, width,
+                  rect.bottom - rect.top, SWP_NOZORDER | SWP_NOACTIVATE );
+
+    x += width + ( i ? 12 : 8 );
+  }
+
+  SelectObject( dc, old_font );
+  ReleaseDC( fuse_hAYWnd, dc );
+}
+
 /* The place of the window is kept in fuse-windows.ini */
 
 static void
@@ -893,6 +943,8 @@ win32_ayplayer_show( void )
       win32_verror( 1 );
       return;
     }
+    /* After the texts were translated */
+    layout_play_row();
     restore_position();
   }
 

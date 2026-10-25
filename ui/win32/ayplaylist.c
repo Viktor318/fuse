@@ -45,8 +45,9 @@ static const int button_ids[ BUTTONS ] = {
   IDC_AYL_ADD, IDC_AYL_ADD_FOLDER, IDC_AYL_REMOVE, IDC_AYL_CLEAR, IDC_AYL_UP,
   IDC_AYL_DOWN, IDC_AYL_LOAD, IDC_AYL_SAVE, IDC_AYL_MEASURE, IDCLOSE, 0
 };
-static int button_right[ BUTTONS ], button_top[ BUTTONS ];
-static int list_right_gap, list_bottom_gap, status_bottom_gap;
+static int button_top[ BUTTONS ], buttons_width;
+static int edge_margin, buttons_gap, list_bottom_gap, status_bottom_gap;
+static POINT list_corner;
 static int number_width, author_width, length_width;
 static SIZE minimum_size, default_size;
 static HFONT bold_font = NULL;
@@ -340,8 +341,20 @@ remember_place( void )
     return;
   winstate_set( "playlist", "x", rect.left );
   winstate_set( "playlist", "y", rect.top );
-  winstate_set( "playlist", "w", rect.right - rect.left );
-  winstate_set( "playlist", "h", rect.bottom - rect.top );
+  winstate_set( "playlist", "size_x", rect.right - rect.left );
+  winstate_set( "playlist", "size_y", rect.bottom - rect.top );
+
+  /* The widths of the columns set by the user (the title takes what is
+     left) */
+  {
+    HWND list = item( IDC_AYL_LIST );
+    winstate_set( "playlist", "column_number",
+                  ListView_GetColumnWidth( list, COLUMN_NUMBER ) );
+    winstate_set( "playlist", "column_author",
+                  ListView_GetColumnWidth( list, COLUMN_AUTHOR ) );
+    winstate_set( "playlist", "column_length",
+                  ListView_GetColumnWidth( list, COLUMN_LENGTH ) );
+  }
 }
 
 static void
@@ -355,30 +368,51 @@ restore_place( void )
   winstate_remove( "playlist", "height" );
   winstate_remove( "playlist", "cx" );
   winstate_remove( "playlist", "cy" );
+  winstate_remove( "playlist", "w" );
+  winstate_remove( "playlist", "h" );
+
+  /* The widths of the columns of last time */
+  {
+    HWND list = item( IDC_AYL_LIST );
+    long width;
+    if( winstate_get( "playlist", "column_number", &width ) && width > 0 )
+      ListView_SetColumnWidth( list, COLUMN_NUMBER, width );
+    if( winstate_get( "playlist", "column_author", &width ) && width > 0 )
+      ListView_SetColumnWidth( list, COLUMN_AUTHOR, width );
+    if( winstate_get( "playlist", "column_length", &width ) && width > 0 )
+      ListView_SetColumnWidth( list, COLUMN_LENGTH, width );
+  }
+
+  if( !winstate_get( "playlist", "size_x", &width ) ||
+      !winstate_get( "playlist", "size_y", &height ) ) {
+    width = default_size.cx;
+    height = default_size.cy;
+  }
+  if( width < minimum_size.cx ) width = minimum_size.cx;
+  if( height < minimum_size.cy ) height = minimum_size.cy;
 
   if( !winstate_get( "playlist", "x", &x ) ||
       !winstate_get( "playlist", "y", &y ) ) {
     /* First time: beside the player */
     RECT player;
     if( fuse_hAYWnd && GetWindowRect( fuse_hAYWnd, &player ) )
-      SetWindowPos( fuse_hAYListWnd, NULL, player.right + 4, player.top, 0,
-                    0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
+      SetWindowPos( fuse_hAYListWnd, NULL, player.right + 4, player.top,
+                    width, height, SWP_NOZORDER | SWP_NOACTIVATE );
+    else
+      SetWindowPos( fuse_hAYListWnd, NULL, 0, 0, width, height,
+                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
     return;
   }
 
-  if( !winstate_get( "playlist", "w", &width ) ||
-      !winstate_get( "playlist", "h", &height ) ) {
-    width = default_size.cx;
-    height = default_size.cy;
-  }
-
-  /* Only if the title bar is on a screen */
+  /* Only if the title bar is on a screen (otherwise just the size) */
   title.left = x; title.top = y; title.right = x + width;
   title.bottom = y + GetSystemMetrics( SM_CYCAPTION );
-  if( !MonitorFromRect( &title, MONITOR_DEFAULTTONULL ) ) return;
+  if( !MonitorFromRect( &title, MONITOR_DEFAULTTONULL ) ) {
+    SetWindowPos( fuse_hAYListWnd, NULL, 0, 0, width, height,
+                  SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
+    return;
+  }
 
-  if( width < minimum_size.cx ) width = minimum_size.cx;
-  if( height < minimum_size.cy ) height = minimum_size.cy;
   SetWindowPos( fuse_hAYListWnd, NULL, x, y, width, height,
                 SWP_NOZORDER | SWP_NOACTIVATE );
 }
@@ -389,33 +423,35 @@ layout( void )
   RECT client;
   HWND list = item( IDC_AYL_LIST ), status = item( IDC_AYL_STATUS );
   RECT rect;
-  POINT corner;
-  int i, list_width, title_width;
+  int i, list_width, title_width, buttons_x;
 
   GetClientRect( fuse_hAYListWnd, &client );
 
+  /* The buttons at the right edge, all as wide as the widest */
+  buttons_x = client.right - edge_margin - buttons_width;
   for( i = 0; button_ids[i]; i++ ) {
     HWND button = item( button_ids[i] );
     GetWindowRect( button, &rect );
-    SetWindowPos( button, NULL, client.right - button_right[i], button_top[i],
-                  0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
+    SetWindowPos( button, NULL, buttons_x, button_top[i], buttons_width,
+                  rect.bottom - rect.top, SWP_NOZORDER | SWP_NOACTIVATE );
   }
 
-  GetWindowRect( list, &rect );
-  corner.x = rect.left; corner.y = rect.top;
-  ScreenToClient( fuse_hAYListWnd, &corner );
-  list_width = client.right - list_right_gap - corner.x;
-  SetWindowPos( list, NULL, 0, 0, list_width,
-                client.bottom - list_bottom_gap - corner.y,
-                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
+  /* The list (and the line under it) up to the buttons */
+  list_width = buttons_x - buttons_gap - list_corner.x;
+  if( list_width < 50 ) list_width = 50;
+  SetWindowPos( list, NULL, list_corner.x, list_corner.y, list_width,
+                client.bottom - list_bottom_gap - list_corner.y,
+                SWP_NOZORDER | SWP_NOACTIVATE );
 
   GetWindowRect( status, &rect );
-  SetWindowPos( status, NULL, corner.x,
+  SetWindowPos( status, NULL, list_corner.x,
                 client.bottom - status_bottom_gap, list_width,
                 rect.bottom - rect.top, SWP_NOZORDER | SWP_NOACTIVATE );
 
   /* The title takes the room left by the other columns */
-  title_width = list_width - number_width - author_width - length_width -
+  title_width = list_width - ListView_GetColumnWidth( list, COLUMN_NUMBER ) -
+                ListView_GetColumnWidth( list, COLUMN_AUTHOR ) -
+                ListView_GetColumnWidth( list, COLUMN_LENGTH ) -
                 GetSystemMetrics( SM_CXVSCROLL ) - 4;
   if( title_width < 60 ) title_width = 60;
   ListView_SetColumnWidth( list, COLUMN_TITLE, title_width );
@@ -437,30 +473,39 @@ add_column( HWND list, int index, const char *title, int width, int format )
 }
 
 /* After the texts were translated (which may make the buttons and the
-   window wider): where everything is, the smallest size, the place and
-   size of last time */
+   window wider): the sizes to keep, the smallest and the first size, then
+   the place and size of last time */
 static void
 setup_geometry( void )
 {
   HWND dialog = fuse_hAYListWnd, list = item( IDC_AYL_LIST );
-  RECT client, rect, window;
-  int i;
+  RECT client, rect, window, units = { 7, 6, 250, 150 };
+  int i, frame_width, client_width;
 
-  /* Where everything is: keep the distances */
+  /* Dialog units: margin 7, gap 6, list 250 wide by default */
+  MapDialogRect( dialog, &units );
+  edge_margin = units.left;
+  buttons_gap = units.top;
+
   GetClientRect( dialog, &client );
+  buttons_width = 0;
   for( i = 0; button_ids[i]; i++ ) {
     POINT corner;
     GetWindowRect( item( button_ids[i] ), &rect );
     corner.x = rect.left; corner.y = rect.top;
     ScreenToClient( dialog, &corner );
-    button_right[i] = client.right - corner.x;
     button_top[i] = corner.y;
+    if( rect.right - rect.left > buttons_width )
+      buttons_width = rect.right - rect.left;
   }
+
   GetWindowRect( list, &rect );
   {
+    POINT top_left = { rect.left, rect.top };
     POINT bottom_right = { rect.right, rect.bottom };
+    ScreenToClient( dialog, &top_left );
     ScreenToClient( dialog, &bottom_right );
-    list_right_gap = client.right - bottom_right.x;
+    list_corner = top_left;
     list_bottom_gap = client.bottom - bottom_right.y;
   }
   GetWindowRect( item( IDC_AYL_STATUS ), &rect );
@@ -469,14 +514,16 @@ setup_geometry( void )
     ScreenToClient( dialog, &top_left );
     status_bottom_gap = client.bottom - top_left.y;
   }
-  /* At least the buttons and a list of 150 pixels */
+
+  /* The first size: the list 250 dialog units wide; at least 150 pixels */
   GetWindowRect( dialog, &window );
-  GetWindowRect( list, &rect );
-  minimum_size.cx = window.right - window.left - ( rect.right - rect.left ) +
-                    150;
-  minimum_size.cy = window.bottom - window.top;
-  default_size.cx = window.right - window.left;
+  frame_width = window.right - window.left - client.right;
+  client_width = list_corner.x + units.right + buttons_gap + buttons_width +
+                 edge_margin;
+  default_size.cx = client_width + frame_width;
   default_size.cy = window.bottom - window.top;
+  minimum_size.cx = default_size.cx - units.right + 150;
+  minimum_size.cy = default_size.cy;
 
   restore_place();
   layout();

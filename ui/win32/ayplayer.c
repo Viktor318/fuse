@@ -151,6 +151,10 @@ update_level_labels( void )
                  i18n( sides[ row ] ) );
     text[ sizeof( text ) - 1 ] = '\0';
     set_text( IDC_AY_LEVEL_LABEL1 + row, text );
+    /* Ticked: heard */
+    CheckDlgButton( fuse_hAYWnd, IDC_AY_LEVEL_LABEL1 + row,
+                    ay_engine_channel_muted( meter_order[ row ] ) ?
+                    BST_UNCHECKED : BST_CHECKED );
     InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + row ), NULL,
                     FALSE );
   }
@@ -199,6 +203,7 @@ draw_meter( const DRAWITEMSTRUCT *item )
 {
   int row = item->CtlID - IDC_AY_LEVEL1;
   int level = ( meter_shown[ meter_order[ row ] ] + 3 ) / 4;
+  int muted = ay_engine_channel_muted( meter_order[ row ] );
   RECT area = item->rcItem, segment;
   int width = area.right - area.left, height = area.bottom - area.top;
   int gap = 2, border = 2, i;
@@ -226,6 +231,7 @@ draw_meter( const DRAWITEMSTRUCT *item )
     segment.bottom = height - border;
 
     if( i >= level ) colour = RGB( 40, 46, 52 );
+    else if( muted ) colour = RGB( 110, 116, 122 );
     else if( i < 10 ) colour = RGB( 45, 184, 77 );
     else if( i < 13 ) colour = RGB( 224, 192, 32 );
     else colour = RGB( 224, 64, 48 );
@@ -410,6 +416,10 @@ close_window( void )
   if( !fuse_hAYWnd ) return;
 
   KillTimer( fuse_hAYWnd, AYPLAYER_TIMER );
+  /* Games must not stay without a channel */
+  ay_engine_set_channel_muted( 0, 0 );
+  ay_engine_set_channel_muted( 1, 0 );
+  ay_engine_set_channel_muted( 2, 0 );
   ayplayer_set_frame_hook( NULL );
   resume_if_paused();
   DestroyWindow( fuse_hAYWnd );
@@ -456,6 +466,18 @@ command( WORD id, WORD code )
       menu_machine_pause( 0 );
     }
     update_pause_button();
+    break;
+
+  case IDC_AY_LEVEL_LABEL1:
+  case IDC_AY_LEVEL_LABEL2:
+  case IDC_AY_LEVEL_LABEL3:
+    if( code == BN_CLICKED ) {
+      int row = id - IDC_AY_LEVEL_LABEL1;
+      ay_engine_set_channel_muted( meter_order[ row ],
+        IsDlgButtonChecked( fuse_hAYWnd, id ) != BST_CHECKED );
+      InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + row ), NULL,
+                      FALSE );
+    }
     break;
 
   case IDC_AY_STEREO:

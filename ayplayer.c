@@ -1,6 +1,10 @@
 /* ayplayer.c: Play the songs of .ay (ZXAYEMUL) music files
    Copyright (c) 2026 Viktor (GitHub: Viktor318)
 
+   Starting a song follows the AY player of ZEsarUX (audio_ayplayer.c,
+   Copyright (C) 2013 Cesar Hernandez Bano, GPL 3 or later), so this file
+   is distributed under the GPL version 3 or later.
+
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 2 of the License, or
@@ -102,7 +106,7 @@ pointer_at( size_t offset )
   long target;
 
   if( value < 0 ) return -1;
-  if( value >= 0x8000 ) value -= 0x10000;
+  /* As in ZEsarUX: the offset is unsigned */
   target = (long)offset + value;
   if( target < 0 || (size_t)target >= ay_length ) return -1;
   return target;
@@ -238,22 +242,30 @@ int
 ayplayer_play( int song )
 {
   long data, points, blocks;
-  int hi_reg, lo_reg, stack, init, interrupt, length, i;
-  libspectrum_word regs;
+  int hi_reg, lo_reg, stack, init, interrupt, length, block;
   libspectrum_dword address;
+  libspectrum_word start_pc = 0x0000;
+  libspectrum_byte player[ 18 ];
+  int i;
 
   if( !ay_data || song < 0 || song >= ay_songs ) return 1;
 
   data = song_data( song );
   if( data < 0 ) return 1;
-  points = pointer_at( data + 10 );
-  blocks = pointer_at( data + 12 );
+
+  /* As in ZEsarUX: player versions 0-3 have the pointers to the points and
+     the blocks after the registers, the later ones further on */
+  if( byte_at( 9 ) <= 3 ) {
+    points = pointer_at( data + 10 );
+    blocks = pointer_at( data + 12 );
+  } else {
+    points = pointer_at( data + 28 );
+    blocks = pointer_at( data + 30 );
+  }
   if( points < 0 || blocks < 0 ) {
     ui_error( UI_ERROR_ERROR, "Song %d of the AY file is damaged", song + 1 );
     return 1;
   }
-
-  if( fuse_emulation_paused ) fuse_emulation_unpause();
 
   /* A Spectrum +2A, all memory RAM (special paging 0,1,2,3) */
   if( machine_current->machine != LIBSPECTRUM_MACHINE_PLUS2A ) {
@@ -263,81 +275,89 @@ ayplayer_play( int song )
   }
   specplus3_memoryport2_write( 0x1ffd, 0x01 );
 
-  /* Memory as the specification asks */
+  stack = word_at( points );
+  init = word_at( points + 2 );
+  interrupt = word_at( points + 4 );
+  if( stack < 0 ) stack = 0;
+  if( init < 0 ) init = 0;
+  if( interrupt < 0 ) interrupt = 0;
+
+  /* Memory: 0000-00FF RET, 0100-3FFF FFh, 4000-FFFF 0, 0038 EI */
   for( address = 0x0000; address < 0x0100; address++ ) poke( address, 0xc9 );
   for( address = 0x0100; address < 0x4000; address++ ) poke( address, 0xff );
   for( address = 0x4000; address < 0x10000; address++ ) poke( address, 0x00 );
   poke( 0x0038, 0xfb );
 
-  /* The blocks of the song */
-  init = word_at( points + 2 );
-  interrupt = word_at( points + 4 );
-  stack = word_at( points );
+  /* The player at address 0 (as in ZEsarUX):
+       no interrupt routine:   DI; CALL init; loop: IM 2; EI; HALT; JR loop
+       with interrupt routine: DI; CALL init; loop: IM 1; EI; HALT;
+                               CALL interrupt; JR loop
+     then DI; JR $ and EI; RET */
+  memset( player, 0xc9, sizeof( player ) );
+  player[0] = 0xf3;
+  player[1] = 0xcd;
+  player[2] = init & 0xff;
+  player[3] = init >> 8;
+  if( !interrupt ) {
+    player[4] = 0xed; player[5] = 0x5e;
+    player[6] = 0xfb;
+    player[7] = 0x76;
+    player[8] = 0x18; player[9] = 256 - 6;
+  } else {
+    player[4] = 0xed; player[5] = 0x56;
+    player[6] = 0xfb;
+    player[7] = 0x76;
+    player[8] = 0xcd;
+    player[9] = interrupt & 0xff;
+    player[10] = interrupt >> 8;
+    player[11] = 0x18; player[12] = 256 - 9;
+  }
+  player[13] = 0xf3; player[14] = 0x18; player[15] = 256 - 2;
+  player[16] = 0xfb; player[17] = 0xc9;
+  for( i = 0; i < 18; i++ ) poke( i, player[i] );
 
-  for( i = 0; ; i++ ) {
-    long entry = blocks + i * 6;
+  /* The blocks of the song */
+  for( block = 0; ; block++ ) {
+    long entry = blocks + block * 6;
     int block_address = word_at( entry );
-    int block_length;
+    int block_length = word_at( entry + 2 );
+    int block_offset = word_at( entry + 4 );
     long block_data;
     int j;
 
     if( block_address <= 0 ) break;
-    block_length = word_at( entry + 2 );
-    block_data = pointer_at( entry + 4 );
-    if( block_length <= 0 || block_data < 0 ) continue;
+    if( block_length < 0 || block_offset < 0 ) break;
 
-    if( !init && i == 0 ) init = block_address;
-
-    /* Not beyond the end of the memory or of the file */
+    /* As DeliAY and ZEsarUX: not beyond the end of the memory */
     if( block_address + block_length > 0x10000 )
       block_length = 0x10000 - block_address;
-    if( (size_t)( block_data + block_length ) > ay_length )
-      block_length = ay_length - block_data;
 
-    for( j = 0; j < block_length; j++ )
+    block_data = entry + 4 + block_offset;
+    for( j = 0; j < block_length; j++ ) {
+      if( (size_t)( block_data + j ) >= ay_length ) break;
       poke( block_address + j, ay_data[ block_data + j ] );
+    }
+
+    /* No init routine: start at the first block */
+    if( !init && block == 0 ) start_pc = block_address;
   }
 
-  if( init <= 0 ) {
-    ui_error( UI_ERROR_ERROR, "Song %d of the AY file has no init routine",
-              song + 1 );
-    return 1;
-  }
-
-  /* The player at address 0 */
-  poke( 0x0000, 0xf3 );				/* DI */
-  poke( 0x0001, 0xcd );				/* CALL init */
-  poke( 0x0002, init & 0xff );
-  poke( 0x0003, init >> 8 );
-  if( interrupt <= 0 ) {
-    poke( 0x0004, 0xed ); poke( 0x0005, 0x5e );	/* IM 2 */
-    poke( 0x0006, 0xfb );			/* EI */
-    poke( 0x0007, 0x76 );			/* HALT */
-    poke( 0x0008, 0x18 ); poke( 0x0009, 0xfa );	/* JR loop */
-  } else {
-    poke( 0x0004, 0xed ); poke( 0x0005, 0x56 );	/* IM 1 */
-    poke( 0x0006, 0xfb );			/* EI */
-    poke( 0x0007, 0x76 );			/* HALT */
-    poke( 0x0008, 0xcd );			/* CALL interrupt */
-    poke( 0x0009, interrupt & 0xff );
-    poke( 0x000a, interrupt >> 8 );
-    poke( 0x000b, 0x18 ); poke( 0x000c, 0xf7 );	/* JR loop */
-  }
-
-  /* Registers */
+  /* Registers, as in ZEsarUX: the cold start values, A and F from the
+     song, SP from the song, I=3, interrupts disabled, IM 0 */
   hi_reg = byte_at( data + 8 );
   lo_reg = byte_at( data + 9 );
-  if( hi_reg < 0 ) hi_reg = 0;
-  if( lo_reg < 0 ) lo_reg = 0;
-  regs = ( hi_reg << 8 ) | lo_reg;
+  if( hi_reg < 0 ) hi_reg = 0xff;
+  if( lo_reg < 0 ) lo_reg = 0xff;
 
-  AF = AF_ = HL = HL_ = DE = DE_ = BC = BC_ = IX = IY = regs;
-  I = hi_reg;
+  AF = AF_ = BC = BC_ = DE = DE_ = HL = HL_ = IX = IY = 0xffff;
+  A = hi_reg;
+  F = lo_reg;
+  SP = stack;
+  I = 3;
   R = R7 = 0;
-  SP = stack > 0 ? stack : 0;
-  PC = 0x0000;
   IFF1 = IFF2 = 0;
   IM = 0;
+  PC = start_pc;
   z80.halted = 0;
 
   length = word_at( data + 4 );
@@ -356,7 +376,6 @@ ayplayer_stop( void )
 
   if( ay_current < 0 ) return;
   ay_current = -1;
-  if( fuse_emulation_paused ) fuse_emulation_unpause();
 
   /* Silence: all AY registers to 0 (volumes too), and the processor waits
      with DI; HALT. The memory stays as it was */
@@ -382,7 +401,7 @@ ayplayer_set_frame_hook( void ( *hook )( void ) )
 void
 ayplayer_frame( void )
 {
-  if( ay_current >= 0 && !fuse_emulation_paused ) {
+  if( ay_current >= 0 ) {
     ay_frames_played++;
     if( ay_song_frames && ay_frames_played >= ay_song_frames )
       ay_song_ended = 1;

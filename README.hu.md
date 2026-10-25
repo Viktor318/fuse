@@ -1,0 +1,168 @@
+# Fuse – magyar Windows-kiadás
+
+[English](README.md) | **Magyar**
+
+Ez a [Fuse](https://fuse-emulator.sourceforge.net/) (Free Unix Spectrum
+Emulator, 1.10.0-s verzió) ZX Spectrum emulátor egy változata, amely a Fuse
+saját Windows-felületével, magyarul vagy angolul használható. Magyar
+felülettel és magyar billentyűzet-támogatással, BASIC programok
+szövegként való betöltésével és mentésével, lejátszási listás AY
+zenelejátszóval, egész számú nagyítású teljes képernyővel és több
+javítással egészíti ki az eredetit, főleg a Windows hangkimenetén.
+
+Maga az emuláció az eredeti Fuse; ez a változat a körülötte lévő Windows
+felületet alakítja át. Az eredeti Fuse leírása a [README](README), változásai
+a [ChangeLog](ChangeLog) fájlban vannak (angolul). Ennek a változatnak a
+módosításai a [CHANGELOG-fork.hu.md](CHANGELOG-fork.hu.md) fájlban
+olvashatók.
+
+![A magyar felület](docs/images/main-window.png)
+
+## Letöltés
+
+A [Releases](https://github.com/Viktor318/fuse/releases) oldalról töltsd le
+a `Fuse-1.10.0-hu.1-windows.zip` fájlt, csomagold ki egy tetszőleges
+mappába, és indítsd el a `fuse.exe`-t. Telepíteni nem kell semmit.
+
+## Mit ad hozzá ez a kiadás
+
+### Magyar vagy angol felület
+
+- **Beállítások > Általános > Nyelv**: *Automatikus* (a Windows nyelvét
+  követi), *English* vagy *Magyar*. A menükre azonnal érvényes, a már nyitott
+  ablakok a következő megnyitáskor jelennek meg az új nyelven.
+- Minden menü, párbeszédablak, beállítás és üzenet le van fordítva. Az
+  ablakok ott, ahol a magyar szöveg hosszabb, szélesebbek lesznek.
+
+### Billentyűzet
+
+- **Gépelés a Windows billentyűkiosztása szerint** (Beállítások >
+  Általános, alapból bekapcsolva): az jelenik meg a Spectrumon, amit
+  begépelsz, bármilyen kiosztású a billentyűzeted. Magyar billentyűzeten a
+  Shift+2 `"`-t, az AltGr+V `@`-ot ír, és így tovább. Az ékezetes betűk
+  ékezet nélkül kerülnek be. A kiterjesztett módot igénylő jeleket
+  (`[ ] { } \ | ~ ©`) a program a megfelelő billentyűsorozattal magától
+  begépeli.
+- **A bal Alt legyen Caps Shift a számbillentyűknél** (alapból bekapcsolva):
+  a bal Alt + 0–9 Caps Shift + számot ad (EDIT, kurzorbillentyűk,
+  DELETE...). Egyébként az Alt megtartja a Windowsban megszokott szerepét
+  (menük, Alt+F4). A numerikus billentyűzet mindig számokat és `+ - * / .`
+  jeleket ad.
+- **Súgó > Billentyűzet**: nagy felbontású kép a Spectrum billentyűzetéről.
+  A Fuse fölött marad, de nem veszi el a fókuszt, így közben tovább lehet
+  gépelni; átméretezhető, és megjegyzi a helyét és a méretét.
+
+### BASIC programok szövegként
+
+- **Fájl > BASIC szöveg betöltése...**: szövegfájlból olvas be BASIC
+  programot (zmakebas-féle jelölések, BASin `.bas` fájlok, UTF-8 vagy
+  Windows-1250 kódolás), és a memóriában lévő program helyére teszi. A
+  sorszám nélküli sorokat 10, 20, 30... sorszámmal látja el, az ékezetes
+  betűket kicseréli, és ezt jelzi is. Ha épp fut egy program, rákérdez, és
+  előbb újraindítja a gépet.
+- **Fájl > BASIC mentése szövegként...**: a memóriában lévő programot
+  szövegfájlba írja.
+
+### AY zenelejátszó
+
+![Az AY lejátszó és a lejátszási lista](docs/images/ay-player.png)
+
+`.ay` (ZXAYEMUL) zenefájlokat játszik le – sok Spectrum-játék és demó zenéje
+megvan ebben a formában – egy emulált Spectrum +2A-n.
+
+- **Megnyitás**: a *Média > AY zenelejátszó...* menüpont úgy nyitja meg a
+  lejátszót, hogy nem szól semmi; a *Fájl > Megnyitás* (vagy a fájl Fuse-ra
+  húzása) a fájl dalait a lejátszási lista végére teszi, és az elsőt
+  elindítja.
+- **A futó program megmarad**: amikor az első dal elindul, a Fuse
+  pillanatképet készít a gépről; a lejátszó (vagy a Fuse) bezárásakor
+  pontosan visszaáll oda, ahol a program tartott.
+- **Lejátszási lista ablak**: akárhány fájl dalai; Hozzáadás (egyszerre több
+  fájl is), Mappa hozzáadása, Eltávolítás (a Delete billentyűvel is), Lista
+  törlése, Fel/Le, Lista betöltése és mentése (`.m3u`), fájlok, mappák vagy
+  listák behúzása az Intézőből. Dupla kattintás vagy Enter: a dal indítása.
+  Az ablak átméretezhető, megjegyzi a helyét, méretét és az oszlopok
+  szélességét; a lista megmarad a következő indításra.
+- **Lejátszás**: *1 dal* vagy *Teljes lista*, valamint *Ismétlés* (a dalé
+  vagy a teljes listáé). Előző / Szünet / Leállítás / Következő, és
+  csúszka a dalban való tekeréshez.
+- **A dalok hosszát a program megméri**: az `.ay` fájlokban megadott
+  hosszak gyakran hibásak vagy hiányoznak. Egy dal első lejátszásakor (vagy a
+  lista ablak *Hosszak mérése* gombjával) a Fuse hang nélkül, teljes
+  sebességgel futtatja a dalt, amíg a zene ismétlődni nem kezd, és megjegyzi
+  a pontos hosszát (ez jóval egy másodpercen belül megvan). A sosem ismétlődő
+  dalok 5 percet kapnak. A körbeérő dal 3 másodperc alatt elhalkul, amikor a
+  lejátszó továbblép.
+- **Szintek és hang**: a három AY-csatorna szintjelzője (a sztereó mód
+  sorrendjében), csatornánként némító jelölőnégyzet, hangerő és sztereó mód
+  (nincs, ACB, ABC és az új BAC) – mind lejátszás közben, azonnal állítható.
+- A zene akkor is szól tovább, ha egy menü nyitva van, ha egy ablakot
+  mozgatsz, vagy ha a Fuse kis méretre van állítva.
+
+### Ablakok és hang
+
+- **Teljes képernyő** (F11, *Beállítások > Teljes képernyő*): keret
+  nélküli, egész számú nagyítással – a nem hivatalos
+  [jfroco/fuse](https://github.com/jfroco/fuse) változatból átvéve.
+- **Folytatás ott, ahol abbahagytam** (Beállítások > Általános): kilépéskor a
+  Fuse elmenti a gépet a betett kazettával és annak állásával együtt, és a
+  következő indításkor visszaállítja.
+- A főablak, a billentyűzetkép és az AY lejátszó ablakai ott nyílnak meg,
+  ahol legutóbb voltak.
+- **Rákérdezés kilépéskor** (Beállítások > Általános, alapból bekapcsolva).
+- A perifériák beállításainál szürkék azok, amelyek az emulált gépen nem
+  lehetnek.
+- A menüsor jól látható kijelöléssel jelenik meg.
+- DirectSound: nincs régi hang ismételt lejátszása akadás után, nincs
+  kattogás.
+
+### Hová menti a fájljait a Fuse
+
+Mindent a **Roaming mappán belüli Fuse mappában** tart: írd be az Intéző
+címsorába (vagy a Win+R ablakba), hogy `%APPDATA%\Fuse`. Benne:
+
+| Fájl | Tartalom |
+|---|---|
+| `fuse.cfg` | a beállítások (a *Beállítások > Mentés* paranccsal, vagy kilépéskor, ha a *Beállítások > Általános > Beállítások automatikus mentése* be van kapcsolva) |
+| `fuse-windows.ini` | az ablakok helye és mérete |
+| `fuse-ay-playlist.m3u` | az AY lejátszási lista |
+| `fuse_ay_lengths.txt` | az AY dalok mért hossza |
+| `fuse-last-session.*` | az utolsó munkamenet (a *Folytatás ott, ahol abbahagytam* beállítással) |
+
+A korábbi verziók által a felhasználói mappába mentett fájlokat a program az
+első indításkor ide költözteti.
+
+## Fordítás a forráskódból
+
+A Windows-programot Linuxon vagy WSL-ben (Windows Subsystem for Linux)
+lehet lefordítani, MinGW-w64-gyel:
+
+```
+sudo apt install gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
+     libz-mingw-w64-dev autoconf automake libtool pkg-config flex bison \
+     perl zip git
+./build-windows-cross.sh
+```
+
+A szkript letölti és lefordítja a libspectrum könyvtárat, majd a Fuse-t a
+Windows-felülettel, és a `fuse.exe`-t a szükséges DLL-ekkel, ROM-okkal és
+adatfájlokkal együtt a `~/fuse-windows/Fuse-windows-<ág>.zip` fájlba
+csomagolja. A forrás egy másolatán dolgozik. A WSL-hez kapcsolódó VS Code-ból
+való fordítás beállításai a `.vscode` mappában vannak (Ctrl+Shift+B).
+
+## Licenc
+
+A Fuse szabad szoftver, a GNU General Public License 2-es vagy újabb
+verziója alatt (lásd [COPYING](COPYING)). Az AY lejátszó a ZEsarUX emulátor
+módján indítja a dalokat (`ayplayer.c`, César Hernández Bañó ZEsarUX-a
+alapján, GPL 3-as vagy újabb verzió), ezért ez a kiadás egészében a GNU GPL
+3-as vagy újabb verziója alatt terjeszthető.
+
+## Köszönet
+
+- Philip Kendall-nak, Fredrick Meuniernek és mindenkinek, aki a
+  [Fuse](https://fuse-emulator.sourceforge.net/) elkészítésében részt vett.
+- César Hernández Bañónak a [ZEsarUX](https://github.com/chernandezba/zesarux)
+  emulátorért.
+- jfroco-nak a [jfroco/fuse](https://github.com/jfroco/fuse) egész számú
+  nagyítású teljes képernyőjéért.

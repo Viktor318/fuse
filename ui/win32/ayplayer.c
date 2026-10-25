@@ -59,6 +59,8 @@ static const char * const stereo_names[] = { "None", "ACB", "ABC", "BAC" };
 /* The length of a song is being measured (the status line shows it) */
 static HWND scan_window = NULL;
 static void scan_window_close( void );
+static void end_options_changed( void );
+static void remember_position( void );
 
 static int shown_volume = -1;
 static int shown_stereo = -1;
@@ -424,6 +426,7 @@ close_window( void )
   if( !fuse_hAYWnd ) return;
 
   KillTimer( fuse_hAYWnd, AYPLAYER_TIMER );
+  remember_position();
   scan_window_close();
   /* Games must not stay without a channel */
   ay_engine_set_channel_muted( 0, 0 );
@@ -490,8 +493,8 @@ command( WORD id, WORD code )
     break;
 
   case IDC_AY_AUTO:
-    ayplayer_set_fade_enabled(
-      IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_AUTO ) == BST_CHECKED );
+  case IDC_AY_REPEAT:
+    if( code == BN_CLICKED ) end_options_changed();
     break;
 
   case IDC_AY_STEREO:
@@ -565,6 +568,16 @@ frame_update( void )
     return;
   }
 
+  /* Seeking runs fast: the window only now and then */
+  if( ayplayer_seeking() ) {
+    static int seek_counter = 0;
+    if( ++seek_counter >= 250 ) {
+      seek_counter = 0;
+      update_time();
+    }
+    return;
+  }
+
   if( ++meter_counter >= 2 ) {
     meter_counter = 0;
     update_meters( 0 );
@@ -574,8 +587,7 @@ frame_update( void )
   counter = 0;
 
   current = ayplayer_current_song();
-  if( current >= 0 && ayplayer_song_ended() && !song_end_posted &&
-      IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_AUTO ) == BST_CHECKED ) {
+  if( current >= 0 && ayplayer_song_ended() && !song_end_posted ) {
     /* Not here, in the middle of a frame: the window does it */
     song_end_posted = 1;
     PostMessage( fuse_hAYWnd, WM_AYPLAYER_SONG_END, 0, 0 );
@@ -583,17 +595,45 @@ frame_update( void )
   update_time();
 }
 
-/* End of the song: next one, or stop after the last one */
+/* The two tick boxes, kept in the settings */
+static void
+end_options_changed( void )
+{
+  int auto_next =
+    IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_AUTO ) == BST_CHECKED;
+  int repeat =
+    IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_REPEAT ) == BST_CHECKED;
+
+  settings_current.ayplayer_auto_next = auto_next;
+  settings_current.ayplayer_repeat = repeat;
+  ayplayer_set_repeat_song( repeat && !auto_next );
+}
+
+/* End of the song:
+     next song on:  the next song; after the last one the first (repeat on)
+                    or stop
+     only repeat:   the same song again (songs that go round do not get
+                    here: they go on playing)
+     neither:       stop */
 static void
 song_end( void )
 {
   int current = ayplayer_current_song();
+  int count = ayplayer_song_count();
+  int auto_next =
+    IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_AUTO ) == BST_CHECKED;
+  int repeat =
+    IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_REPEAT ) == BST_CHECKED;
 
   song_end_posted = 0;
   if( current < 0 || !ayplayer_song_ended() ) return;
 
-  if( current + 1 < ayplayer_song_count() ) {
+  if( auto_next && current + 1 < count ) {
     play( current + 1 );
+  } else if( auto_next && repeat ) {
+    play( 0 );
+  } else if( !auto_next && repeat ) {
+    play( current );
   } else {
     ayplayer_stop();
     update_pause_button();
@@ -611,8 +651,11 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       int i;
 
       fuse_hAYWnd = hWnd;
-      CheckDlgButton( hWnd, IDC_AY_AUTO, BST_CHECKED );
-      ayplayer_set_fade_enabled( 1 );
+      CheckDlgButton( hWnd, IDC_AY_AUTO, settings_current.ayplayer_auto_next ?
+                      BST_CHECKED : BST_UNCHECKED );
+      CheckDlgButton( hWnd, IDC_AY_REPEAT, settings_current.ayplayer_repeat ?
+                      BST_CHECKED : BST_UNCHECKED );
+      end_options_changed();
       SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETRANGE, FALSE,
                           MAKELPARAM( 0, 100 ) );
       SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETPAGESIZE, 0, 10 );
@@ -666,6 +709,7 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   case WM_EXITSIZEMOVE:
   case WM_EXITMENULOOP:
     win32ui_modal_exit();
+    remember_position();
     return 0;
 
   case WM_AYPLAYER_SONG_END:
@@ -692,6 +736,39 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   return FALSE;
 }
 
+/* The place of the window is kept in the settings */
+#define NO_POSITION -32768
+
+static void
+remember_position( void )
+{
+  RECT rect;
+
+  if( !fuse_hAYWnd || IsIconic( fuse_hAYWnd ) ||
+      !GetWindowRect( fuse_hAYWnd, &rect ) )
+    return;
+  settings_current.ayplayer_window_x = rect.left;
+  settings_current.ayplayer_window_y = rect.top;
+}
+
+static void
+restore_position( void )
+{
+  POINT title;
+  int x = settings_current.ayplayer_window_x;
+  int y = settings_current.ayplayer_window_y;
+
+  if( x == NO_POSITION || y == NO_POSITION ) return;
+
+  /* Only if the title bar is on a screen (one may have been removed) */
+  title.x = x + 40;
+  title.y = y + 8;
+  if( !MonitorFromPoint( title, MONITOR_DEFAULTTONULL ) ) return;
+
+  SetWindowPos( fuse_hAYWnd, NULL, x, y, 0, 0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
+}
+
 /* The file was opened: show the window (or update it) */
 void
 win32_ayplayer_show( void )
@@ -703,6 +780,7 @@ win32_ayplayer_show( void )
       win32_verror( 1 );
       return;
     }
+    restore_position();
   }
 
   ayplayer_set_frame_hook( frame_update );

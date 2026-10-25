@@ -67,8 +67,11 @@ long ayplayer_scan_frames( void );
 int ayplayer_scan_take_finished( void );	/* over since the last call? */
 void ayplayer_scan_cancel( void );		/* plays without measuring */
 
-/* Fade out at the end of default length songs (going on to the next) */
-void ayplayer_set_fade_enabled( int enabled );
+/* The same song again at the end: a song whose music goes round just goes
+   on playing (the elapsed time back to where the round starts); otherwise
+   ayplayer_song_ended() and the user interface plays it again. When not
+   repeating, songs that go round fade out at the end */
+void ayplayer_set_repeat_song( int repeat );
 const char *ayplayer_filename( void );
 const char *ayplayer_author( void );
 const char *ayplayer_misc( void );

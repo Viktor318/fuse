@@ -50,3 +50,4 @@
 #define IDC_AY_STEREO_LABEL 4230
 #define IDC_AY_STEREO       4231
 #define IDC_AY_STATUS       4232
+#define IDC_AY_REPEAT       4233

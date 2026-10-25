@@ -155,6 +155,8 @@ const i18n_entry i18n_hu_table[] = {
     "&RZX felvétel" },
   { "&Registers",
     "&Regiszterek" },
+  { "&Repeat",
+    "Dal &ismétlése" },
   { "&Reset",
     "&Alaphelyzet" },
   { "&Reset...",

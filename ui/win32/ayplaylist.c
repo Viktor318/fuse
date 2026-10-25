@@ -159,6 +159,15 @@ win32_ayplaylist_update( void )
     ListView_EnsureVisible( list, count - 1, FALSE );
     ListView_EnsureVisible( list, top, FALSE );
   }
+  /* A new song being played: show it */
+  {
+    static int shown_current = -1;
+    int current = ayplaylist_current();
+    if( current != shown_current && current >= 0 && current < count )
+      ListView_EnsureVisible( list, current, FALSE );
+    shown_current = current;
+  }
+
   SendMessage( list, WM_SETREDRAW, TRUE, 0 );
   InvalidateRect( list, NULL, TRUE );
 

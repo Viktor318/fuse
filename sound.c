@@ -58,6 +58,7 @@ int sound_enabled = 0;		/* Are we currently using the sound card */
 
 static int sound_enabled_ever = 0; /* whether sound has *ever* been in use; see
 				      sound_ay_write() and sound_ay_reset() */
+int sound_long_buffer = 0;
 int sound_stereo_ay = SOUND_STEREO_AY_NONE; /* local copy of settings_current.stereo_ay */
 
 int sound_framesiz;

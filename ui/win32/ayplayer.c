@@ -784,6 +784,7 @@ win32_ayplayer_show( void )
   }
 
   ayplayer_set_frame_hook( frame_update );
+  win32ui_ayplayer_timer_start();
   resume_if_paused();
   update_all();
   ShowWindow( fuse_hAYWnd, SW_SHOW );

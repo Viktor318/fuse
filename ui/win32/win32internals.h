@@ -68,6 +68,8 @@ int win32ui_machine_paused( void );
 /* A Windows modal loop (menu, moving or resizing a window) starts / ends */
 void win32ui_modal_enter( void );
 void win32ui_modal_exit( void );
+/* The AY player started: keep the music going during such loops */
+void win32ui_ayplayer_timer_start( void );
 
 /*
  * Display routines (win32display.c)

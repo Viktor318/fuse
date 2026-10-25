@@ -33,7 +33,14 @@
 #include "ui/ui.h"
 
 /* same as for SDL Sound */
-#define MAX_AUDIO_BUFFER ( 8192 * 5 )
+/* A second of sound. Games keep it filled at most as far as the old buffer
+   allowed (low latency); the AY player further, so that Windows holding up
+   the program for a moment (a list opening, a window being moved) is not
+   heard */
+static DWORD buffer_bytes;
+#define MAX_AUDIO_BUFFER buffer_bytes
+#define GAME_FILL_LIMIT ( 8192 * 5 / 2 )
+#define LONG_BUFFER_MS 300
 
 static LPDIRECTSOUND lpDS; /* DirectSound object */
 static LPDIRECTSOUNDBUFFER lpDSBuffer; /* sound buffer */
@@ -109,6 +116,8 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   pcmwf.nAvgBytesPerSec = pcmwf.nSamplesPerSec * pcmwf.nBlockAlign;
 
   pcmwf.wFormatTag = WAVE_FORMAT_PCM;
+
+  buffer_bytes = pcmwf.nAvgBytesPerSec / pcmwf.nBlockAlign * pcmwf.nBlockAlign;
 
   /* create sound buffer description */
   memset( &dsbd, 0, sizeof( DSBUFFERDESC ) );
@@ -248,8 +257,14 @@ sound_lowlevel_frame( libspectrum_signed_word *data, int len )
 
   /* Too far ahead: wait for some of it to be played */
   while( 1 ) {
-    target = lead + margin;
-    if( target > MAX_AUDIO_BUFFER / 2 ) target = MAX_AUDIO_BUFFER / 2;
+    if( sound_long_buffer ) {
+      target = lead + ( margin > LONG_BUFFER_MS * bytes_per_ms ?
+                        margin : LONG_BUFFER_MS * bytes_per_ms );
+      if( target > MAX_AUDIO_BUFFER / 2 ) target = MAX_AUDIO_BUFFER / 2;
+    } else {
+      target = lead + margin;
+      if( target > GAME_FILL_LIMIT ) target = GAME_FILL_LIMIT;
+    }
     if( (long long)( written_total - played_total ) < (long long)target )
       break;
     Sleep( 5 );

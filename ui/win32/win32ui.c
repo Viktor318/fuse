@@ -59,6 +59,8 @@
 /* Frames are being run from a timer inside a modal loop */
 static int modal_emulating = 0;
 static void modal_emulation_tick( void );
+/* When the main loop last ran */
+static LARGE_INTEGER main_loop_time;
 
 /* Window handler */
 HWND fuse_hWnd;
@@ -796,6 +798,7 @@ ui_event( void )
 {
   /* Frames run from inside a Windows modal loop: its messages are its own */
   if( modal_emulating ) return 0;
+  QueryPerformanceCounter( &main_loop_time );
 
   display_timing_input_begin();
   win32ui_process_messages( 1 );
@@ -951,14 +954,16 @@ win32ui_machine_paused( void )
   return paused;
 }
 
-/* While Windows runs a modal loop (a menu is open, a window is moved or
-   resized), the main loop does not run. Normally the emulation is paused
-   meanwhile; while the AY player plays, the frames are run from a timer
-   instead, so the music goes on */
+/* While Windows runs a loop of its own (a menu is open, a window is moved
+   or resized, a list opens...), the main loop does not run. Normally the
+   emulation is paused meanwhile. While the AY player plays, a timer notices
+   when the main loop has not run for a while and runs the frames itself,
+   so the music goes on */
 static int modal_depth = 0;
 static int modal_running = 0;
-static long modal_frames;
-static LARGE_INTEGER modal_start, modal_frequency;
+static LARGE_INTEGER stall_start, counter_frequency;
+static int stalled = 0;
+static long stall_frames;
 
 void
 win32ui_modal_enter( void )
@@ -966,14 +971,7 @@ win32ui_modal_enter( void )
   if( modal_depth++ ) return;
 
   modal_running = ayplayer_current_song() >= 0 && !paused;
-  if( modal_running ) {
-    QueryPerformanceFrequency( &modal_frequency );
-    QueryPerformanceCounter( &modal_start );
-    modal_frames = 0;
-    SetTimer( fuse_hWnd, MODAL_EMULATION_TIMER, 5, NULL );
-  } else {
-    fuse_emulation_pause();
-  }
+  if( !modal_running ) fuse_emulation_pause();
 }
 
 void
@@ -982,43 +980,65 @@ win32ui_modal_exit( void )
   if( modal_depth <= 0 ) return;
   if( --modal_depth ) return;
 
-  if( modal_running ) {
-    KillTimer( fuse_hWnd, MODAL_EMULATION_TIMER );
-    modal_running = 0;
-  } else {
-    fuse_emulation_unpause();
-  }
+  if( !modal_running ) fuse_emulation_unpause();
+  modal_running = 0;
+}
+
+/* The AY player started: the timer that keeps the music going */
+void
+win32ui_ayplayer_timer_start( void )
+{
+  QueryPerformanceFrequency( &counter_frequency );
+  QueryPerformanceCounter( &main_loop_time );
+  SetTimer( fuse_hWnd, MODAL_EMULATION_TIMER, 10, NULL );
 }
 
 static void
 modal_emulation_tick( void )
 {
   LARGE_INTEGER now;
+  double since;
   long due;
   int run = 0;
 
-  if( !modal_depth || !modal_running || modal_emulating || paused ||
-      fuse_exiting || !modal_frequency.QuadPart )
+  if( modal_emulating || paused || fuse_exiting || fuse_emulation_paused ||
+      !counter_frequency.QuadPart || ayplayer_current_song() < 0 ) {
+    stalled = 0;
     return;
+  }
 
-  /* 50 frames a second, a little ahead; the sound output (or the timer
-     without sound) holds the emulation back if it runs too fast */
+  /* Has the main loop run lately? */
   QueryPerformanceCounter( &now );
-  due = (long)( (double)( now.QuadPart - modal_start.QuadPart ) * 50.0 /
-                modal_frequency.QuadPart ) + 2;
+  since = (double)( now.QuadPart - main_loop_time.QuadPart ) /
+          counter_frequency.QuadPart;
+  if( since < 0.04 ) {
+    stalled = 0;
+    return;
+  }
+
+  if( !stalled ) {
+    stalled = 1;
+    stall_start = main_loop_time;
+    stall_frames = 0;
+  }
+
+  /* 50 frames a second since the main loop stopped; the sound output (or
+     the timer without sound) holds the emulation back if it runs ahead */
+  due = (long)( (double)( now.QuadPart - stall_start.QuadPart ) * 50.0 /
+                counter_frequency.QuadPart );
 
   modal_emulating = 1;
-  while( modal_frames < due && run < 4 && !fuse_exiting ) {
+  while( stall_frames < due && run < 4 && !fuse_exiting ) {
     libspectrum_dword frame = spectrum_get_frame_count();
     while( spectrum_get_frame_count() == frame && !fuse_exiting ) {
       z80_do_opcodes();
       event_do_events();
     }
-    modal_frames++;
+    stall_frames++;
     run++;
   }
-  /* After a long stall do not try to catch up */
-  if( modal_frames < due - 10 ) modal_frames = due - 10;
+  /* After a long hold-up do not try to catch up */
+  if( stall_frames < due - 10 ) stall_frames = due - 10;
   modal_emulating = 0;
 }
 

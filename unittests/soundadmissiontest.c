@@ -116,6 +116,11 @@ void sound_lowlevel_frame( libspectrum_signed_word *data, int count )
   published++;
 }
 
+#ifdef main
+/* SDL headers redefine main on Windows, but this test needs a normal entry point. */
+#undef main
+#endif
+
 int main( void )
 {
   int stereo, route, pass, frame;

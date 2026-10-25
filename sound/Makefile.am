@@ -37,6 +37,9 @@ EXTRA_fuse_SOURCES += \
                       sound/sfifo.c \
                       sound/sunsound.c \
                       sound/wiisound.c \
+                      sound/wasapi_pcm.c \
+                      sound/wasapi_native.c \
+                      sound/wasapisound.c \
                       sound/win32sound.c
 
 noinst_HEADERS += \
@@ -56,7 +59,9 @@ noinst_HEADERS += \
                   sound/sfifo.h \
                   sound/source_synths.h \
                   sound/tv_filter.h \
-                  sound/ula_filter.h
+                  sound/ula_filter.h \
+                  sound/wasapi_pcm.h \
+                  sound/wasapi_native.h
 
 fuse_DEPENDENCIES += $(SOUND_LIBADD)
 fuse_LDADD += $(SOUND_LIBS) $(SOUND_LIBADD)

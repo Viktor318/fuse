@@ -719,6 +719,11 @@ test_scheduler( void )
   printf( "scheduler: tape/overshoot/ties/frame/rearm/RZX/reinit passed\n" );
 }
 
+#ifdef main
+/* SDL headers redefine main on Windows, but this test needs a normal entry point. */
+#undef main
+#endif
+
 int
 main( int argc, char **argv )
 {

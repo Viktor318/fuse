@@ -551,6 +551,52 @@ AC_CHECK_HEADER(
   [#include <windows.h>]
 )
 
+dnl WASAPI is opt-in, below legacy Win32 drivers in automatic preference.
+dnl Probe C wrappers and SDK GUID definitions on the actual MinGW toolchain.
+have_wasapi=no
+case "$host_os" in
+  mingw32*)
+    wasapi_save_LIBS="$LIBS"
+    LIBS="$LIBS -lole32 -lavrt -luuid -luser32"
+    AC_MSG_CHECKING([for native WASAPI C interfaces and GUID linkage])
+    AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+      #define WINVER 0x0600
+      #define _WIN32_WINNT 0x0600
+      #define COBJMACROS
+      #include <windows.h>
+      #include <initguid.h>
+      #include <mmdeviceapi.h>
+      #include <audioclient.h>
+      #include <avrt.h>
+    ]], [[
+      IMMDeviceEnumerator *enumerator = NULL;
+      IAudioClient *client = NULL;
+      IAudioClient3 *client3 = NULL;
+      IAudioRenderClient *render = NULL;
+      WAVEFORMATEX *format = NULL;
+      UINT32 period, fundamental, minimum, maximum;
+      DWORD task = 0;
+      CoCreateInstance( &CLSID_MMDeviceEnumerator, NULL, CLSCTX_INPROC_SERVER,
+                        &IID_IMMDeviceEnumerator, (void **)&enumerator );
+      IAudioClient_QueryInterface( client, &IID_IAudioClient3, (void **)&client3 );
+      IAudioClient3_GetSharedModeEnginePeriod( client3, format, &period,
+                                              &fundamental, &minimum, &maximum );
+      IAudioClient3_InitializeSharedAudioStream( client3,
+                      AUDCLNT_STREAMFLAGS_EVENTCALLBACK, period, format, NULL );
+      IAudioClient_Initialize( client, AUDCLNT_SHAREMODE_SHARED,
+                      AUDCLNT_STREAMFLAGS_EVENTCALLBACK, 0, 0, format, NULL );
+      IAudioClient_GetService( client, &IID_IAudioRenderClient, (void **)&render );
+      AvRevertMmThreadCharacteristics( AvSetMmThreadCharacteristicsW( L"Audio", &task ) );
+      return 0;
+    ]])], [have_wasapi=yes], [])
+    AC_MSG_RESULT([$have_wasapi])
+    LIBS="$wasapi_save_LIBS"
+    if test "$have_wasapi" = yes; then
+      audio_driver_list="$audio_driver_list wasapi"
+    fi
+    ;;
+esac
+
 dnl SDL audio
 if test "$sdl_available" != "no"; then
   dnl Default to SDL audio if we're using the SDL UI
@@ -631,6 +677,8 @@ audio_driver_found=no
 for drv in $audio_driver_list; do
     dnl If audio_driver is auto then select the first one from the list
     if test "$audio_driver" = "auto"; then
+       dnl The WASAPI trial is explicit-only, even without legacy headers.
+       if test "$drv" = wasapi; then continue; fi
        audio_driver=$drv
     fi
 
@@ -664,6 +712,19 @@ case $audio_driver in
     ;;
   win32sound)
     SOUND_LIBADD='sound/win32sound.$(OBJEXT)' SOUND_LIBS='-lwinmm'
+    ;;
+  wasapi)
+    if test "$UI" != win32; then
+      AC_MSG_ERROR([WASAPI trial requires the native --with-win32 UI])
+    fi
+    SOUND_LIBADD='sound/wasapisound.$(OBJEXT) sound/wasapi_native.$(OBJEXT) sound/wasapi_pcm.$(OBJEXT)'
+    SOUND_LIBS='-lole32 -lavrt -luuid -luser32' sound_fifo=yes
+    dnl Some legacy files include CRT headers before config.h. Set the target
+    dnl on the command line too, before MinGW chooses its newer default.
+    CPPFLAGS="$CPPFLAGS -DWINVER=0x0600 -D_WIN32_WINNT=0x0600"
+    AC_DEFINE([HAVE_WASAPI_AUDIO], 1, [Defined for native WASAPI audio])
+    AC_DEFINE([SOUND_PCM_ADMISSION], 1,
+              [Defined for exact PCM production admission])
     ;;
   alsa)
     SOUND_LIBADD='sound/alsasound.$(OBJEXT) sound/alsa_config.$(OBJEXT)' SOUND_LIBS='-lasound'
@@ -701,8 +762,9 @@ esac
 
 AM_CONDITIONAL(HAVE_PCM_ADMISSION,
   test "$audio_driver" = sdl || test "$audio_driver" = coreaudio ||
-  test "$audio_driver" = alsa)
+  test "$audio_driver" = alsa || test "$audio_driver" = wasapi)
 AM_CONDITIONAL(HAVE_ALSA_AUDIO, test "$audio_driver" = alsa)
+AM_CONDITIONAL(HAVE_WASAPI_AUDIO, test "$audio_driver" = wasapi)
 
 if test "$sound_fifo" = yes; then
   AC_MSG_CHECKING([whether C11 FIFO atomics are usable])
@@ -941,7 +1003,12 @@ case "$host_os" in
     ;;
   mingw32*)
     COMPAT_OSNAME='win32'
-    AC_DEFINE([WINVER], 0x0500, [Minimal supported version of Windows is 2000])
+    if test "$audio_driver" = wasapi; then
+      AC_DEFINE([WINVER], 0x0600, [Minimum supported Windows version])
+      AC_DEFINE([_WIN32_WINNT], 0x0600, [Minimum Windows API target for WASAPI])
+    else
+      AC_DEFINE([WINVER], 0x0500, [Minimum supported Windows version])
+    fi
     AC_DEFINE([_WIN32_IE], 0x501, [Internet Explorer 5.01 or higher is required])
     AC_DEFINE([WIN32_LEAN_AND_MEAN],, [Exclude rarely used stuff from Windows headers <windows.h>])
     ;;
@@ -959,6 +1026,8 @@ AM_CONDITIONAL(COMPAT_MORPHOS, test "$COMPAT_OSNAME" = 'morphos')
 AM_CONDITIONAL(COMPAT_UNIX, test "$COMPAT_OSNAME" = 'unix')
 AM_CONDITIONAL(COMPAT_WII, test "$COMPAT_OSNAME" = 'wii')
 AM_CONDITIONAL(COMPAT_WIN32, test "$COMPAT_OSNAME" = 'win32')
+AM_CONDITIONAL(HAVE_AUDIO_TEST_THREADS,
+  test "$pthread" = yes || test "$COMPAT_OSNAME" = win32)
 
 compat_darwin=no
 case "$host_os" in
@@ -969,7 +1038,8 @@ AM_CONDITIONAL(COMPAT_DARWIN, test "$compat_darwin" = yes)
 dnl Native notification support used by callback audio. The single-threaded
 dnl web target uses cooperative Asyncify waits, not POSIX semaphores.
 if test "$ac_cv_c_emscripten" != yes &&
-   { test "$audio_driver" = sdl || test "$audio_driver" = coreaudio; }; then
+   { test "$audio_driver" = sdl || test "$audio_driver" = coreaudio ||
+     test "$audio_driver" = wasapi; }; then
   case "$host_os" in
     darwin*)
       AC_CHECK_HEADER([os/os_sync_wait_on_address.h], [],

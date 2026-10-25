@@ -38,6 +38,11 @@ publication( struct alsa_pacing *p, unsigned int before, unsigned int after,
   CHECK( !alsa_pacing_publication( p, before, after, true, true ) );
 }
 
+#ifdef main
+/* SDL headers redefine main on Windows, but this test needs a normal entry point. */
+#undef main
+#endif
+
 int
 main( void )
 {

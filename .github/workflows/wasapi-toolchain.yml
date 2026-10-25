@@ -1,0 +1,45 @@
+name: WASAPI native toolchain gate
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/wasapi-audio]
+  pull_request:
+    paths:
+      - 'unittests/wasapi*.c'
+      - 'unittests/win32audiowaittest.c'
+      - 'sound/wasapi*'
+      - 'sound/audio_progress.h'
+      - 'compat/win32/wait.c'
+      - 'compat/wait.h'
+      - 'hacking/wasapi-toolchain*'
+      - '.github/workflows/wasapi-toolchain.yml'
+jobs:
+  native:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Keep source and shell scripts LF-only
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: cygwin/cygwin-install-action@711d29f3da23c9f4a1798e369a6f01198c13b11a # v6
+        with:
+          platform: x86
+          packages: mingw64-i686-gcc-core mingw64-i686-binutils
+      - name: Compile, link and execute native MinGW tests (no endpoint needed)
+        timeout-minutes: 2
+        env:
+          WASAPI_RUN_NATIVE: '1'
+        shell: bash.exe --login --norc -eo pipefail -o igncr '{0}'
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p build/wasapi-toolchain
+          set -o pipefail
+          sh hacking/wasapi-toolchain-check.sh 2>&1 | tee build/wasapi-toolchain/gate.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: wasapi-native-toolchain-gate
+          path: build/wasapi-toolchain/

@@ -78,7 +78,7 @@ cd "$WORK/fuse"
 
 # libspectrum is static: don't import its symbols from a DLL
 CPPFLAGS="-DLIBSPECTRUM_EXPORTS" ./configure --host=$HOST --disable-sdl2 \
-  --with-audio-driver=directsound --without-png --without-libxml2
+  --with-audio-driver="${FUSE_AUDIO_DRIVER:-wasapi}" --without-png --without-libxml2
 
 # Some helper test programs don't link for Windows; fuse.exe is what we need
 make -k -j"$(nproc)" || true

@@ -433,14 +433,17 @@ jobs:
           
       - name: (9) Run tests
         id: run-tests
+        timeout-minutes: 3
         run: |
           cd ${GITHUB_WORKSPACE}
-          
-          echo "Bulding and running tests .."
-          #cd z80
-          #./coretest.exe
-          echo "(skipped)"
-          
+          if [ "${{ inputs.verify_audio }}" = "wasapi" ]; then
+            # Endpoint-independent main() targets, including real Win32 waits
+            # and consumer threads. Do not substitute Cygwin POSIX binaries.
+            set -o pipefail
+            make check-audio 2>&1 | tee wasapi-tests.log
+          else
+            echo "Tests skipped for the legacy build"
+          fi
         shell: bash.exe --login --norc -eo pipefail -o igncr '{0}'
 
       - name: (9b) Run unit tests

@@ -188,6 +188,13 @@ sound_init( const char *device )
   if( audio_cut_interval && audio_event < 0 )
     audio_event = event_register( sound_audio_event, "Audio cut" );
   ay_engine_init( settings_current.volume_ay, sound_stereo_ay );
+  /* The sound generator starts from the registers the AY has now (they
+     may have changed while the sound was off, e.g. in the AY player) */
+  {
+    int reg;
+    for( reg = 0; reg < 14; reg++ )
+      ay_engine_write( reg, machine_current->ay.registers[ reg ], 0 );
+  }
   source_synths_init( left_buf, right_buf, sound_channels == 2,
                       settings_current.volume_specdrum,
                       settings_current.volume_covox,

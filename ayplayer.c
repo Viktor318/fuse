@@ -214,7 +214,7 @@ free_file( void )
   ay_length = 0;
   ay_songs = 0;
   ay_current = -1;
-  sound_long_buffer = 0;
+  sound_set_long_buffer( 0 );
 }
 
 /* CRC-32 of the file: identifies it in the lengths file */
@@ -854,7 +854,7 @@ ayplayer_play( int song )
   ay_engine_set_fade( 100 );
   ay_song_ended = 0;
   ay_current = song;
-  sound_long_buffer = 1;
+  sound_set_long_buffer( 1 );
 
   /* The measured length, or measure it now */
   {
@@ -887,7 +887,7 @@ ayplayer_stop( void )
   ay_engine_set_fade( 100 );
   if( ay_current < 0 ) return;
   ay_current = -1;
-  sound_long_buffer = 0;
+  sound_set_long_buffer( 0 );
 
   /* Silence: all AY registers to 0 (volumes too), and the processor waits
      with DI; HALT. The memory stays as it was */

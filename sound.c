@@ -59,6 +59,7 @@ int sound_enabled = 0;		/* Are we currently using the sound card */
 static int sound_enabled_ever = 0; /* whether sound has *ever* been in use; see
 				      sound_ay_write() and sound_ay_reset() */
 int sound_long_buffer = 0;
+static int sound_restart_pending = 0;
 int sound_stereo_ay = SOUND_STEREO_AY_NONE; /* local copy of settings_current.stereo_ay */
 
 int sound_framesiz;
@@ -540,5 +541,25 @@ sound_frame( void )
   frame_sample_count = 0;
   audio_frame_suspended = 0;
   sound_schedule_audio();
+
+  if( sound_restart_pending ) {
+    sound_restart_pending = 0;
+    sound_end();
+    sound_init( settings_current.sound_device );
+  }
+}
+
+/* The AY player keeps more sound ahead than games do */
+void
+sound_set_long_buffer( int on )
+{
+  on = on ? 1 : 0;
+  if( sound_long_buffer == on ) return;
+  sound_long_buffer = on;
+#ifdef HAVE_WASAPI_AUDIO
+  /* The WASAPI output sizes its buffer when it starts: restart it with the
+     new size at the end of the frame */
+  if( sound_enabled ) sound_restart_pending = 1;
+#endif
 }
 

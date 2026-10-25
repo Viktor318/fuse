@@ -116,6 +116,7 @@ extern int sound_stereo_ay;
 /* The AY player plays: the sound output may keep more sound ahead (latency
    does not matter, hold-ups of the program are not heard) */
 extern int sound_long_buffer;
+void sound_set_long_buffer( int on );
 
 /* settings_current.stereo_ay / volume_ay changed: apply while playing */
 void sound_ay_stereo_changed( void );

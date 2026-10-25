@@ -27,6 +27,12 @@ static struct audio_progress progress;
 static int progress_initialized, failure_reported;
 static _Atomic bool native_negative;
 static unsigned int width, prefill_goal;
+/* While the AY player plays (sound_long_buffer), the FIFO is made larger when
+   the output starts and about LONG_BUFFER_MS of sound is kept ahead, so the
+   music goes on while the main loop is held up (menus, window moves). Games
+   get the upstream geometry and pacing unchanged. */
+#define LONG_BUFFER_MS 300
+static unsigned int long_frames;
 static uint32_t last_progress;
 static audio_progress_deadline stall_deadline;
 
@@ -157,8 +163,16 @@ fifo_pacing_init( unsigned int speed, uint64_t *startup,
               sound_audio_interval_tstates( speed ) / speed + 1 : 0;
   *operation = "allocate whole-frame FIFO";
   if( *startup > UINT_MAX || allowance > UINT_MAX ||
-      wasapi_fifo_bytes( *startup, geometry.capacity, allowance, width, &bytes ) ||
-      sfifo_init( &sound_fifo, bytes ) ) return 1;
+      wasapi_fifo_bytes( *startup, geometry.capacity, allowance, width, &bytes ) )
+    return 1;
+  long_frames = 0;
+  if( sound_long_buffer ) {
+    long_frames = (uint64_t)geometry.format.rate * LONG_BUFFER_MS / 1000;
+    /* Room for the long buffer and a whole frame batch more */
+    if( (uint64_t)( long_frames + *startup ) * width + 1 > bytes )
+      bytes = ( long_frames + *startup ) * width + 1;
+  }
+  if( sfifo_init( &sound_fifo, bytes ) ) return 1;
   *capacity = pcm_fifo_capacity( &sound_fifo, width );
   *operation = "initialize admission geometry";
   if( *capacity < *startup ||
@@ -277,6 +291,14 @@ sound_lowlevel_reserve( unsigned int frames )
     protect_native();
     admitted = audio_pacing_can_admit( &pacing, &sound_fifo, width, frames );
     if( admitted < 0 ) return admitted;
+    if( long_frames && pacing.ready && frames && frames <= long_frames ) {
+      /* AY player: fill up to the long buffer, not to the adaptive target */
+      int physical = pcm_fifo_producer_can_write( &sound_fifo, width, frames );
+      int q = audio_pacing_occupancy( &sound_fifo, width );
+      if( physical < 0 ) return physical;
+      if( q < 0 ) return q;
+      admitted = physical > 0 && (unsigned int)q <= long_frames - frames;
+    }
     if( admitted ) break;
     error = audio_progress_wait( &progress, generation, audio_progress_until() );
     if( error && error != ETIMEDOUT && error != EINTR ) {

@@ -73,6 +73,7 @@ void win32_ayplaylist_show( void );
 void win32_ayplaylist_toggle( void );
 void win32_ayplaylist_close( void );
 void win32_ayplaylist_update( void );
+void win32_ayplaylist_update_status( void );
 int win32_ayplaylist_selected( void );
 void win32_ayplayer_show( void );
 int win32ui_machine_paused( void );

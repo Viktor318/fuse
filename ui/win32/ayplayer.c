@@ -433,10 +433,16 @@ resume_if_paused( void )
 /* Measuring the lengths of the whole list (one song after the other) */
 static int measuring = 0;
 static int measure_next_index = 0;
+/* The song that was playing when measuring started, and where it was;
+   it goes on from there afterwards (-1: none) */
+static int measure_resume_index = -1;
+static long measure_resume_frame = 0;
 
 static void
 play( int index )
 {
+  /* Chosen by the user: measuring (if any) is over */
+  if( measuring ) measure_resume_index = -1;
   measuring = 0;
   resume_if_paused();
   ayplaylist_play( index );
@@ -473,9 +479,20 @@ measure_next( void )
     }
   }
 
-  /* Nothing is being played after measuring */
   measuring = 0;
   ayplayer_stop();
+
+  /* The song that was playing goes on where it was; or nothing plays */
+  if( measure_resume_index >= 0 &&
+      measure_resume_index < ayplaylist_count() ) {
+    int index = measure_resume_index;
+    measure_resume_index = -1;
+    play( index );
+    if( measure_resume_frame > 0 ) ayplayer_seek( measure_resume_frame );
+    update_time();
+    return;
+  }
+  measure_resume_index = -1;
   ayplaylist_set_current( -1 );
   update_all();
 }
@@ -483,8 +500,17 @@ measure_next( void )
 void
 win32_ayplayer_measure_all( void )
 {
-  if( !fuse_hAYWnd || ayplayer_current_song() >= 0 ) return;
+  if( !fuse_hAYWnd || measuring ) return;
   resume_if_paused();
+
+  /* A song playing stops for the time of measuring */
+  measure_resume_index = -1;
+  if( ayplayer_current_song() >= 0 ) {
+    measure_resume_index = ayplaylist_current();
+    measure_resume_frame = ayplayer_frames_played();
+    ayplayer_stop();
+  }
+
   measuring = 1;
   measure_next_index = 0;
   measure_next();
@@ -493,7 +519,7 @@ win32_ayplayer_measure_all( void )
 int
 win32_ayplayer_busy( void )
 {
-  return measuring || ayplayer_current_song() >= 0;
+  return measuring;
 }
 
 static void
@@ -587,6 +613,7 @@ command( WORD id, WORD code )
   case IDC_AY_STOP:
     resume_if_paused();
     measuring = 0;
+    measure_resume_index = -1;
     ayplayer_stop();
     update_pause_button();
     update_time();
@@ -783,6 +810,14 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   case WM_TIMER:
     /* Only for the paused state; while playing the frames update it */
     if( wParam == AYPLAYER_TIMER ) {
+      /* "Measure lengths" can be used only while nothing plays */
+      static int last_busy = -1;
+      int busy = win32_ayplayer_busy();
+      if( busy != last_busy ) {
+        last_busy = busy;
+        win32_ayplaylist_update_status();
+      }
+
       update_pause_button();
       sync_sound_settings();
       if( player_paused() || ayplayer_current_song() < 0 )

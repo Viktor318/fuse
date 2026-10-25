@@ -51,6 +51,8 @@ static int number_width, author_width, length_width;
 static SIZE minimum_size, default_size;
 static HFONT bold_font = NULL;
 
+static void update_status( void );
+
 static HWND
 item( int id )
 {
@@ -88,6 +90,12 @@ set_cell( HWND list, int row, int column, const char *text )
   cell.pszText = (char *)text;
   SendMessageA( list, column ? LVM_SETITEMTEXTA : LVM_INSERTITEMA,
                 column ? row : 0, (LPARAM)&cell );
+}
+
+void
+win32_ayplaylist_update_status( void )
+{
+  if( fuse_hAYListWnd ) update_status();
 }
 
 static void
@@ -573,6 +581,11 @@ playlist_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       if( header->code == LVN_KEYDOWN &&
           ( (NMLVKEYDOWN *)lParam )->wVKey == VK_DELETE ) {
         remove_selected();
+        return TRUE;
+      }
+      if( header->code == NM_RETURN ) {
+        int index = win32_ayplaylist_selected();
+        if( index >= 0 ) win32_ayplayer_play_entry( index );
         return TRUE;
       }
     }

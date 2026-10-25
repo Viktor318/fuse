@@ -560,4 +560,26 @@ extra	AY player	BAC	BAC
 extra	AY player	Length: %d:%02d (default)	Hossz: %d:%02d (alapértelmezett)
 extra	AY player	Reading the length of the song...	A dal hosszának beolvasása...
 extra	AY player	Length: %d:%02d (measured)	Hossz: %d:%02d (mért)
-extra	AY player	&Repeat	Dal &ismétlése
+extra	AY player	&Repeat	&Ismétlés
+1 Menü	Media	&AY music player...	&AY zenelejátszó...
+extra	AY player	&List	&Lista
+extra	AY player	Play:	Lejátszás:
+extra	AY player	&1 song	&1 dal
+extra	AY player	&Whole list	&Teljes lista
+extra	AY playlist	Fuse - AY Playlist	Fuse - AY lejátszási lista
+extra	AY playlist	&Add...	&Hozzáadás...
+extra	AY playlist	Add &folder...	&Mappa hozzáadása...
+extra	AY playlist	&Remove	&Eltávolítás
+extra	AY playlist	C&lear list	Lista &törlése
+extra	AY playlist	&Up	&Fel
+extra	AY playlist	&Down	&Le
+extra	AY playlist	L&oad list...	Lista &betöltése...
+extra	AY playlist	&Save list...	Lista m&entése...
+extra	AY playlist	&Measure lengths	Hosszak mé&rése
+extra	AY playlist	Title	Dal címe
+extra	AY playlist	Author	Szerző
+extra	AY playlist	%d songs, %d measured - double click: play	%d dal, %d megmérve - dupla kattintás: lejátszás
+extra	AY playlist	Fuse - Add AY Files	Fuse - AY fájlok hozzáadása
+extra	AY playlist	Fuse - Load Playlist	Fuse - Lejátszási lista betöltése
+extra	AY playlist	Fuse - Save Playlist	Fuse - Lejátszási lista mentése
+extra	AY playlist	The .ay files of this folder are added:	Ennek a mappának az .ay fájljai kerülnek a listára:

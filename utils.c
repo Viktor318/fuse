@@ -61,6 +61,7 @@
 #include "tape.h"
 #include "utils.h"
 #include "ayplayer.h"
+#include "ayplaylist.h"
 
 #ifdef UI_WIN32
 void win32_ayplayer_show( void );
@@ -116,7 +117,8 @@ utils_open_file( const char *filename, int autoload,
   /* AY music files: open the AY player */
   if( ayplayer_is_ay_file( filename ) ) {
     if( type_ptr ) *type_ptr = LIBSPECTRUM_ID_UNKNOWN;
-    if( ayplayer_open( filename ) ) return 1;
+    /* Added to the end of the playlist and played */
+    if( ayplaylist_open_file( filename ) ) return 1;
 #ifdef UI_WIN32
     win32_ayplayer_show();
 #endif

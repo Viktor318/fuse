@@ -50,6 +50,7 @@
 #include "periph.h"
 #include "compat.h"
 #include "settings.h"
+#include "snapshot.h"
 #include "sound.h"
 #include "sound/ay_engine.h"
 #include "timer/timer.h"
@@ -124,7 +125,12 @@ static libspectrum_dword ay_file_checksum = 0;
 static long ay_seek_target = -1;
 static int ay_seek_frame_rate;
 
-static libspectrum_machine ay_previous_machine = LIBSPECTRUM_MACHINE_UNKNOWN;
+/* The machine as it was before the player took it over (the program that
+   was running, e.g. a game), restored when the player is closed */
+static libspectrum_snap *ay_saved_snap = NULL;
+
+/* Full path of the loaded file */
+static char ay_path[ 1024 ] = "";
 
 /* ------------------------------------------------------------------------
    Reading the file
@@ -236,39 +242,83 @@ lengths_path( char *path, size_t size )
 
 /* Lines: checksum (hex), song (0 based), length in frames (0: no repetition
    found, the default length is used), the frame the music goes on from
-   after the end (-1: the music ends). The last line of a song counts */
+   after the end (-1: the music ends). The last line of a song counts.
+   Read once, then kept in memory too */
+typedef struct length_entry {
+  libspectrum_dword sum;
+  int song;
+  long frames, loop;
+} length_entry;
+
+static length_entry *lengths = NULL;
+static size_t lengths_count = 0, lengths_size = 0;
+static int lengths_read = 0;
+
+static void
+lengths_remember( libspectrum_dword sum, int song, long frames, long loop )
+{
+  size_t i;
+
+  for( i = 0; i < lengths_count; i++ )
+    if( lengths[i].sum == sum && lengths[i].song == song ) break;
+
+  if( i == lengths_count ) {
+    if( lengths_count == lengths_size ) {
+      lengths_size = lengths_size ? lengths_size * 2 : 64;
+      lengths = libspectrum_renew( length_entry, lengths, lengths_size );
+    }
+    lengths_count++;
+  }
+  lengths[i].sum = sum;
+  lengths[i].song = song;
+  lengths[i].frames = frames;
+  lengths[i].loop = loop;
+}
+
 static int
 lengths_lookup( libspectrum_dword sum, int song, long *frames, long *loop )
 {
-  char path[ 1024 ], line[ 128 ];
-  unsigned long file_sum;
-  int file_song, found = 0;
-  long file_frames, file_loop;
-  FILE *f;
+  size_t i;
 
-  lengths_path( path, sizeof( path ) );
-  f = fopen( path, "r" );
-  if( !f ) return 0;
+  if( !lengths_read ) {
+    char path[ 1024 ], line[ 128 ];
+    unsigned long file_sum;
+    int file_song;
+    long file_frames, file_loop;
+    FILE *f;
 
-  while( fgets( line, sizeof( line ), f ) ) {
-    if( sscanf( line, "%lx %d %ld %ld", &file_sum, &file_song, &file_frames,
-                &file_loop ) != 4 )
-      continue;
-    if( (libspectrum_dword)file_sum == sum && file_song == song ) {
-      *frames = file_frames;
-      *loop = file_loop;
-      found = 1;
+    lengths_read = 1;
+    lengths_path( path, sizeof( path ) );
+    f = fopen( path, "r" );
+    if( f ) {
+      while( fgets( line, sizeof( line ), f ) ) {
+        if( sscanf( line, "%lx %d %ld %ld", &file_sum, &file_song,
+                    &file_frames, &file_loop ) == 4 )
+          lengths_remember( file_sum, file_song, file_frames, file_loop );
+      }
+      fclose( f );
     }
   }
-  fclose( f );
-  return found;
+
+  for( i = 0; i < lengths_count; i++ ) {
+    if( lengths[i].sum == sum && lengths[i].song == song ) {
+      *frames = lengths[i].frames;
+      *loop = lengths[i].loop;
+      return 1;
+    }
+  }
+  return 0;
 }
 
 static void
 lengths_store( libspectrum_dword sum, int song, long frames, long loop )
 {
   char path[ 1024 ];
+  long old_frames, old_loop;
   FILE *f;
+
+  lengths_lookup( sum, song, &old_frames, &old_loop );	/* read it first */
+  lengths_remember( sum, song, frames, loop );
 
   lengths_path( path, sizeof( path ) );
   f = fopen( path, "a" );
@@ -278,10 +328,17 @@ lengths_store( libspectrum_dword sum, int song, long frames, long loop )
 }
 
 int
-ayplayer_open( const char *filename )
+ayplayer_known_length( libspectrum_dword checksum, int song, long *frames )
+{
+  long loop;
+  return lengths_lookup( checksum, song, frames, &loop );
+}
+
+/* Check and copy the file; on success it belongs to the caller */
+static int
+read_ay_file( const char *filename, libspectrum_byte **data, size_t *length )
 {
   utils_file file;
-  const char *name, *p;
 
   if( utils_read_file( filename, &file ) ) return 1;
 
@@ -291,15 +348,36 @@ ayplayer_open( const char *filename )
     return 1;
   }
 
+  *data = libspectrum_new( libspectrum_byte, file.length );
+  memcpy( *data, file.buffer, file.length );
+  *length = file.length;
+  utils_close_file( &file );
+  return 0;
+}
+
+int
+ayplayer_load( const char *filename )
+{
+  libspectrum_byte *data;
+  size_t length;
+  const char *name, *p;
+
+  if( read_ay_file( filename, &data, &length ) ) return 1;
+
   ayplayer_stop();
   free_file();
 
-  ay_data = libspectrum_new( libspectrum_byte, file.length );
-  memcpy( ay_data, file.buffer, file.length );
-  ay_length = file.length;
-  utils_close_file( &file );
+  ay_data = data;
+  ay_length = length;
   ay_file_checksum = checksum( ay_data, ay_length );
 
+  if( song_data( 0 ) < 0 ) {
+    ui_error( UI_ERROR_ERROR, "'%s' is not a valid AY music file", filename );
+    free_file();
+    return 1;
+  }
+
+  snprintf( ay_path, sizeof( ay_path ), "%s", filename );
   name = filename;
   for( p = filename; *p; p++ )
     if( *p == '/' || *p == '\\' ) name = p + 1;
@@ -312,34 +390,93 @@ ayplayer_open( const char *filename )
   ay_first_song = byte_at( 17 );
   if( ay_first_song < 0 || ay_first_song >= ay_songs ) ay_first_song = 0;
 
+  return 0;
+}
+
+const char *
+ayplayer_path( void )
+{
+  return ay_data ? ay_path : "";
+}
+
+/* The songs of a file, without loading it for playing */
+int
+ayplayer_file_info( const char *filename, ayplayer_info *info )
+{
+  libspectrum_byte *data, *saved_data = ay_data;
+  size_t length, saved_length = ay_length;
+  int saved_songs = ay_songs;
+  int i, error = 0;
+
+  memset( info, 0, sizeof( *info ) );
+  if( read_ay_file( filename, &data, &length ) ) return 1;
+
+  /* The reading functions work on the loaded file: lend them this one */
+  ay_data = data;
+  ay_length = length;
+
   if( song_data( 0 ) < 0 ) {
     ui_error( UI_ERROR_ERROR, "'%s' is not a valid AY music file", filename );
-    free_file();
-    return 1;
+    error = 1;
+  } else {
+    info->checksum = checksum( data, length );
+    string_at( 12, info->author, sizeof( info->author ) );
+    info->songs = byte_at( 16 ) + 1;
+    ay_songs = info->songs;
+    info->names = libspectrum_new( ayplayer_song_title, info->songs );
+    for( i = 0; i < info->songs; i++ )
+      ayplayer_song_name( i, info->names[i], sizeof( info->names[i] ) );
   }
 
-  if( ay_previous_machine == LIBSPECTRUM_MACHINE_UNKNOWN )
-    ay_previous_machine = machine_current->machine;
+  ay_data = saved_data;
+  ay_length = saved_length;
+  ay_songs = saved_songs;
+  libspectrum_free( data );
+  return error;
+}
 
-  return ayplayer_play( ay_first_song );
+void
+ayplayer_file_info_free( ayplayer_info *info )
+{
+  libspectrum_free( info->names );
+  info->names = NULL;
+}
+
+/* Keep the running program before the player first takes the machine */
+static void
+take_over( void )
+{
+  if( ay_saved_snap ) return;
+  ay_saved_snap = libspectrum_snap_alloc();
+  if( snapshot_copy_to( ay_saved_snap ) ) {
+    libspectrum_snap_free( ay_saved_snap );
+    ay_saved_snap = NULL;
+  }
+}
+
+int
+ayplayer_has_machine( void )
+{
+  return ay_saved_snap != NULL;
+}
+
+/* Give the machine back: the program that was running goes on */
+void
+ayplayer_release( void )
+{
+  ayplayer_stop();
+  if( !ay_saved_snap ) return;
+
+  snapshot_copy_from( ay_saved_snap );
+  libspectrum_snap_free( ay_saved_snap );
+  ay_saved_snap = NULL;
 }
 
 void
 ayplayer_close( void )
 {
-  int was_open = ay_data != NULL;
-
-  ayplayer_stop();
+  ayplayer_release();
   free_file();
-
-  /* Back to the machine used before the player */
-  if( was_open && ay_previous_machine != LIBSPECTRUM_MACHINE_UNKNOWN ) {
-    if( machine_current->machine != ay_previous_machine )
-      machine_select( ay_previous_machine );
-    else
-      machine_reset( 0 );
-  }
-  ay_previous_machine = LIBSPECTRUM_MACHINE_UNKNOWN;
 }
 
 /* ------------------------------------------------------------------------
@@ -607,6 +744,8 @@ ayplayer_play( int song )
     ui_error( UI_ERROR_ERROR, "Song %d of the AY file is damaged", song + 1 );
     return 1;
   }
+
+  take_over();
 
   /* A Spectrum +2A, all memory RAM (special paging 0,1,2,3) */
   if( machine_current->machine != LIBSPECTRUM_MACHINE_PLUS2A ) {

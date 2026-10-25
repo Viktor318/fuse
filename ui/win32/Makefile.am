@@ -37,6 +37,7 @@ ui_win32_files = \
                  ui/win32/about.c \
                  ui/win32/about.h \
                  ui/win32/ayplayer.c \
+                 ui/win32/ayplaylist.c \
                  ui/win32/winstate.c \
                  ui/win32/winstate.h \
                  ui/win32/ayplayer.h \

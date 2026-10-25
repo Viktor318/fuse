@@ -29,6 +29,10 @@
 #include "event.h"
 #include "fuse.h"
 #include "menu.h"
+
+#ifdef UI_WIN32
+void win32_ayplayer_show( void );
+#endif
 #include "movie.h"
 #include "machines/specplus3.h"
 #include "ui/uidisplay.h"
@@ -362,6 +366,15 @@ MENU_CALLBACK( menu_options_fullscreen )
 {
   ui_widget_finish();
   settings_current.full_screen = !settings_current.full_screen;
+}
+
+/* The AY player with its playlist, without playing anything */
+MENU_CALLBACK( menu_media_ayplayer )
+{
+  ui_widget_finish();
+#ifdef UI_WIN32
+  win32_ayplayer_show();
+#endif
 }
 
 MENU_CALLBACK( menu_options_save )

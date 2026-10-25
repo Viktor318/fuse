@@ -62,6 +62,18 @@ extern HWND fuse_hABOWnd;
 
 /* AY player window (ayplayer.c) */
 extern HWND fuse_hAYWnd;
+extern HWND fuse_hAYListWnd;
+
+/* The AY player window and its playlist window */
+void win32_ayplayer_update( void );
+void win32_ayplayer_play_entry( int index );
+void win32_ayplayer_measure_all( void );
+int win32_ayplayer_busy( void );
+void win32_ayplaylist_show( void );
+void win32_ayplaylist_toggle( void );
+void win32_ayplaylist_close( void );
+void win32_ayplaylist_update( void );
+int win32_ayplaylist_selected( void );
 void win32_ayplayer_show( void );
 int win32ui_machine_paused( void );
 

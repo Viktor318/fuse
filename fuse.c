@@ -62,6 +62,7 @@
 #include "event.h"
 #include "fuse.h"
 #include "ayplayer.h"
+#include "ayplaylist.h"
 
 #ifdef UI_WIN32
 void win32_ayplayer_show( void );
@@ -247,8 +248,11 @@ int main(int argc, char **argv)
 #ifdef ENABLE_AUTOMATION
       && !automation_active()
 #endif
-    )
+    ) {
+    /* The program that was running before the AY player comes back */
+    ayplayer_close();
     session_save();
+  }
 
   fuse_end();
 #ifdef ENABLE_AUTOMATION
@@ -1128,7 +1132,7 @@ do_start_files( start_files_t *start_files )
   }
 
   if( start_files->ay ) {
-    if( ayplayer_open( start_files->ay ) ) return 1;
+    if( ayplaylist_open_file( start_files->ay ) ) return 1;
 #ifdef UI_WIN32
     win32_ayplayer_show();
 #endif

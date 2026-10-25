@@ -519,6 +519,9 @@ Media/IDE/ZXMMC/_Insert..., Item,, menu_media_ide_insert,, 9
 Media/IDE/ZXMMC/_Commit, Item,, menu_media_ide_commit,, 9
 Media/IDE/ZXMMC/_Eject, Item,, menu_media_ide_eject,, 9
 
+Media/separator, Separator
+Media/_AY music player..., Item,, menu_media_ayplayer
+
 _Help, Branch
 Help/_Keyboard..., Item
 Help/_About..., Item

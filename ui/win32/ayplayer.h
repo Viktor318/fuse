@@ -26,7 +26,6 @@
 #define IDC_AY_MISC_LABEL   4206
 #define IDC_AY_MISC         4207
 #define IDC_AY_SONG_GROUP   4208
-#define IDC_AY_SONG_LABEL   4209
 #define IDC_AY_SONG         4210
 #define IDC_AY_PROGRESS     4211
 #define IDC_AY_ELAPSED      4212
@@ -51,3 +50,20 @@
 #define IDC_AY_STEREO       4231
 #define IDC_AY_STATUS       4232
 #define IDC_AY_REPEAT       4233
+#define IDC_AY_MODE_LABEL   4234
+#define IDC_AY_MODE_SINGLE  4235
+#define IDC_AY_MODE_LIST    4236
+#define IDC_AY_LIST         4237
+
+#define IDD_AYPLAYLIST      4250
+#define IDC_AYL_LIST        4251
+#define IDC_AYL_STATUS      4252
+#define IDC_AYL_ADD         4253
+#define IDC_AYL_ADD_FOLDER  4254
+#define IDC_AYL_REMOVE      4255
+#define IDC_AYL_CLEAR       4256
+#define IDC_AYL_UP          4257
+#define IDC_AYL_DOWN        4258
+#define IDC_AYL_LOAD        4259
+#define IDC_AYL_SAVE        4260
+#define IDC_AYL_MEASURE     4261

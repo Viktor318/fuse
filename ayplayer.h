@@ -25,10 +25,34 @@
 /* Is this the name of an .ay file? */
 int ayplayer_is_ay_file( const char *filename );
 
-/* Open a file and play its first song */
-int ayplayer_open( const char *filename );
+#include <libspectrum.h>
 
-/* Stop, forget the file and go back to the previous machine */
+/* Load a file for playing (does not play anything) */
+int ayplayer_load( const char *filename );
+const char *ayplayer_path( void );	/* "" if none */
+
+/* The songs of a file, without loading it for playing */
+typedef char ayplayer_song_title[ 128 ];
+typedef struct ayplayer_info {
+  int songs;
+  libspectrum_dword checksum;
+  char author[ 256 ];
+  ayplayer_song_title *names;
+} ayplayer_info;
+int ayplayer_file_info( const char *filename, ayplayer_info *info );
+void ayplayer_file_info_free( ayplayer_info *info );
+
+/* The length measured earlier of a song (by file checksum): 1 if known;
+   frames 0: no repetition found (default length) */
+int ayplayer_known_length( libspectrum_dword checksum, int song,
+                           long *frames );
+
+/* The first song played takes the machine over (a +2A); the program that
+   was running is kept and comes back when the player releases it */
+int ayplayer_has_machine( void );
+void ayplayer_release( void );
+
+/* Stop, forget the file and give the machine back */
 void ayplayer_close( void );
 
 /* Play song `song' (0 based) / stop playing */

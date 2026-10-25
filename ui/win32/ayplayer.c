@@ -26,6 +26,7 @@
 
 #include "ayplayer.h"
 #include "../../ayplayer.h"
+#include "../../ayplaylist.h"
 #include "fuse.h"
 #include "i18n.h"
 #include "machine.h"
@@ -62,6 +63,8 @@ static HWND scan_window = NULL;
 static void scan_window_close( void );
 static void end_options_changed( void );
 static void remember_position( void );
+
+static HFONT song_font = NULL;
 
 static int shown_volume = -1;
 static int shown_stereo = -1;
@@ -139,6 +142,12 @@ update_time( void )
     text[ sizeof( text ) - 1 ] = '\0';
   }
   set_text( IDC_AY_LENGTH, text );
+
+  /* Nothing chosen: nothing shown */
+  if( ayplaylist_current() < 0 && current < 0 ) {
+    set_text( IDC_AY_ELAPSED, "" );
+    set_text( IDC_AY_LENGTH, "" );
+  }
 }
 
 /* ------------------------------------------------------------------------
@@ -383,28 +392,36 @@ slider_scroll( HWND slider, WORD code )
 static void
 update_all( void )
 {
-  int i, count = ayplayer_song_count();
-  int current = ayplayer_current_song();
+  int index = ayplaylist_current(), count = ayplaylist_count();
   char text[ 512 ], name[ 256 ];
 
-  set_text( IDC_AY_FILE, ayplayer_filename() );
-  set_text( IDC_AY_AUTHOR, ayplayer_author() );
-  set_text( IDC_AY_MISC, ayplayer_misc() );
-
-  SendDlgItemMessage( fuse_hAYWnd, IDC_AY_SONG, CB_RESETCONTENT, 0, 0 );
-  for( i = 0; i < count; i++ ) {
-    ayplayer_song_name( i, name, sizeof( name ) );
-    _snprintf( text, sizeof( text ), "%d / %d - %s", i + 1, count, name );
-    text[ sizeof( text ) - 1 ] = '\0';
-    SendDlgItemMessageA( fuse_hAYWnd, IDC_AY_SONG, CB_ADDSTRING, 0,
-                         (LPARAM)text );
+  /* Nothing chosen: nothing shown */
+  if( index < 0 && ayplayer_current_song() < 0 ) {
+    set_text( IDC_AY_FILE, "" );
+    set_text( IDC_AY_AUTHOR, "" );
+    set_text( IDC_AY_MISC, "" );
+  } else {
+    set_text( IDC_AY_FILE, ayplayer_filename() );
+    set_text( IDC_AY_AUTHOR, ayplayer_author() );
+    set_text( IDC_AY_MISC, ayplayer_misc() );
   }
-  if( current >= 0 )
-    SendDlgItemMessage( fuse_hAYWnd, IDC_AY_SONG, CB_SETCURSEL, current, 0 );
+
+  /* The song being played: its place in the list and title */
+  text[0] = '\0';
+  if( index >= 0 ) {
+    _snprintf( text, sizeof( text ), "%d / %d \x96 %s", index + 1, count,
+               ayplaylist_get( index )->title );
+  } else if( ayplayer_current_song() >= 0 ) {
+    ayplayer_song_name( ayplayer_current_song(), name, sizeof( name ) );
+    _snprintf( text, sizeof( text ), "%s", name );
+  }
+  text[ sizeof( text ) - 1 ] = '\0';
+  set_text( IDC_AY_SONG, text );
 
   update_pause_button();
   update_time();
   sync_sound_settings();
+  win32_ayplaylist_update();
 }
 
 static void
@@ -413,12 +430,70 @@ resume_if_paused( void )
   if( player_paused() ) menu_machine_pause( 0 );
 }
 
+/* Measuring the lengths of the whole list (one song after the other) */
+static int measuring = 0;
+static int measure_next_index = 0;
+
 static void
-play( int song )
+play( int index )
 {
+  measuring = 0;
   resume_if_paused();
-  ayplayer_play( song );
+  ayplaylist_play( index );
   update_all();
+}
+
+void
+win32_ayplayer_update( void )
+{
+  if( fuse_hAYWnd ) update_all();
+}
+
+void
+win32_ayplayer_play_entry( int index )
+{
+  if( fuse_hAYWnd ) play( index );
+}
+
+/* The next song of the list whose length is not known yet; when there is
+   none, measuring is over */
+static void
+measure_next( void )
+{
+  long frames;
+
+  while( measuring && measure_next_index < ayplaylist_count() ) {
+    int index = measure_next_index++;
+
+    if( ayplaylist_length( index, &frames ) ) continue;
+    ayplaylist_play( index );
+    if( ayplayer_scanning() ) {
+      update_all();
+      return;
+    }
+  }
+
+  /* Nothing is being played after measuring */
+  measuring = 0;
+  ayplayer_stop();
+  ayplaylist_set_current( -1 );
+  update_all();
+}
+
+void
+win32_ayplayer_measure_all( void )
+{
+  if( !fuse_hAYWnd || ayplayer_current_song() >= 0 ) return;
+  resume_if_paused();
+  measuring = 1;
+  measure_next_index = 0;
+  measure_next();
+}
+
+int
+win32_ayplayer_busy( void )
+{
+  return measuring || ayplayer_current_song() >= 0;
 }
 
 static void
@@ -435,43 +510,49 @@ close_window( void )
   ay_engine_set_channel_muted( 2, 0 );
   ayplayer_set_frame_hook( NULL );
   resume_if_paused();
+  measuring = 0;
+  win32_ayplaylist_close();
   DestroyWindow( fuse_hAYWnd );
   fuse_hAYWnd = NULL;
+  if( song_font ) {
+    DeleteObject( song_font );
+    song_font = NULL;
+  }
 
+  /* The program that was running before comes back */
   ayplayer_close();
 }
 
 static void
 command( WORD id, WORD code )
 {
-  int current = ayplayer_current_song();
-  int count = ayplayer_song_count();
+  int current = ayplaylist_current();
+  int count = ayplaylist_count();
+  int playing = ayplayer_current_song() >= 0;
 
   switch( id ) {
 
-  case IDC_AY_SONG:
-    if( code == CBN_SELCHANGE ) {
-      int song = SendDlgItemMessage( fuse_hAYWnd, IDC_AY_SONG, CB_GETCURSEL,
-                                     0, 0 );
-      if( song >= 0 ) play( song );
-    }
-    break;
-
   case IDC_AY_PREV:
     if( current > 0 ) play( current - 1 );
-    else if( current < 0 ) play( 0 );
+    else if( current < 0 && count ) play( 0 );
     break;
 
   case IDC_AY_NEXT:
-    if( current < 0 ) play( 0 );
-    else if( current + 1 < count ) play( current + 1 );
+    if( current < 0 && count ) play( 0 );
+    else if( current >= 0 && current + 1 < count ) play( current + 1 );
+    break;
+
+  case IDC_AY_LIST:
+    win32_ayplaylist_toggle();
     break;
 
   case IDC_AY_PAUSE:
-    if( current < 0 ) {
-      int song = SendDlgItemMessage( fuse_hAYWnd, IDC_AY_SONG, CB_GETCURSEL,
-                                     0, 0 );
-      play( song >= 0 ? song : 0 );
+    if( !playing ) {
+      /* Play: the song chosen in the list, or the last one, or the first */
+      int index = win32_ayplaylist_selected();
+      if( index < 0 ) index = current;
+      if( index < 0 ) index = 0;
+      if( index < count ) play( index );
     } else {
       /* Pause or resume. When pausing, this returns only after resuming,
          so show the new label first */
@@ -493,7 +574,8 @@ command( WORD id, WORD code )
     }
     break;
 
-  case IDC_AY_AUTO:
+  case IDC_AY_MODE_SINGLE:
+  case IDC_AY_MODE_LIST:
   case IDC_AY_REPEAT:
     if( code == BN_CLICKED ) end_options_changed();
     break;
@@ -504,6 +586,7 @@ command( WORD id, WORD code )
 
   case IDC_AY_STOP:
     resume_if_paused();
+    measuring = 0;
     ayplayer_stop();
     update_pause_button();
     update_time();
@@ -596,49 +679,49 @@ frame_update( void )
   update_time();
 }
 
-/* The two tick boxes, kept in the settings */
+/* Play one song or the whole list, repeat it or not: kept in the settings */
 static void
 end_options_changed( void )
 {
-  int auto_next =
-    IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_AUTO ) == BST_CHECKED;
+  int list_mode =
+    IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_MODE_LIST ) == BST_CHECKED;
   int repeat =
     IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_REPEAT ) == BST_CHECKED;
 
-  settings_current.ayplayer_auto_next = auto_next;
+  settings_current.ayplayer_auto_next = list_mode;
   settings_current.ayplayer_repeat = repeat;
-  ayplayer_set_repeat_song( repeat && !auto_next );
+  ayplayer_set_repeat_song( repeat && !list_mode );
 }
 
 /* End of the song:
-     next song on:  the next song; after the last one the first (repeat on)
-                    or stop
-     only repeat:   the same song again (songs that go round do not get
-                    here: they go on playing)
-     neither:       stop */
+     1 song:      stop; repeat: the same song again (songs that go round
+                  do not get here: they go on playing)
+     whole list:  the next song; after the last one stop, or with repeat
+                  the first one again */
 static void
 song_end( void )
 {
-  int current = ayplayer_current_song();
-  int count = ayplayer_song_count();
-  int auto_next =
-    IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_AUTO ) == BST_CHECKED;
+  int current = ayplaylist_current();
+  int count = ayplaylist_count();
+  int list_mode =
+    IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_MODE_LIST ) == BST_CHECKED;
   int repeat =
     IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_REPEAT ) == BST_CHECKED;
 
   song_end_posted = 0;
-  if( current < 0 || !ayplayer_song_ended() ) return;
+  if( ayplayer_current_song() < 0 || !ayplayer_song_ended() ) return;
 
-  if( auto_next && current + 1 < count ) {
+  if( list_mode && current >= 0 && current + 1 < count ) {
     play( current + 1 );
-  } else if( auto_next && repeat ) {
+  } else if( list_mode && repeat && count ) {
     play( 0 );
-  } else if( !auto_next && repeat ) {
+  } else if( !list_mode && repeat && current >= 0 ) {
     play( current );
   } else {
     ayplayer_stop();
     update_pause_button();
     update_time();
+    win32_ayplaylist_update();
   }
 }
 
@@ -664,8 +747,21 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
         winstate_remove( "ayplayer", "repeat" );
       }
 
-      CheckDlgButton( hWnd, IDC_AY_AUTO, settings_current.ayplayer_auto_next ?
-                      BST_CHECKED : BST_UNCHECKED );
+      CheckRadioButton( hWnd, IDC_AY_MODE_SINGLE, IDC_AY_MODE_LIST,
+                        settings_current.ayplayer_auto_next ?
+                        IDC_AY_MODE_LIST : IDC_AY_MODE_SINGLE );
+
+      /* The song being played in bold */
+      {
+        LOGFONT font;
+        HFONT normal = (HFONT)SendMessage( hWnd, WM_GETFONT, 0, 0 );
+        if( normal && GetObject( normal, sizeof( font ), &font ) ) {
+          font.lfWeight = FW_BOLD;
+          song_font = CreateFontIndirect( &font );
+          SendDlgItemMessage( hWnd, IDC_AY_SONG, WM_SETFONT,
+                              (WPARAM)song_font, FALSE );
+        }
+      }
       CheckDlgButton( hWnd, IDC_AY_REPEAT, settings_current.ayplayer_repeat ?
                       BST_CHECKED : BST_UNCHECKED );
       end_options_changed();
@@ -731,6 +827,10 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 
   case WM_AYPLAYER_SCAN_DONE:
     scan_window_close();
+    if( measuring ) {
+      measure_next();
+      return 0;
+    }
     if( ayplayer_current_song() >= 0 ) {
       ayplayer_play( ayplayer_current_song() );
       update_all();
@@ -799,6 +899,7 @@ win32_ayplayer_show( void )
   ayplayer_set_frame_hook( frame_update );
   win32ui_ayplayer_timer_start();
   resume_if_paused();
+  win32_ayplaylist_show();
   update_all();
   ShowWindow( fuse_hAYWnd, SW_SHOW );
   SetForegroundWindow( fuse_hAYWnd );

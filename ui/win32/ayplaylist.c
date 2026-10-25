@@ -323,8 +323,8 @@ remember_place( void )
     return;
   winstate_set( "playlist", "x", rect.left );
   winstate_set( "playlist", "y", rect.top );
-  winstate_set( "playlist", "width", rect.right - rect.left );
-  winstate_set( "playlist", "height", rect.bottom - rect.top );
+  winstate_set( "playlist", "cx", rect.right - rect.left );
+  winstate_set( "playlist", "cy", rect.bottom - rect.top );
 }
 
 static void
@@ -333,16 +333,24 @@ restore_place( void )
   long x, y, width, height;
   RECT title;
 
+  /* The first version kept a size of its wider default: forget it */
+  winstate_remove( "playlist", "width" );
+  winstate_remove( "playlist", "height" );
+
   if( !winstate_get( "playlist", "x", &x ) ||
-      !winstate_get( "playlist", "y", &y ) ||
-      !winstate_get( "playlist", "width", &width ) ||
-      !winstate_get( "playlist", "height", &height ) ) {
+      !winstate_get( "playlist", "y", &y ) ) {
     /* First time: beside the player */
     RECT player;
     if( fuse_hAYWnd && GetWindowRect( fuse_hAYWnd, &player ) )
       SetWindowPos( fuse_hAYListWnd, NULL, player.right + 4, player.top, 0,
                     0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
     return;
+  }
+
+  if( !winstate_get( "playlist", "cx", &width ) ||
+      !winstate_get( "playlist", "cy", &height ) ) {
+    width = minimum_size.cx;
+    height = minimum_size.cy;
   }
 
   /* Only if the title bar is on a screen */

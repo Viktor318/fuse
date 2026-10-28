@@ -3768,6 +3768,70 @@ disk_write_open_udi_roundtrip_test( void )
   return r;
 }
 
+/* A UDI image whose stored CRC or length field does not match its contents
+   must be refused: open_udi() validates both before decoding any tracks */
+static int
+disk_open_malformed_udi_rejected_test( void )
+{
+  char temporary_path[] = "/tmp/fuse-disk-malformed-XXXXXX";
+  char filename[ PATH_MAX ];
+  disk_t write_disk, open_disk;
+  utils_file file;
+  libspectrum_dword eof = 0;
+  int fd, r = 0;
+
+  /* mkdtemp is not provided by MinGW; use mkstemp to obtain a unique
+     filename prefix instead. */
+  fd = mkstemp( temporary_path );
+  if( fd < 0 ) return 1;
+  close( fd );
+  unlink( temporary_path );
+  snprintf( filename, sizeof( filename ), "%s.udi", temporary_path );
+
+  memset( &write_disk, 0, sizeof( write_disk ) );
+  if( disk_new( &write_disk, 2, 40, DISK_DENS_AUTO, DISK_UDI ) != DISK_OK )
+    return 1;
+  if( disk_write( &write_disk, filename ) != DISK_OK ) r++;
+  disk_close( &write_disk );
+
+  utils_file_init( &file, filename );
+  if( !r && utils_file_read( &file ) ) r++;
+  if( !r && file.length < 8 ) r++;
+
+  if( !r ) {
+    /* The stored length is the file length minus the four CRC bytes */
+    eof = (libspectrum_dword) file.buffer[4] |
+          (libspectrum_dword) file.buffer[5] << 8 |
+          (libspectrum_dword) file.buffer[6] << 16 |
+          (libspectrum_dword) file.buffer[7] << 24;
+    if( eof != file.length - 4 ) r++;
+  }
+
+  /* A corrupted CRC must be refused */
+  if( !r ) {
+    file.buffer[eof] ^= 0xff;
+    memset( &open_disk, 0, sizeof( open_disk ) );
+    if( disk_open_loaded( &open_disk, &file, 0, 0 ) != DISK_OPEN ) r++;
+    disk_close( &open_disk );
+    file.buffer[eof] ^= 0xff;
+  }
+
+  /* A mismatched length field must be refused */
+  if( !r ) {
+    file.buffer[4] ^= 0x01;
+    memset( &open_disk, 0, sizeof( open_disk ) );
+    if( disk_open_loaded( &open_disk, &file, 0, 0 ) != DISK_OPEN ) r++;
+    disk_close( &open_disk );
+    file.buffer[4] ^= 0x01;
+  }
+
+  utils_file_free( &file );
+  unlink( filename );
+
+  if( r ) printf( "disk_open_malformed_udi_rejected_test failed\n" );
+  return r;
+}
+
 static FILE compat_file_test_file;
 static int compat_file_test_calls[ 7 ];
 
@@ -4234,6 +4298,7 @@ unittests_run( void )
   r += utils_open_loaded_disk_merge_test();
   r += disk_write_blank_disk_cpc_save_test();
   r += disk_write_open_udi_roundtrip_test();
+  r += disk_open_malformed_udi_rejected_test();
   r += screenshot_scr_roundtrip_test();
   r += event_queue_test();
 #ifdef ENABLE_AUTOMATION

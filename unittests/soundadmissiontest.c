@@ -53,6 +53,9 @@ static int captured_count, expected_count[100];
 static blip_resampled_time_t expected_offset[100];
 
 int option_enumerate_sound_stereo_ay( void ) { return selected_stereo; }
+int option_enumerate_sound_stereo_ay_a( void ) { return 0; }
+int option_enumerate_sound_stereo_ay_b( void ) { return 1; }
+int option_enumerate_sound_stereo_ay_c( void ) { return 2; }
 int option_enumerate_sound_speaker_type( void ) { return speaker; }
 int timer_fastloading_active( void ) { return 0; }
 int tape_is_playing( void ) { return 0; }

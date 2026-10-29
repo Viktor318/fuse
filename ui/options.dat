@@ -169,7 +169,10 @@ sound
 Sound Options
 Checkbox, (S)ound enabled, sound, INPUT_KEY_s
 Checkbox, (L)oading sound, sound_load, INPUT_KEY_l
-Combo, (A)Y stereo separation, stereo_ay, INPUT_KEY_a, *None|ACB|ABC|BAC
+Combo, (A)Y stereo separation, stereo_ay, INPUT_KEY_a, *None|ACB|ABC|BAC|CBA|Custom
+Combo, Custom stereo: A cha(n)nel, stereo_ay_a, INPUT_KEY_n, *Left|Centre|Right
+Combo, Custom stereo: (B) channel, stereo_ay_b, INPUT_KEY_b, Left|*Centre|Right
+Combo, Custom stereo: C c(h)annel, stereo_ay_c, INPUT_KEY_h, Left|Centre|*Right
 Combo, Speaker (t)ype, speaker_type, INPUT_KEY_t, *Automatic|TV speaker|Beeper|Unfiltered
 Entry, A(Y) volume, volume_ay, INPUT_KEY_y, 3, %
 Entry, B(e)eper volume, volume_beeper, INPUT_KEY_e, 3, %

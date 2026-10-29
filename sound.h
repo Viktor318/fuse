@@ -103,13 +103,24 @@ extern int sound_framesiz;
  *  * ABC stereo is used in the Pentagon/Scorpion.
  *  * BAC stereo does seem to exist but is quite rare:
  *      Z80Stealth emulates BAC stereo but that's about all.
- *  * CAB, BCA and CBA don't get many search results.
+ *  * CAB, BCA and CBA don't get many search results; CBA is ABC
+ *    mirrored.
+ *  * Custom: each channel left, in the centre or right, as set in the
+ *    stereo_ay_a/b/c settings.
  */
 
 #define SOUND_STEREO_AY_NONE	0
 #define SOUND_STEREO_AY_ACB	1
 #define SOUND_STEREO_AY_ABC	2
 #define SOUND_STEREO_AY_BAC	3
+#define SOUND_STEREO_AY_CBA	4
+#define SOUND_STEREO_AY_CUSTOM	5
+
+/* Where each AY channel is heard in a stereo mode */
+#define SOUND_AY_LEFT	0
+#define SOUND_AY_CENTRE	1
+#define SOUND_AY_RIGHT	2
+void sound_ay_channel_positions( int stereo, int position[3] );
 
 extern int sound_stereo_ay;
 

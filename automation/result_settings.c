@@ -32,7 +32,9 @@ stereo_name( int stereo )
 {
   return stereo == SOUND_STEREO_AY_ACB ? "acb" :
          stereo == SOUND_STEREO_AY_ABC ? "abc" :
-         stereo == SOUND_STEREO_AY_BAC ? "bac" : "none";
+         stereo == SOUND_STEREO_AY_BAC ? "bac" :
+         stereo == SOUND_STEREO_AY_CBA ? "cba" :
+         stereo == SOUND_STEREO_AY_CUSTOM ? "custom" : "none";
 }
 
 static const char *

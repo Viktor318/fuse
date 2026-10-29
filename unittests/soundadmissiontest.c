@@ -129,6 +129,8 @@ int main( void )
   settings_current.emulation_speed = 100;
   settings_current.sound_freq = 48000;
   settings_current.volume_beeper = settings_current.volume_ay = 70;
+  settings_current.volume_ay_a = settings_current.volume_ay_b =
+    settings_current.volume_ay_c = 100;
   settings_current.volume_specdrum = settings_current.volume_covox = 50;
   settings_current.volume_uspeech = 50;
   for( stereo = 0; stereo < 2; stereo++ ) {

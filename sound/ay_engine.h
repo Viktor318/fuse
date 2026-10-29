@@ -25,7 +25,12 @@ void ay_engine_stereo_order( int stereo, int order[ 3 ] );
 /* Silence a channel (0=A, 1=B, 2=C) while playing */
 void ay_engine_set_channel_muted( int channel, int muted );
 int ay_engine_channel_muted( int channel );
-/* Highest level (0-15) of a channel since the last call */
+/* Volume of a channel (0=A, 1=B, 2=C) in percent */
+void ay_engine_set_channel_volume( int channel, int percent );
+/* A level (0-15) of a channel as heard after its volume */
+int ay_engine_channel_level_heard( int channel, int level );
+/* Highest level (0-15) of a channel since the last call, after the volume
+   of the channel */
 int ay_engine_channel_peak( int channel );
 
 /* Test-support accessors used by the regression tests in

@@ -16,6 +16,12 @@ Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
   szerző a modulból jön; a lista, a hosszmérés, a tekerés, a szintjelzők, a
   sztereó és a csatornanémítás ugyanúgy működik, mint az `.ay` fájloknál. A
   TurboSound moduloknak egyelőre csak az első AY-ja szól.
+- Csatornánkénti hangerő: minden szintjelző mellett egy csúszka (0–100%;
+  húzás közben a csúszka fölött látszik a százalék, és buborék is mutatja),
+  az *Alaphelyzet* gomb mindhármat 100%-ra állítja. A szintjelzők a
+  hangerő utáni szintet mutatják. A beállítás megmarad, és a *Beállítások >
+  Hang* ablakban is ott van; a két ablak azonnal követi egymást. Az ablak
+  kicsit szélesebb lett.
 
 ## v1.10.0-hu.1 – 2026-10-25
 

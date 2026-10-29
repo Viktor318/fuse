@@ -175,6 +175,9 @@ Combo, Custom stereo: (B) channel, stereo_ay_b, INPUT_KEY_b, Left|*Centre|Right
 Combo, Custom stereo: C c(h)annel, stereo_ay_c, INPUT_KEY_h, Left|Centre|*Right
 Combo, Speaker (t)ype, speaker_type, INPUT_KEY_t, *Automatic|TV speaker|Beeper|Unfiltered
 Entry, A(Y) volume, volume_ay, INPUT_KEY_y, 3, %
+Entry, AY channel A (v)olume, volume_ay_a, INPUT_KEY_v, 3, %
+Entry, AY channel B volu(m)e, volume_ay_b, INPUT_KEY_m, 3, %
+Entry, AY channel C v(o)lume, volume_ay_c, INPUT_KEY_o, 3, %
 Entry, B(e)eper volume, volume_beeper, INPUT_KEY_e, 3, %
 Entry, Spec(D)rum volume, volume_specdrum, INPUT_KEY_d, 3, %
 Entry, (C)ovox volume, volume_covox, INPUT_KEY_c, 3, %

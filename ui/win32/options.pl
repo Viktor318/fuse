@@ -331,7 +331,23 @@ CODE
 static HWND sound_options_window = NULL;
 static int sound_options_syncing = 0;
 static char *sound_options_original[4];
-static int sound_options_original_volume;
+static int sound_options_original_volume[4];
+
+/* The AY volume and the volumes of the channels */
+static const int sound_options_volume_ids[4] = { IDC_OPT_SOUND_VOLUME_AY,
+  IDC_OPT_SOUND_VOLUME_AY_A, IDC_OPT_SOUND_VOLUME_AY_B,
+  IDC_OPT_SOUND_VOLUME_AY_C };
+
+static int *
+sound_options_volume( int i )
+{
+  switch( i ) {
+  case 0: return &settings_current.volume_ay;
+  case 1: return &settings_current.volume_ay_a;
+  case 2: return &settings_current.volume_ay_b;
+  default: return &settings_current.volume_ay_c;
+  }
+}
 
 static char **
 sound_options_string( int i )
@@ -374,10 +390,12 @@ sound_options_live( HWND hwndDlg )
     if( n >= 0 && n < counts[i] )
       settings_set_string( sound_options_string( i ), names[i][n] );
   }
-  buffer[0] = '\\0';
-  SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_VOLUME_AY, WM_GETTEXT, 80,
-                      (LPARAM) buffer );
-  if( buffer[0] ) settings_current.volume_ay = atoi( buffer );
+  for( i = 0; i < 4; i++ ) {
+    buffer[0] = '\\0';
+    SendDlgItemMessage( hwndDlg, sound_options_volume_ids[i], WM_GETTEXT, 80,
+                        (LPARAM) buffer );
+    if( buffer[0] ) *sound_options_volume( i ) = atoi( buffer );
+  }
 
   sound_options_apply();
 }
@@ -392,7 +410,8 @@ sound_options_open( HWND hwndDlg )
     char *value = *sound_options_string( i );
     sound_options_original[i] = value ? utils_safe_strdup( value ) : NULL;
   }
-  sound_options_original_volume = settings_current.volume_ay;
+  for( i = 0; i < 4; i++ )
+    sound_options_original_volume[i] = *sound_options_volume( i );
 }
 
 static void
@@ -410,7 +429,8 @@ sound_options_close( int cancel )
     sound_options_original[i] = NULL;
   }
   if( cancel ) {
-    settings_current.volume_ay = sound_options_original_volume;
+    for( i = 0; i < 4; i++ )
+      *sound_options_volume( i ) = sound_options_original_volume[i];
     sound_options_apply();
   }
   sound_options_window = NULL;
@@ -442,9 +462,11 @@ win32_options_sound_sync( void )
         SendDlgItemMessage( sound_options_window, ids[i], CB_SETCURSEL, n,
                             0 );
   }
-  snprintf( buffer, sizeof( buffer ), "%d", settings_current.volume_ay );
-  SendDlgItemMessage( sound_options_window, IDC_OPT_SOUND_VOLUME_AY,
-                      WM_SETTEXT, 0, (LPARAM) buffer );
+  for( i = 0; i < 4; i++ ) {
+    snprintf( buffer, sizeof( buffer ), "%d", *sound_options_volume( i ) );
+    SendDlgItemMessage( sound_options_window, sound_options_volume_ids[i],
+                        WM_SETTEXT, 0, (LPARAM) buffer );
+  }
   menu_options_sound_dependencies( sound_options_window );
   sound_options_syncing = 0;
 }
@@ -483,7 +505,10 @@ CODE
     print << "CODE" if $_->{name} eq 'sound';
       if( HIWORD( wParam ) == CBN_SELCHANGE ||
           ( HIWORD( wParam ) == EN_CHANGE &&
-            LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY ) )
+            ( LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY ||
+              LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY_A ||
+              LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY_B ||
+              LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY_C ) ) )
         sound_options_live( hwndDlg );
 CODE
     print << "CODE";

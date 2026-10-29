@@ -731,6 +731,8 @@ main( int argc, char **argv )
   settings_current.sound_freq = argc > 1 ? atoi( argv[1] ) : 48000;
   CHECK( settings_current.sound_freq >= 8000 && settings_current.sound_freq <= 96000 );
   settings_current.volume_beeper = settings_current.volume_ay = 70;
+  settings_current.volume_ay_a = settings_current.volume_ay_b =
+    settings_current.volume_ay_c = 100;
   settings_current.volume_specdrum = settings_current.volume_covox = 50;
   settings_current.volume_uspeech = 50;
   test_scheduler();

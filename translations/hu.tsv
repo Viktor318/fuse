@@ -583,3 +583,4 @@ extra	AY playlist	Fuse - Add AY Files	Fuse - AY fájlok hozzáadása
 extra	AY playlist	Fuse - Load Playlist	Fuse - Lejátszási lista betöltése
 extra	AY playlist	Fuse - Save Playlist	Fuse - Lejátszási lista mentése
 extra	AY playlist	The .ay files of this folder are added:	Ennek a mappának az .ay fájljai kerülnek a listára:
+extra	AY playlist	%d files of the list are not available and were left out	A lista %d fájlja nem érhető el, ezek kimaradtak

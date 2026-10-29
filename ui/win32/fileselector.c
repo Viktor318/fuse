@@ -48,7 +48,7 @@ static LPCTSTR file_filter = TEXT(
 ";"
 "*.d40;*.d80;*.dsk;*.fdi;*.img;*.mgt;*.opd;*.opu;*.sad;*.scl;*.td0;*.trd;*.udi;"
 "*.dck;*.rom;*.hdf;*.mdr;*.fmf;*.rzx;"
-"*.bin;*.log;*.mlt;*.png;*.pok;*.scr;*.svg;*.ay"
+"*.bin;*.log;*.mlt;*.png;*.pok;*.scr;*.svg;*.ay;*.pt3"
 #ifdef LIBSPECTRUM_SUPPORTS_ZLIB_COMPRESSION
 ";*.gz;*.zip"
 #endif
@@ -62,8 +62,8 @@ static LPCTSTR file_filter = TEXT(
 "*.bas;*.txt\0"
 "Auxiliary Files (*.scr;*.mlt;*.pok;*.png;*.svg;...)\0"
 "*.bin;*.log;*.mlt;*.png;*.pok;*.scr;*.svg\0"
-"AY Music Files (*.ay)\0"
-"*.ay\0"
+"AY Music Files (*.ay;*.pt3)\0"
+"*.ay;*.pt3\0"
 #ifdef LIBSPECTRUM_SUPPORTS_ZLIB_COMPRESSION
 "Compressed files (*.gz;*.zip;...)\0"
 "*.gz;*.zip"

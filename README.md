@@ -60,7 +60,7 @@ folder of your choice and start `fuse.exe`. Nothing has to be installed.
 
 
 Plays `.ay` (ZXAYEMUL) music files – the music of many Spectrum games and
-demos – on an emulated Spectrum +2A.
+demos – on an emulated Spectrum +2A, and Pro Tracker 3 (`.pt3`) modules.
 
 - **Opening**: *Media > AY music player...* opens the player without playing
   anything; *File > Open* (or dragging a file onto Fuse) adds the songs of an

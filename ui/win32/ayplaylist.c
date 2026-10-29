@@ -221,8 +221,25 @@ add_files( void )
   memset( &ofn, 0, sizeof( ofn ) );
   ofn.lStructSize = sizeof( ofn );
   ofn.hwndOwner = fuse_hAYListWnd;
-  ofn.lpstrFilter = "AY Music Files (*.ay)\0*.ay;*.AY\0"
-                    "All Files (*.*)\0*.*\0";
+  {
+    static char filter[ 256 ];
+    const char *music = i18n( "AY Music Files (*.ay;*.pt3)" );
+    const char *all = i18n( "All Files (*.*)" );
+    const char *music_types = "*.ay;*.AY;*.pt3;*.PT3", *all_types = "*.*";
+    size_t used = 0;
+
+    /* name, types, name, types, each ending in \0, then one more \0 */
+    memcpy( filter + used, music, strlen( music ) + 1 );
+    used += strlen( music ) + 1;
+    memcpy( filter + used, music_types, strlen( music_types ) + 1 );
+    used += strlen( music_types ) + 1;
+    memcpy( filter + used, all, strlen( all ) + 1 );
+    used += strlen( all ) + 1;
+    memcpy( filter + used, all_types, strlen( all_types ) + 1 );
+    used += strlen( all_types ) + 1;
+    filter[ used ] = '\0';
+    ofn.lpstrFilter = filter;
+  }
   ofn.lpstrFile = buffer;
   ofn.nMaxFile = sizeof( buffer );
   ofn.Flags = OFN_ALLOWMULTISELECT | OFN_EXPLORER | OFN_FILEMUSTEXIST |

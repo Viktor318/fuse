@@ -533,7 +533,8 @@ extra	AY player	&Resume	&Folytatás
 extra	AY player	&Song:	&Dal:
 extra	AY player	'%s' is not a valid AY music file	A(z) '%s' nem érvényes AY zenefájl
 extra	AY player	'%s' is not an AY music file	A(z) '%s' nem AY zenefájl
-extra	AY player	AY Music Files (*.ay)	AY zenefájlok (*.ay)
+extra	AY player	AY Music Files (*.ay;*.pt3)	AY zenefájlok (*.ay;*.pt3)
+extra	AY player	'%s' is not a valid PT3 music file	A(z) '%s' nem érvényes PT3 zenefájl
 extra	AY player	Author:	Szerző:
 extra	AY player	Elapsed: %d:%02d	Eltelt: %d:%02d
 extra	AY player	F&ull screen	Teljes &képernyő

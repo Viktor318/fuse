@@ -462,6 +462,7 @@ play( int index )
   /* Chosen by the user: measuring (if any) is over */
   if( measuring ) measure_resume_index = -1;
   measuring = 0;
+  measure_stopping = 0;
   resume_if_paused();
   ayplaylist_play( index );
   update_all();
@@ -701,8 +702,14 @@ scan_update( void )
   }
 
   /* Over: play the song from the start, with its length */
-  if( ayplayer_scan_take_finished() )
+  if( ayplayer_scan_take_finished() ) {
     PostMessage( fuse_hAYWnd, WM_AYPLAYER_SCAN_DONE, 0, 0 );
+    return;
+  }
+
+  /* Given up (another song was started meanwhile): the window shows the
+     song being played again, its time and level meters */
+  scan_window_close();
 }
 
 static void

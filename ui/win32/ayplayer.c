@@ -69,6 +69,8 @@ static HFONT song_font = NULL;
 
 static int shown_volume = -1;
 static int shown_stereo = -1;
+/* The places of the channels shown in the level meter labels */
+static int shown_positions[3] = { -1, -1, -1 };
 
 /* Pausing works as Machine > Pause (the emulation really stops) */
 static int
@@ -166,6 +168,7 @@ update_level_labels( void )
 
   ay_engine_stereo_order( stereo, meter_order );
   sound_ay_channel_positions( stereo, position );
+  memcpy( shown_positions, position, sizeof( position ) );
   for( row = 0; row < 3; row++ ) {
     if( stereo == SOUND_STEREO_AY_NONE )
       _snprintf( text, sizeof( text ), "%c", 'A' + meter_order[ row ] );
@@ -301,6 +304,7 @@ volume_changed( void )
   settings_current.volume_ay = volume;
   shown_volume = volume;
   sound_ay_volume_changed();
+  win32_options_sound_sync();
 
   _snprintf( text, sizeof( text ), "%d%%", volume );
   text[ sizeof( text ) - 1 ] = '\0';
@@ -327,6 +331,7 @@ stereo_changed( void )
   sound_ay_stereo_changed();
   shown_stereo = stereo;
   update_level_labels();
+  win32_options_sound_sync();
 }
 
 /* Changed in the options meanwhile? */
@@ -334,7 +339,15 @@ static void
 sync_sound_settings( void )
 {
   if( settings_current.volume_ay != shown_volume ) show_volume();
-  if( option_enumerate_sound_stereo_ay() != shown_stereo ) show_stereo();
+  if( option_enumerate_sound_stereo_ay() != shown_stereo ) {
+    show_stereo();
+  } else {
+    /* Custom: the places of the channels may have changed */
+    int position[3];
+    sound_ay_channel_positions( shown_stereo, position );
+    if( memcmp( position, shown_positions, sizeof( position ) ) )
+      update_level_labels();
+  }
 }
 
 /* ------------------------------------------------------------------------
@@ -435,6 +448,8 @@ resume_if_paused( void )
 
 /* Measuring the lengths of the whole list (one song after the other) */
 static int measuring = 0;
+/* Stop asked for: the song being measured is finished, then no more */
+static int measure_stopping = 0;
 static int measure_next_index = 0;
 /* The song that was playing when measuring started, and where it was;
    it goes on from there afterwards (-1: none) */
@@ -471,7 +486,8 @@ measure_next( void )
 {
   long frames;
 
-  while( measuring && measure_next_index < ayplaylist_count() ) {
+  while( measuring && !measure_stopping &&
+         measure_next_index < ayplaylist_count() ) {
     int index = measure_next_index++;
 
     if( ayplaylist_length( index, &frames ) ) continue;
@@ -483,6 +499,7 @@ measure_next( void )
   }
 
   measuring = 0;
+  measure_stopping = 0;
   ayplayer_stop();
 
   /* The song that was playing goes on where it was; or nothing plays */
@@ -515,8 +532,27 @@ win32_ayplayer_measure_all( void )
   }
 
   measuring = 1;
+  measure_stopping = 0;
   measure_next_index = 0;
   measure_next();
+}
+
+/* Stop measuring the lengths of the list: the song being measured is
+   finished first, so its length is not lost */
+void
+win32_ayplayer_measure_stop( void )
+{
+  if( !measuring || measure_stopping ) return;
+  measure_stopping = 1;
+  win32_ayplaylist_update_status();
+  /* Between two songs: over at once */
+  if( !ayplayer_scanning() ) measure_next();
+}
+
+int
+win32_ayplayer_measure_stopping( void )
+{
+  return measuring && measure_stopping;
 }
 
 int

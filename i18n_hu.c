@@ -207,6 +207,8 @@ const i18n_entry i18n_hu_table[] = {
     "&Indítás" },
   { "&Stop",
     "&Megállítás" },
+  { "&Stop measuring",
+    "Mé&rés leállítása" },
   { "&Stop recording after RZX ends",
     "Felvétel &leállítása az RZX végén" },
   { "&Swap mouse buttons",

@@ -66,9 +66,14 @@ extern HWND fuse_hAYListWnd;
 
 /* The AY player window and its playlist window */
 void win32_ayplayer_update( void );
+/* The AY player changed an AY sound setting: show it in Options > Sound
+   if that is open */
+void win32_options_sound_sync( void );
 void win32_ayplayer_play_entry( int index );
 void win32_ayplayer_measure_all( void );
 int win32_ayplayer_busy( void );
+void win32_ayplayer_measure_stop( void );
+int win32_ayplayer_measure_stopping( void );
 void win32_ayplaylist_show( void );
 void win32_ayplaylist_toggle( void );
 void win32_ayplaylist_close( void );

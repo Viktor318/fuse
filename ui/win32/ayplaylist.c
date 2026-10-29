@@ -115,8 +115,17 @@ update_status( void )
   text[ sizeof( text ) - 1 ] = '\0';
   SetDlgItemTextA( fuse_hAYListWnd, IDC_AYL_STATUS, text );
 
-  EnableWindow( item( IDC_AYL_MEASURE ),
-                count > measured && !win32_ayplayer_busy() );
+  /* While measuring the button stops it */
+  if( win32_ayplayer_busy() ) {
+    SetDlgItemTextA( fuse_hAYListWnd, IDC_AYL_MEASURE,
+                     i18n( "&Stop measuring" ) );
+    EnableWindow( item( IDC_AYL_MEASURE ),
+                  !win32_ayplayer_measure_stopping() );
+  } else {
+    SetDlgItemTextA( fuse_hAYListWnd, IDC_AYL_MEASURE,
+                     i18n( "&Measure lengths" ) );
+    EnableWindow( item( IDC_AYL_MEASURE ), count > measured );
+  }
 }
 
 /* Fill the list again (keeping the selection and where it was scrolled) */
@@ -671,7 +680,8 @@ playlist_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
         ayplaylist_save_m3u( path );
       return TRUE;
     case IDC_AYL_MEASURE:
-      win32_ayplayer_measure_all();
+      if( win32_ayplayer_busy() ) win32_ayplayer_measure_stop();
+      else win32_ayplayer_measure_all();
       return TRUE;
     case IDCLOSE:
     case IDCANCEL:

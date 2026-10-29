@@ -43,6 +43,10 @@ static int current = -1;
 static int loaded = 0;
 /* Do not write the file while it is being read */
 static int loading = 0;
+/* Reading the saved list when the player starts: no messages */
+static int quiet = 0;
+/* Files of a list being loaded that couldn't be read (left out) */
+static int missing_files = 0;
 
 static int save_m3u( const char *path );
 
@@ -71,7 +75,19 @@ load_saved( void )
   f = fopen( path, "r" );
   if( !f ) return;
   fclose( f );
+  quiet = 1;
   ayplaylist_load_m3u( path, 1 );
+  quiet = 0;
+}
+
+static int
+file_readable( const char *path )
+{
+  FILE *f = fopen( path, "rb" );
+
+  if( !f ) return 0;
+  fclose( f );
+  return 1;
 }
 
 static ayplaylist_entry*
@@ -96,6 +112,13 @@ add_songs( const char *path, int song )
 {
   ayplayer_info info;
   int i, first = -1;
+
+  /* A file of a list that isn't there (any more) is left out, without a
+     message for every one of them */
+  if( loading && !file_readable( path ) ) {
+    missing_files++;
+    return -1;
+  }
 
   if( ayplayer_file_info( path, &info ) ) return -1;
 
@@ -295,6 +318,7 @@ ayplaylist_load_m3u( const char *path, int append )
   before = entry_count;
 
   loading = 1;
+  missing_files = 0;
   while( fgets( line, sizeof( line ), f ) ) {
     char *end = line + strlen( line ), *mark;
     int song = -1;
@@ -334,6 +358,13 @@ ayplaylist_load_m3u( const char *path, int append )
   }
   loading = 0;
   fclose( f );
+
+  /* The saved list: the missing files just go; a list loaded by the user:
+     one message */
+  if( missing_files && !quiet )
+    ui_error( UI_ERROR_WARNING,
+              "%d files of the list are not available and were left out",
+              missing_files );
 
   autosave();
   ( void )before;

@@ -15,6 +15,8 @@
 #include "i18n.h"
 
 const i18n_entry i18n_hu_table[] = {
+  { "%d files of the list are not available and were left out",
+    "A lista %d fájlja nem érhető el, ezek kimaradtak" },
   { "%d songs, %d measured - double click: play",
     "%d dal, %d megmérve - dupla kattintás: lejátszás" },
   { "%s already exists.\nDo you want to overwrite it?",

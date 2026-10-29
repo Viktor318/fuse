@@ -25,6 +25,7 @@
 #include <commctrl.h> /* windows.h must be included prior to commctrl.h */
 
 #include "ayplayer.h"
+#include "../../ayplay.h"
 #include "../../ayplayer.h"
 #include "../../ayplaylist.h"
 #include "fuse.h"
@@ -41,7 +42,7 @@
 HWND fuse_hAYWnd = NULL;
 
 #define AYPLAYER_TIMER 1
-#define AYPLAYER_TIMER_MS 200
+#define AYPLAYER_TIMER_MS 40
 
 /* The position slider is being moved by the user: do not move it */
 static int seek_dragging = 0;
@@ -79,11 +80,11 @@ static HWND hover_tip = NULL, drag_tip = NULL;
 static int drag_row = -1;
 static void show_channel_volumes( void );
 
-/* Pausing works as Machine > Pause (the emulation really stops) */
+/* Pausing stops the music only: the emulated machine goes on */
 static int
 player_paused( void )
 {
-  return win32ui_machine_paused();
+  return ayplayer_paused();
 }
 
 static void
@@ -124,7 +125,6 @@ update_time( void )
   int current = ayplayer_current_song();
 
   if( current < 0 ) played = 0;
-  if( ayplayer_seeking() ) played = ayplayer_seek_target();
   if( seek_dragging ) played = SendMessage( slider, TBM_GETPOS, 0, 0 );
   if( length && played > length ) played = length;
 
@@ -175,6 +175,7 @@ update_level_labels( void )
 
   ay_engine_stereo_order( stereo, meter_order );
   sound_ay_channel_positions( stereo, position );
+  ayplay_update_mix();
   memcpy( shown_positions, position, sizeof( position ) );
   for( row = 0; row < 3; row++ ) {
     if( stereo == SOUND_STEREO_AY_NONE )
@@ -186,7 +187,7 @@ update_level_labels( void )
     set_text( IDC_AY_LEVEL_LABEL1 + row, text );
     /* Ticked: heard */
     CheckDlgButton( fuse_hAYWnd, IDC_AY_LEVEL_LABEL1 + row,
-                    ay_engine_channel_muted( meter_order[ row ] ) ?
+                    ayplay_muted( meter_order[ row ] ) ?
                     BST_UNCHECKED : BST_CHECKED );
     InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + row ), NULL,
                     FALSE );
@@ -195,19 +196,13 @@ update_level_labels( void )
   show_channel_volumes();
 }
 
-/* The level of a channel. Without sound output the sound generator does
-   not run: then the volume registers (envelope: full) */
+/* The level of a channel of the music, after its volume */
 static int
 channel_level( int channel )
 {
-  int volume, mixer;
-
-  if( sound_enabled ) return ay_engine_channel_peak( channel );
-
-  volume = machine_current->ay.registers[ 8 + channel ];
-  mixer = machine_current->ay.registers[ 7 ];
-  if( ( ( mixer >> channel ) & 9 ) == 9 ) return 0;
-  return ay_engine_channel_level_heard( channel, volume & 16 ? 15 : volume & 15 );
+  if( ayplayer_current_song() < 0 ) return 0;
+  return ay_engine_channel_level_heard( channel,
+                                        ayplay_channel_peak( channel ) );
 }
 
 /* Fast up, slowly down */
@@ -238,7 +233,7 @@ draw_meter( const DRAWITEMSTRUCT *item )
 {
   int row = item->CtlID - IDC_AY_LEVEL1;
   int level = ( meter_shown[ meter_order[ row ] ] + 3 ) / 4;
-  int muted = ay_engine_channel_muted( meter_order[ row ] );
+  int muted = ayplay_muted( meter_order[ row ] );
   RECT area = item->rcItem, segment;
   int width = area.right - area.left, height = area.bottom - area.top;
   int gap = 2, border = 2, i;
@@ -656,27 +651,26 @@ update_all( void )
   win32_ayplaylist_update();
 }
 
+/* Mixed into the sound of the emulator, the music needs the emulation:
+   Machine > Pause is over */
 static void
 resume_if_paused( void )
 {
-  if( player_paused() ) menu_machine_pause( 0 );
+  if( !ayplay_output_independent() && win32ui_machine_paused() )
+    menu_machine_pause( 0 );
 }
 
-/* Measuring the lengths of the whole list (one song after the other) */
+/* Measuring the lengths of the whole list (one song after the other, in
+   the background; the music goes on meanwhile) */
 static int measuring = 0;
 /* Stop asked for: the song being measured is finished, then no more */
 static int measure_stopping = 0;
 static int measure_next_index = 0;
-/* The song that was playing when measuring started, and where it was;
-   it goes on from there afterwards (-1: none) */
-static int measure_resume_index = -1;
-static long measure_resume_frame = 0;
 
 static void
 play( int index )
 {
   /* Chosen by the user: measuring (if any) is over */
-  if( measuring ) measure_resume_index = -1;
   measuring = 0;
   measure_stopping = 0;
   resume_if_paused();
@@ -706,52 +700,30 @@ measure_next( void )
   while( measuring && !measure_stopping &&
          measure_next_index < ayplaylist_count() ) {
     int index = measure_next_index++;
+    const ayplaylist_entry *entry = ayplaylist_get( index );
 
     if( ayplaylist_length( index, &frames ) ) continue;
-    ayplaylist_play( index );
-    if( ayplayer_scanning() ) {
-      update_all();
+    if( !ayplayer_measure( entry->path, entry->song ) ) {
+      win32_ayplaylist_update();
       return;
     }
   }
 
   measuring = 0;
   measure_stopping = 0;
-  ayplayer_stop();
-
-  /* The song that was playing goes on where it was; or nothing plays */
-  if( measure_resume_index >= 0 &&
-      measure_resume_index < ayplaylist_count() ) {
-    int index = measure_resume_index;
-    measure_resume_index = -1;
-    play( index );
-    if( measure_resume_frame > 0 ) ayplayer_seek( measure_resume_frame );
-    update_time();
-    return;
-  }
-  measure_resume_index = -1;
-  ayplaylist_set_current( -1 );
-  update_all();
+  win32_ayplaylist_update();
 }
 
 void
 win32_ayplayer_measure_all( void )
 {
   if( !fuse_hAYWnd || measuring ) return;
-  resume_if_paused();
-
-  /* A song playing stops for the time of measuring */
-  measure_resume_index = -1;
-  if( ayplayer_current_song() >= 0 ) {
-    measure_resume_index = ayplaylist_current();
-    measure_resume_frame = ayplayer_frames_played();
-    ayplayer_stop();
-  }
 
   measuring = 1;
   measure_stopping = 0;
   measure_next_index = 0;
-  measure_next();
+  /* The song playing is being measured: that first */
+  if( !ayplayer_measuring() ) measure_next();
 }
 
 /* Stop measuring the lengths of the list: the song being measured is
@@ -763,7 +735,7 @@ win32_ayplayer_measure_stop( void )
   measure_stopping = 1;
   win32_ayplaylist_update_status();
   /* Between two songs: over at once */
-  if( !ayplayer_scanning() ) measure_next();
+  if( !ayplayer_measuring() ) measure_next();
 }
 
 int
@@ -786,12 +758,10 @@ close_window( void )
   KillTimer( fuse_hAYWnd, AYPLAYER_TIMER );
   remember_position();
   scan_window_close();
-  /* Games must not stay without a channel */
-  ay_engine_set_channel_muted( 0, 0 );
-  ay_engine_set_channel_muted( 1, 0 );
-  ay_engine_set_channel_muted( 2, 0 );
+  ayplay_set_muted( 0, 0 );
+  ayplay_set_muted( 1, 0 );
+  ayplay_set_muted( 2, 0 );
   ayplayer_set_frame_hook( NULL );
-  resume_if_paused();
   measuring = 0;
   win32_ayplaylist_close();
   DestroyWindow( fuse_hAYWnd );
@@ -804,7 +774,6 @@ close_window( void )
     song_font = NULL;
   }
 
-  /* The program that was running before comes back */
   ayplayer_close();
 }
 
@@ -839,10 +808,8 @@ command( WORD id, WORD code )
       if( index < 0 ) index = 0;
       if( index < count ) play( index );
     } else {
-      /* Pause or resume. When pausing, this returns only after resuming,
-         so show the new label first */
-      if( !player_paused() ) set_text( IDC_AY_PAUSE, i18n( "&Resume" ) );
-      menu_machine_pause( 0 );
+      ayplayer_set_paused( !player_paused() );
+      update_meters( 0 );
     }
     update_pause_button();
     break;
@@ -852,7 +819,7 @@ command( WORD id, WORD code )
   case IDC_AY_LEVEL_LABEL3:
     if( code == BN_CLICKED ) {
       int row = id - IDC_AY_LEVEL_LABEL1;
-      ay_engine_set_channel_muted( meter_order[ row ],
+      ayplay_set_muted( meter_order[ row ],
         IsDlgButtonChecked( fuse_hAYWnd, id ) != BST_CHECKED );
       InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + row ), NULL,
                       FALSE );
@@ -874,9 +841,6 @@ command( WORD id, WORD code )
     break;
 
   case IDC_AY_STOP:
-    resume_if_paused();
-    measuring = 0;
-    measure_resume_index = -1;
     ayplayer_stop();
     update_pause_button();
     update_time();
@@ -889,21 +853,17 @@ command( WORD id, WORD code )
   }
 }
 
-/* Called by the emulation every frame: update the window every 10 frames
-   and go to the next song at the end. Does not depend on WM_TIMER, which
-   Windows does not always send while the emulation keeps the message
-   queue busy */
+/* Called by the emulation every frame and by a timer (the music goes on
+   while the emulation does not run): the level meters every 40 ms, the rest
+   every 200 ms, and at the end of a song the next one. The timer alone is
+   not enough: Windows does not always send WM_TIMER while the emulation
+   keeps the message queue busy */
 #define WM_AYPLAYER_SONG_END ( WM_APP + 1 )
 
 static int song_end_posted = 0;
 
-/* ------------------------------------------------------------------------
-   Measuring the length of a song
-   ------------------------------------------------------------------------ */
-
-#define WM_AYPLAYER_SCAN_DONE ( WM_APP + 2 )
-
-/* While measuring: a line at the bottom of the window */
+/* While the length of the song playing is measured: a line at the bottom
+   of the window */
 static void
 scan_window_close( void )
 {
@@ -912,67 +872,59 @@ scan_window_close( void )
   if( fuse_hAYWnd ) set_text( IDC_AY_STATUS, "" );
 }
 
-/* Called every frame while measuring, and once when it is over */
 static void
 scan_update( void )
 {
-  if( ayplayer_scanning() ) {
+  if( ayplayer_measuring_current() ) {
     if( !scan_window ) {
       scan_window = fuse_hAYWnd;
       set_text( IDC_AY_STATUS, i18n( "Reading the length of the song..." ) );
     }
-    return;
+  } else {
+    scan_window_close();
+  }
+}
+
+static void
+tick( void )
+{
+  static DWORD last_meters = 0, last_time = 0;
+  DWORD now = GetTickCount();
+  int current;
+
+  if( !fuse_hAYWnd ) return;
+
+  /* A length found: shown, and the next song of the list measured */
+  if( ayplayer_poll() ) {
+    if( measuring ) measure_next();
+    win32_ayplaylist_update();
+    update_time();
   }
 
-  /* Over: play the song from the start, with its length */
-  if( ayplayer_scan_take_finished() ) {
-    PostMessage( fuse_hAYWnd, WM_AYPLAYER_SCAN_DONE, 0, 0 );
-    return;
+  if( now - last_meters >= 40 ) {
+    last_meters = now;
+    /* Paused: the meters stay where the music stopped, like a still
+       picture, and go on when it goes on */
+    if( !player_paused() ) update_meters( ayplayer_current_song() < 0 );
   }
 
-  /* Given up (another song was started meanwhile): the window shows the
-     song being played again, its time and level meters */
-  scan_window_close();
+  if( now - last_time < 200 ) return;
+  last_time = now;
+
+  scan_update();
+  current = ayplayer_current_song();
+  if( current >= 0 && ayplayer_song_ended() && !song_end_posted ) {
+    /* Not here, maybe in the middle of a frame: the window does it */
+    song_end_posted = 1;
+    PostMessage( fuse_hAYWnd, WM_AYPLAYER_SONG_END, 0, 0 );
+  }
+  update_time();
 }
 
 static void
 frame_update( void )
 {
-  static int counter = 0, meter_counter = 0;
-  int current;
-
-  if( !fuse_hAYWnd ) return;
-
-  if( ayplayer_scanning() || scan_window ) {
-    scan_update();
-    return;
-  }
-
-  /* Seeking runs fast: the window only now and then */
-  if( ayplayer_seeking() ) {
-    static int seek_counter = 0;
-    if( ++seek_counter >= 250 ) {
-      seek_counter = 0;
-      update_time();
-    }
-    return;
-  }
-
-  if( ++meter_counter >= 2 ) {
-    meter_counter = 0;
-    update_meters( 0 );
-  }
-
-  if( ++counter < 10 ) return;
-  counter = 0;
-
-  current = ayplayer_current_song();
-  if( current >= 0 && ayplayer_song_ended() && !song_end_posted ) {
-    /* Not here, in the middle of a frame: the window does it */
-    song_end_posted = 1;
-    PostMessage( fuse_hAYWnd, WM_AYPLAYER_SONG_END, 0, 0 );
-  }
-  update_time();
+  tick();
 }
 
 /* Play one song or the whole list, repeat it or not: kept in the settings */
@@ -1087,9 +1039,7 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     return TRUE;
 
   case WM_TIMER:
-    /* Only for the paused state; while playing the frames update it */
     if( wParam == AYPLAYER_TIMER ) {
-      /* "Measure lengths" can be used only while nothing plays */
       static int last_busy = -1;
       int busy = win32_ayplayer_busy();
       if( busy != last_busy ) {
@@ -1099,10 +1049,7 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 
       update_pause_button();
       sync_sound_settings();
-      /* Stopped: the meters go down. Paused: they stay where the music
-         stopped, like a still picture, and go on when it goes on */
-      if( ayplayer_current_song() < 0 && !player_paused() )
-        update_meters( 1 );
+      tick();
       return 0;
     }
     break;
@@ -1152,18 +1099,6 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 
   case WM_AYPLAYER_SONG_END:
     song_end();
-    return 0;
-
-  case WM_AYPLAYER_SCAN_DONE:
-    scan_window_close();
-    if( measuring ) {
-      measure_next();
-      return 0;
-    }
-    if( ayplayer_current_song() >= 0 ) {
-      ayplayer_play( ayplayer_current_song() );
-      update_all();
-    }
     return 0;
 
   case WM_COMMAND:

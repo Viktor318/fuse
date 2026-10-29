@@ -30,6 +30,7 @@
 
 #include <string.h>
 
+#include "ayplay.h"
 #include "fuse.h"
 #include "event.h"
 #include "debugger/debugger.h"
@@ -265,6 +266,7 @@ sound_ay_stereo_changed( void )
 {
   int stereo = option_enumerate_sound_stereo_ay();
 
+  ayplay_update_mix();
   if( !sound_enabled ) return;	/* sound_init() reads it */
   /* Custom: the places of the channels may have changed */
   if( stereo == sound_stereo_ay && stereo != SOUND_STEREO_AY_CUSTOM ) return;
@@ -327,6 +329,7 @@ sound_ay_volume_changed( void )
   ay_engine_set_channel_volume( 0, settings_current.volume_ay_a );
   ay_engine_set_channel_volume( 1, settings_current.volume_ay_b );
   ay_engine_set_channel_volume( 2, settings_current.volume_ay_c );
+  ayplay_update_mix();
 }
 
 void
@@ -484,6 +487,12 @@ sound_advance_to( libspectrum_dword endpoint )
   /* Keep short digital silences from triggering aggressive DAC auto-muting.
      Apply to the final PCM, including recordings, not the speaker model. */
   sound_silence_noise_apply( &silence_noise, samples, count, sound_channels );
+#ifndef HAVE_WASAPI_AUDIO
+  /* The music of the AY player (with WASAPI it has a stream of its own) */
+  if( count )
+    ayplay_render( samples, count / sound_channels, sound_channels,
+                   settings_current.sound_freq );
+#endif
   memcpy( frame_samples + frame_sample_count, samples,
           count * sizeof( *samples ) );
   frame_sample_count += count;

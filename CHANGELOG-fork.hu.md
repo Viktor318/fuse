@@ -11,8 +11,7 @@ Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
 - WASAPI hangkimenet (az upstream `feature/wasapi-audio` ágból): a
   `fuse.exe` mostantól ezt használja. Kisebb késleltetés; a hangot egy külön
-  szál adja a hangkártyának; amíg az AY lejátszó szól, 300 ms hang van
-  előre.
+  szál adja a hangkártyának.
 - A WASAPI követi a Windows alapértelmezett hangkimenetét: ha átállítod,
   vagy a használt eszközt kihúzod, a hang a Fuse újraindítása nélkül átvált
   az új alapértelmezett eszközre.
@@ -21,6 +20,21 @@ Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
 ### AY zenelejátszó
 
+- A dalok az emulált géptől függetlenül szólnak: az `.ay` fájl lejátszóját
+  egy saját Z80 futtatja (Andre Weissflog chips Z80-a, zlib licenc), saját
+  AY hanggenerátorral. A lejátszó már nem veszi át a gépet (nincs +2A,
+  nincs pillanatkép): a futó program megy tovább, és a hangja a zenével
+  együtt hallatszik. A Szünet csak a zenét állítja meg.
+- WASAPI-val (`fuse.exe`) a zenének saját hangfolyama van, amelyet egy
+  külön szál táplál: menük, párbeszédablakok és ablakmozgatás alatt is szól,
+  miközben az emuláció a szokásos módon szünetel, és ez is követi az
+  alapértelmezett hangkimenetet. DirectSounddal a zene képkockánként az
+  emulátor hangjába keveredik (300 ms hang van előre, mint eddig).
+- A dalok hosszát a program a háttérben, egy külön szálon méri, miközben a
+  dal szól (a hossz megtalálásakor a dal nem indul újra); a lista ablak
+  *Hosszak mérése* gombja már nem állítja le a szóló dalt. Azokat a hosszakat,
+  amelyeknél az előző változat feladta a mérést, újra megméri. A tekerés
+  mindkét irányban azonnali.
 - Pro Tracker 3 modulok (`.pt3`, a Vortex Tracker II-vel készültek is)
   lejátszása: nem fut Z80-as lejátszó, a program képkockánként a modulból
   számolja ki az AY-regisztereket (a lejátszó a ZXTune-é C-ben, képkockánként

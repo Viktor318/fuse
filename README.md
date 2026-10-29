@@ -67,32 +67,37 @@ There are two programs in the package, with the same settings:
 
 
 Plays `.ay` (ZXAYEMUL) music files – the music of many Spectrum games and
-demos – on an emulated Spectrum +2A, and Pro Tracker 3 (`.pt3`) modules.
+demos – and Pro Tracker 3 (`.pt3`) modules. A song runs on a Z80 of its own
+(the [chips](https://github.com/floooh/chips) Z80 by Andre Weissflog) with an
+AY sound generator of its own, apart from the emulated machine.
 
 - **Opening**: *Media > AY music player...* opens the player without playing
   anything; *File > Open* (or dragging a file onto Fuse) adds the songs of an
   `.ay` file to the end of the playlist and plays the first one.
-- **The program that was running is kept**: when the first song starts, Fuse
-  takes a snapshot of the machine; closing the player (or Fuse) brings it
-  back exactly as it was.
+- **The emulated machine is left alone**: the program that was running goes
+  on, and its sound is heard together with the music.
 - **Playlist window**: songs of any number of files; Add (several files at
   once), Add folder, Remove (also the Delete key), Clear list, Up/Down, Load
   and Save list (`.m3u`), dragging files, folders or lists from Explorer.
   Double click or Enter plays a song. The window can be resized and remembers
   its place, size and column widths; the list is kept for the next start.
 - **Play**: *1 song* or *Whole list*, and *Repeat* (the song or the whole
-  list). Previous / Pause / Stop / Next, and a slider to seek in the song.
+  list). Previous / Pause / Stop / Next (Pause stops the music only), and a
+  slider to seek in the song (at once, in either direction).
 - **Song lengths are measured**: the lengths written in `.ay` files are often
   wrong or missing. The first time a song is played (or with *Measure lengths*
-  in the playlist window), Fuse runs it at full speed without sound until the
-  music repeats, and keeps its exact length (in well under a second). Songs
-  that never repeat get 5 minutes. A song that goes round fades out in
+  in the playlist window), it is run in the background, without sound, until
+  the music repeats, and its exact length is kept (in well under a second);
+  the music goes on meanwhile. Songs that never repeat get 5 minutes. A song that goes round fades out in
   3 seconds when the player moves on.
 - **Levels and sound**: level meters of the three AY channels (in the order
   of the stereo mode), a tick box to mute each channel, volume, and stereo
   mode (none, ACB, ABC and the new BAC) – all changed at once while playing.
-- The music goes on while a menu is open, while a window is moved or when
-  Fuse is minimized.
+- The music goes on while a menu or a dialog box is open, while a window is
+  moved or when Fuse is minimized. With WASAPI (`fuse.exe`) the music has a
+  sound stream of its own and does not need the emulation at all; with
+  DirectSound it is mixed into the sound of the emulator, which then keeps
+  running in menus and while a window is moved (but not in dialog boxes).
 
 ### Window and sound
 

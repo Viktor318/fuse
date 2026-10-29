@@ -47,29 +47,38 @@ void ayplayer_file_info_free( ayplayer_info *info );
 int ayplayer_known_length( libspectrum_dword checksum, int song,
                            long *frames );
 
-/* The first song played takes the machine over (a +2A); the program that
-   was running is kept and comes back when the player releases it */
-int ayplayer_has_machine( void );
-void ayplayer_release( void );
-
-/* Stop, forget the file and give the machine back */
+/* Stop and forget the file */
 void ayplayer_close( void );
 
-/* Play song `song' (0 based) / stop playing */
+/* Play song `song' (0 based) / stop playing. The song plays apart from the
+   emulated machine (ayplay.c), which goes on with what it was doing */
 int ayplayer_play( int song );
 void ayplayer_stop( void );
+void ayplayer_set_paused( int paused );
+int ayplayer_paused( void );
 
-/* Go to a frame of the current song: the emulation runs there without
-   sound and without waiting (backwards: from the start of the song) */
+/* Go to a frame of the current song */
 int ayplayer_seek( long frame );
-int ayplayer_seeking( void );
-long ayplayer_seek_target( void );	/* -1: not seeking */
+
+/* The music is mixed into the sound of the emulator and plays: the
+   emulation has to go on (in menus, while moving the window...) */
+int ayplayer_needs_emulation( void );
 
 /* Called once every frame */
 void ayplayer_frame( void );
 
 /* The user interface can be called every frame (NULL: not) */
 void ayplayer_set_frame_hook( void ( *hook )( void ) );
+
+/* Measuring the length of a song, the first time it is played, in the
+   background while it plays. ayplayer_poll() is called often (it takes the
+   result): 1 when a measuring is over */
+int ayplayer_poll( void );
+int ayplayer_measuring( void );
+int ayplayer_measuring_current( void );	/* the song playing */
+/* Measure a song of a file (playing nothing): 1 if it is known already or
+   cannot be read */
+int ayplayer_measure( const char *filename, int song );
 
 int ayplayer_is_open( void );
 int ayplayer_song_count( void );
@@ -81,15 +90,6 @@ int ayplayer_song_ended( void );
 int ayplayer_length_is_default( void );
 /* The length was measured (by the repetition of the music) */
 int ayplayer_length_is_measured( void );
-
-/* Measuring the length of a song, the first time it is played: the user
-   interface shows the progress (0-100) and, when it is over, plays the
-   song again with ayplayer_play() */
-int ayplayer_scanning( void );
-int ayplayer_scan_progress( void );
-long ayplayer_scan_frames( void );
-int ayplayer_scan_take_finished( void );	/* over since the last call? */
-void ayplayer_scan_cancel( void );		/* plays without measuring */
 
 /* The same song again at the end: a song whose music goes round just goes
    on playing (the elapsed time back to where the round starts); otherwise

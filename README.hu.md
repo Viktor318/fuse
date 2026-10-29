@@ -73,16 +73,16 @@ A csomagban két program van, közös beállításokkal:
 
 
 `.ay` (ZXAYEMUL) zenefájlokat játszik le – sok Spectrum-játék és demó zenéje
-megvan ebben a formában – egy emulált Spectrum +2A-n, valamint Pro Tracker 3
-(`.pt3`) modulokat.
+megvan ebben a formában –, valamint Pro Tracker 3 (`.pt3`) modulokat. A dal
+egy saját Z80-on fut (Andre Weissflog [chips](https://github.com/floooh/chips)
+Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
 
 - **Megnyitás**: a *Média > AY zenelejátszó...* menüpont úgy nyitja meg a
   lejátszót, hogy nem szól semmi; a *Fájl > Megnyitás* (vagy a fájl Fuse-ra
   húzása) a fájl dalait a lejátszási lista végére teszi, és az elsőt
   elindítja.
-- **A futó program megmarad**: amikor az első dal elindul, a Fuse
-  pillanatképet készít a gépről; a lejátszó (vagy a Fuse) bezárásakor
-  pontosan visszaáll oda, ahol a program tartott.
+- **Az emulált gépet nem érinti**: a futó program megy tovább, és a hangja a
+  zenével együtt hallatszik.
 - **Lejátszási lista ablak**: akárhány fájl dalai; Hozzáadás (egyszerre több
   fájl is), Mappa hozzáadása, Eltávolítás (a Delete billentyűvel is), Lista
   törlése, Fel/Le, Lista betöltése és mentése (`.m3u`), fájlok, mappák vagy
@@ -90,20 +90,25 @@ megvan ebben a formában – egy emulált Spectrum +2A-n, valamint Pro Tracker 3
   Az ablak átméretezhető, megjegyzi a helyét, méretét és az oszlopok
   szélességét; a lista megmarad a következő indításra.
 - **Lejátszás**: *1 dal* vagy *Teljes lista*, valamint *Ismétlés* (a dalé
-  vagy a teljes listáé). Előző / Szünet / Leállítás / Következő, és
-  csúszka a dalban való tekeréshez.
+  vagy a teljes listáé). Előző / Szünet / Leállítás / Következő (a Szünet
+  csak a zenét állítja meg), és csúszka a dalban való tekeréshez (azonnal,
+  mindkét irányban).
 - **A dalok hosszát a program megméri**: az `.ay` fájlokban megadott
   hosszak gyakran hibásak vagy hiányoznak. Egy dal első lejátszásakor (vagy a
-  lista ablak *Hosszak mérése* gombjával) a Fuse hang nélkül, teljes
-  sebességgel futtatja a dalt, amíg a zene ismétlődni nem kezd, és megjegyzi
-  a pontos hosszát (ez jóval egy másodpercen belül megvan). A sosem ismétlődő
-  dalok 5 percet kapnak. A körbeérő dal 3 másodperc alatt elhalkul, amikor a
+  lista ablak *Hosszak mérése* gombjával) a dal a háttérben, hang nélkül fut,
+  amíg a zene ismétlődni nem kezd, és a program megjegyzi a pontos hosszát
+  (ez jóval egy másodpercen belül megvan); a zene közben szól tovább. A sosem
+  ismétlődő dalok 5 percet kapnak. A körbeérő dal 3 másodperc alatt elhalkul, amikor a
   lejátszó továbblép.
 - **Szintek és hang**: a három AY-csatorna szintjelzője (a sztereó mód
   sorrendjében), csatornánként némító jelölőnégyzet, hangerő és sztereó mód
   (nincs, ACB, ABC és az új BAC) – mind lejátszás közben, azonnal állítható.
-- A zene akkor is szól tovább, ha egy menü nyitva van, ha egy ablakot
-  mozgatsz, vagy ha a Fuse kis méretre van állítva.
+- A zene akkor is szól tovább, ha egy menü vagy párbeszédablak nyitva van, ha
+  egy ablakot mozgatsz, vagy ha a Fuse kis méretre van állítva. WASAPI-val
+  (`fuse.exe`) a zenének saját hangfolyama van, és egyáltalán nem kell hozzá
+  az emuláció; DirectSounddal a zene az emulátor hangjába keveredik, ezért az
+  emuláció menükben és ablakmozgatás közben fut tovább (párbeszédablakokban
+  nem).
 
 ### Ablakok és hang
 

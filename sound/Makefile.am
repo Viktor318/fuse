@@ -37,6 +37,7 @@ EXTRA_fuse_SOURCES += \
                       sound/sfifo.c \
                       sound/sunsound.c \
                       sound/wiisound.c \
+                      sound/ayplay_wasapi.c \
                       sound/wasapi_pcm.c \
                       sound/wasapi_native.c \
                       sound/wasapisound.c \
@@ -51,6 +52,7 @@ noinst_HEADERS += \
                   sound/audio_pacing.h \
                   sound/audio_progress.h \
                   sound/blipbuffer.h \
+                  sound/chips_z80.h \
                   sound/dc_filter.h \
                   sound/output_mixer.h \
                   sound/silence_noise.h \

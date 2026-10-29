@@ -727,7 +727,7 @@ case $audio_driver in
     if test "$UI" != win32; then
       AC_MSG_ERROR([WASAPI trial requires the native --with-win32 UI])
     fi
-    SOUND_LIBADD='sound/wasapisound.$(OBJEXT) sound/wasapi_native.$(OBJEXT) sound/wasapi_pcm.$(OBJEXT)'
+    SOUND_LIBADD='sound/wasapisound.$(OBJEXT) sound/wasapi_native.$(OBJEXT) sound/wasapi_pcm.$(OBJEXT) sound/ayplay_wasapi.$(OBJEXT)'
     SOUND_LIBS='-lole32 -lavrt -luuid -luser32' sound_fifo=yes
     dnl Some legacy files include CRT headers before config.h. Set the target
     dnl on the command line too, before MinGW chooses its newer default.

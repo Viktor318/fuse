@@ -933,9 +933,10 @@ win32ui_machine_paused( void )
 
 /* While Windows runs a loop of its own (a menu is open, a window is moved
    or resized, a list opens...), the main loop does not run. Normally the
-   emulation is paused meanwhile. While the AY player plays, a timer notices
-   when the main loop has not run for a while and runs the frames itself,
-   so the music goes on */
+   emulation is paused meanwhile. While the AY player plays and its music is
+   mixed into the sound of the emulator (not with WASAPI, where it has a
+   stream of its own), a timer notices when the main loop has not run for a
+   while and runs the frames itself, so the music goes on */
 static int modal_depth = 0;
 static int modal_running = 0;
 static LARGE_INTEGER stall_start, counter_frequency;
@@ -947,7 +948,7 @@ win32ui_modal_enter( void )
 {
   if( modal_depth++ ) return;
 
-  modal_running = ayplayer_current_song() >= 0 && !paused;
+  modal_running = ayplayer_needs_emulation() && !paused;
   if( !modal_running ) fuse_emulation_pause();
 }
 
@@ -979,7 +980,7 @@ modal_emulation_tick( void )
   int run = 0;
 
   if( modal_emulating || paused || fuse_exiting || fuse_emulation_paused ||
-      !counter_frequency.QuadPart || ayplayer_current_song() < 0 ) {
+      !counter_frequency.QuadPart || !ayplayer_needs_emulation() ) {
     stalled = 0;
     return;
   }
@@ -1520,7 +1521,7 @@ win32ui_window_resize( HWND hWnd, WPARAM wParam, LPARAM lParam )
 {
   if( wParam == SIZE_MINIMIZED ) {
     /* The AY player goes on playing in the background */
-    if( !size_paused && ayplayer_current_song() >= 0 && !paused ) return 0;
+    if( !size_paused && ayplayer_needs_emulation() && !paused ) return 0;
 
     if( !size_paused ) {
       size_paused = 1;

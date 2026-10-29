@@ -11,7 +11,7 @@ in [ChangeLog](ChangeLog).
 
 - WASAPI sound output (from the upstream `feature/wasapi-audio` branch):
   `fuse.exe` now uses it. Lower latency; the sound is fed from a thread of
-  its own; while the AY player plays, 300 ms of sound are kept ahead.
+  its own.
 - WASAPI follows the Windows default output: when it is changed, or the
   device in use is unplugged, the sound moves to the new default device
   without restarting Fuse.
@@ -20,6 +20,21 @@ in [ChangeLog](ChangeLog).
 
 ### AY music player
 
+- Songs play apart from the emulated machine: a Z80 of its own (the chips
+  Z80 by Andre Weissflog, zlib license) runs the player of the `.ay` file,
+  with an AY sound generator of its own. The machine is no longer taken over
+  (no +2A, no snapshot): the program that was running goes on and is heard
+  together with the music. Pause stops the music only.
+- With WASAPI (`fuse.exe`) the music has a sound stream of its own, fed by a
+  thread: it plays on during menus, dialog boxes and window moves, with the
+  emulation paused as usual, and follows the default output device too.
+  With DirectSound it is mixed into the sound of the emulator, frame by
+  frame (300 ms of sound kept ahead, as before).
+- Song lengths are measured in the background, in a thread, while the song
+  plays (no restart when the length is found); *Measure lengths* in the
+  playlist window no longer stops the song playing. Lengths that the earlier
+  version gave up on are measured again. Seeking is instant in both
+  directions.
 - Pro Tracker 3 modules (`.pt3`, also from Vortex Tracker II) can be played
   too: no Z80 player runs, the AY registers of every frame are worked out
   from the module (the player is a C port of ZXTune's, checked frame by

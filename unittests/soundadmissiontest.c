@@ -21,6 +21,11 @@
 #include <setjmp.h>
 #define FUSE_SOUND_TEST_INTERVAL 0
 #include "sound.c"
+
+/* The AY player is not part of these tests */
+void ayplay_update_mix( void ) {}
+void ayplay_render( short *dest, int frames, int channels, int rate )
+{ (void)dest; (void)frames; (void)channels; (void)rate; }
 #include "event.c"
 int rzx_playback;
 enum debugger_mode_t debugger_mode = DEBUGGER_MODE_INACTIVE;

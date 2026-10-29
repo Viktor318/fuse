@@ -29,7 +29,6 @@
 #include "phantom_typist.h"
 #include "settings.h"
 #include "sound.h"
-#include "ayplayer.h"
 #include "tape.h"
 #include "timer.h"
 #include "ui/ui.h"
@@ -192,8 +191,7 @@ timer_frame( libspectrum_dword last_tstates, int event GCC_UNUSED,
 
   /* If we're fastloading, just schedule another check in a frame's time
      and do nothing else */
-  if( ( settings_current.fastload && timer_fastloading_active() ) ||
-      ayplayer_seeking() ) {
+  if( settings_current.fastload && timer_fastloading_active() ) {
 
     libspectrum_dword next_check_time =
       last_tstates + machine_current->timings.tstates_per_frame;

@@ -50,6 +50,9 @@ fuse_SOURCES = display.c \
 	i18n.c \
 	i18n_hu.c \
 	ayplayer.c \
+	ayplay.c \
+	aymeasure.c \
+	aysource.c \
 	pt3player.c \
 	ayplaylist.c \
 	basic_text.c \
@@ -159,6 +162,9 @@ noinst_HEADERS = bitmap.h \
 	hungarian_keyboard.h \
 	i18n.h \
 	ayplayer.h \
+	ayplay.h \
+	aymeasure.h \
+	aysource.h \
 	ayplaylist.h \
 	basic_text.h \
 	phantom_typist.h \

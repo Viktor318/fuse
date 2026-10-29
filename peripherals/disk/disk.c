@@ -2253,8 +2253,10 @@ fprintf( stderr, "\n::::%s:::: ", filename );
     break;
   case LIBSPECTRUM_ID_DISK_OPD:
     d->type = DISK_OPD;
+    /* fall through */
   case LIBSPECTRUM_ID_DISK_MGT:
     if( d->type == DISK_TYPE_NONE) d->type = DISK_MGT;
+    /* fall through */
   case LIBSPECTRUM_ID_DISK_IMG:
     if( d->type == DISK_TYPE_NONE) d->type = DISK_IMG;
     open_img_mgt_opd( &buffer, d );
@@ -2273,6 +2275,7 @@ fprintf( stderr, "\n::::%s:::: ", filename );
     break;
   case LIBSPECTRUM_ID_DISK_CPC:
     d->type = DISK_CPC;
+    /* fall through */
   case LIBSPECTRUM_ID_DISK_ECPC:
     if( d->type == DISK_TYPE_NONE) d->type = DISK_ECPC;
     open_cpc( &buffer, d, preindex );

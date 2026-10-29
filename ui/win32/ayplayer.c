@@ -1179,7 +1179,8 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 }
 
 /* "Play: (o) 1 song ( ) Whole list [x] Repeat": one after the other, as
-   wide as their texts are (in either language) */
+   wide as their texts are (in either language); the repeat box under the
+   Next button */
 static void
 layout_play_row( void )
 {
@@ -1214,6 +1215,16 @@ layout_play_row( void )
 
     /* A radio button or tick box: the box and the room after it too */
     width = size.cx + ( i ? box + 6 : 0 );
+
+    /* The repeat box starts where the Next button does, if there is room */
+    if( i == 3 ) {
+      RECT next;
+      POINT next_corner;
+      GetWindowRect( GetDlgItem( fuse_hAYWnd, IDC_AY_NEXT ), &next );
+      next_corner.x = next.left; next_corner.y = next.top;
+      ScreenToClient( fuse_hAYWnd, &next_corner );
+      if( next_corner.x > x ) x = next_corner.x;
+    }
 
     GetWindowRect( control, &rect );
     corner.x = rect.left; corner.y = rect.top;

@@ -69,6 +69,8 @@ static HFONT song_font = NULL;
 
 static int shown_volume = -1;
 static int shown_stereo = -1;
+/* The places of the channels shown in the level meter labels */
+static int shown_positions[3] = { -1, -1, -1 };
 
 /* Pausing works as Machine > Pause (the emulation really stops) */
 static int
@@ -166,6 +168,7 @@ update_level_labels( void )
 
   ay_engine_stereo_order( stereo, meter_order );
   sound_ay_channel_positions( stereo, position );
+  memcpy( shown_positions, position, sizeof( position ) );
   for( row = 0; row < 3; row++ ) {
     if( stereo == SOUND_STEREO_AY_NONE )
       _snprintf( text, sizeof( text ), "%c", 'A' + meter_order[ row ] );
@@ -301,6 +304,7 @@ volume_changed( void )
   settings_current.volume_ay = volume;
   shown_volume = volume;
   sound_ay_volume_changed();
+  win32_options_sound_sync();
 
   _snprintf( text, sizeof( text ), "%d%%", volume );
   text[ sizeof( text ) - 1 ] = '\0';
@@ -327,6 +331,7 @@ stereo_changed( void )
   sound_ay_stereo_changed();
   shown_stereo = stereo;
   update_level_labels();
+  win32_options_sound_sync();
 }
 
 /* Changed in the options meanwhile? */
@@ -334,7 +339,15 @@ static void
 sync_sound_settings( void )
 {
   if( settings_current.volume_ay != shown_volume ) show_volume();
-  if( option_enumerate_sound_stereo_ay() != shown_stereo ) show_stereo();
+  if( option_enumerate_sound_stereo_ay() != shown_stereo ) {
+    show_stereo();
+  } else {
+    /* Custom: the places of the channels may have changed */
+    int position[3];
+    sound_ay_channel_positions( shown_stereo, position );
+    if( memcmp( position, shown_positions, sizeof( position ) ) )
+      update_level_labels();
+  }
 }
 
 /* ------------------------------------------------------------------------

@@ -287,11 +287,13 @@ spectrum_unattached_port( void )
 
     /* Attribute bytes */
     case 5: column++;
+    /* fall through */
     case 3:
       return RAM[ memory_current_screen ][ display_attr_start[line] + column ];
 
     /* Screen data */
     case 4: column++;
+    /* fall through */
     case 2:
       return RAM[ memory_current_screen ][ display_line_start[line] + column ];
 

@@ -226,6 +226,9 @@ group	context	english	hungarian
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	&AY stereo separation	&AY sztereó szétválasztás
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	Speaker &type	Hangszóró &típusa
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	A&Y volume	A&Y hangerő
+2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	AY channel A &volume	AY A csatorna han&gereje
+2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	AY channel B volu&me	AY B csatorna hangere&je
+2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	AY channel C v&olume	AY C csat&orna hangereje
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	B&eeper volume	B&eeper hangerő
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	Spec&Drum volume	Spec&Drum hangerő
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	&Covox volume	&Covox hangerő
@@ -534,6 +537,8 @@ extra	AY player	&Song:	&Dal:
 extra	AY player	'%s' is not a valid AY music file	A(z) '%s' nem érvényes AY zenefájl
 extra	AY player	'%s' is not an AY music file	A(z) '%s' nem AY zenefájl
 extra	AY player	AY Music Files (*.ay;*.pt3)	AY zenefájlok (*.ay;*.pt3)
+extra	AY player	R&eset	&Alaphelyzet
+extra	AY player	Channel %c volume: %d%%	%c csatorna hangereje: %d%%
 extra	AY player	'%s' is not a valid PT3 music file	A(z) '%s' nem érvényes PT3 zenefájl
 extra	AY player	Author:	Szerző:
 extra	AY player	Elapsed: %d:%02d	Eltelt: %d:%02d

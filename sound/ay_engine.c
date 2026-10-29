@@ -66,6 +66,8 @@ static int ay_volume = 100;
 static int ay_fade = 100;
 /* Channels not heard (the level meters still see them) */
 static int channel_muted[AY_CHANNELS];
+/* Volume of each channel in percent */
+static int channel_volume[AY_CHANNELS] = { 100, 100, 100 };
 /* Highest level (0-15) of each channel since the last query */
 static int meter_peak[AY_CHANNELS];
 
@@ -169,6 +171,31 @@ ay_engine_channel_muted( int channel )
   return channel >= 0 && channel < AY_CHANNELS && channel_muted[ channel ];
 }
 
+void
+ay_engine_set_channel_volume( int channel, int percent )
+{
+  if( channel < 0 || channel >= AY_CHANNELS ) return;
+  channel_volume[ channel ] = percent < 0 ? 0 : percent > 100 ? 100 : percent;
+}
+
+/* A level (0-15) as heard after the volume of the channel: the highest
+   level of the chip that is not louder */
+int
+ay_engine_channel_level_heard( int channel, int level )
+{
+  unsigned int amplitude;
+  int heard;
+
+  if( channel < 0 || channel >= AY_CHANNELS ) return level;
+  if( level <= 0 ) return 0;
+  if( level > AY_ENV_STEPS - 1 ) level = AY_ENV_STEPS - 1;
+  if( channel_volume[ channel ] >= 100 ) return level;
+
+  amplitude = levels[ level ] * channel_volume[ channel ] / 100;
+  for( heard = level; heard > 0 && levels[ heard ] > amplitude; heard-- ) ;
+  return heard;
+}
+
 int
 ay_engine_channel_peak( int channel )
 {
@@ -177,7 +204,7 @@ ay_engine_channel_peak( int channel )
   if( channel < 0 || channel >= AY_CHANNELS ) return 0;
   peak = meter_peak[ channel ];
   meter_peak[ channel ] = 0;
-  return peak;
+  return ay_engine_channel_level_heard( channel, peak );
 }
 
 void
@@ -333,7 +360,7 @@ ay_channel_output( int channel, int envelope_level, unsigned int tone_count )
   }
   if( !( mixer & ( 0x08 << channel ) ) && noise_toggle ) output = 0;
   if( channel_muted[channel] ) return 0;
-  return output * ay_volume * ay_fade / 10000;
+  return output * ay_volume * ay_fade / 10000 * channel_volume[channel] / 100;
 }
 
 static void

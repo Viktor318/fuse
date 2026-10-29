@@ -16,6 +16,11 @@ in [ChangeLog](ChangeLog).
   author come from the module; the playlist, length measurement, seeking,
   level meters, stereo and channel muting work as for `.ay` files. Of
   TurboSound modules only the first AY is played for now.
+- Volume of each channel: a slider beside each level meter (0-100%; the
+  percent is shown above the thumb while moving it, and in a tooltip),
+  *Reset* sets all three back to 100%. The meters show the levels after
+  these volumes. The volumes are kept, and are also in *Options > Sound*;
+  both windows show changes at once. The window is a little wider.
 
 ## v1.10.0-hu.1 – 2026-10-25
 

@@ -111,6 +111,9 @@ sound_force_8bit, null, 0
 sound_freq, numeric, 44100, 'f'
 speaker_type, string, NULL
 volume_ay, numeric, 100
+volume_ay_a, numeric, 100
+volume_ay_b, numeric, 100
+volume_ay_c, numeric, 100
 volume_beeper, numeric, 100
 volume_specdrum, numeric, 100
 volume_covox, numeric, 100

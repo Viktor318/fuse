@@ -191,6 +191,7 @@ sound_init( const char *device )
   if( audio_cut_interval && audio_event < 0 )
     audio_event = event_register( sound_audio_event, "Audio cut" );
   ay_engine_init( settings_current.volume_ay, sound_stereo_ay );
+  sound_ay_volume_changed();
   /* The sound generator starts from the registers the AY has now (they
      may have changed while the sound was off, e.g. in the AY player) */
   {
@@ -323,6 +324,9 @@ void
 sound_ay_volume_changed( void )
 {
   ay_engine_set_volume( settings_current.volume_ay );
+  ay_engine_set_channel_volume( 0, settings_current.volume_ay_a );
+  ay_engine_set_channel_volume( 1, settings_current.volume_ay_b );
+  ay_engine_set_channel_volume( 2, settings_current.volume_ay_c );
 }
 
 void

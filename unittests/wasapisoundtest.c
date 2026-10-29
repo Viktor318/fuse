@@ -22,7 +22,7 @@
 struct wasapi_native {
   struct wasapi_service *service;
   unsigned int prefill, padding;
-  int started;
+  int started, device_changed;
   int32_t error;
   void (*notify)( void * );
   void *observer;
@@ -101,6 +101,8 @@ wasapi_native_data( struct wasapi_native *n )
   return 0;
 }
 int wasapi_native_started( struct wasapi_native *n ) { return n->started; }
+int wasapi_native_device_changed( struct wasapi_native *n )
+{ return n->device_changed; }
 int32_t wasapi_native_error( struct wasapi_native *n ) { return n->error; }
 const char *wasapi_native_operation( struct wasapi_native *n )
 { (void)n; return "injected packet fault"; }
@@ -133,6 +135,9 @@ settings_info settings_current;
 libspectrum_dword sound_get_effective_processor_speed( void )
 { return 3500000 * speed_percent / 100; }
 int sound_normal_producer_context( void ) { return context; }
+int sound_long_buffer = 0;
+static int restarts;
+void sound_request_restart( void ) { restarts++; }
 int ui_error( ui_error_level level, const char *message, ... )
 { (void)level; (void)message; return 0; }
 int ui_error_console( ui_error_level level, const char *message, ... )
@@ -189,6 +194,18 @@ main( void )
   CHECK( service.silence == 0 );
   sound_lowlevel_end(); CHECK( !live && !sound_fifo.buffer && !service.scratch );
 
+  /* A changed output endpoint requests a reopen instead of retiring, and
+     holds production until the restart without reporting a failure. */
+  start( 0 ); publish( 960 ); publish( 960 );
+  mock.device_changed = 1;
+  CHECK( !sound_lowlevel_reserve( 240 ) && native && settings_current.sound );
+  CHECK( restarts == 1 && !pacing.reserved );
+  CHECK( !sound_lowlevel_reserve( 240 ) && restarts == 1 );
+  sound_lowlevel_frame( NULL, 240 ); CHECK( native && settings_current.sound );
+  sound_lowlevel_end(); CHECK( !live && !sound_fifo.buffer );
+  start( 0 ); CHECK( !restart_requested ); publish( 960 );
+  sound_lowlevel_end();
+
   /* Device failure must retire even when the producer already has room. */
   start( 0 );
   mock.error = WASAPI_PACKET_FAILURE;
@@ -227,7 +244,7 @@ main( void )
   CHECK( sound_lowlevel_init( NULL, &rate, &stereo ) );
   join_failure = 0; sound_lowlevel_end(); CHECK( !native && !sound_fifo.buffer );
   for( int i = 0; i < 32; i++ ) { start( SOUND_STEREO_AY_ACB ); sound_lowlevel_end(); }
-  CHECK( closes == 39 && waits > 0 );
+  CHECK( closes == 41 && waits > 0 );
   /* A worker stalled before Start must not trap the producer behind a stopped
      FIFO. Use an already-expired watchdog, without a wall-clock test sleep. */
   start( 0 ); block_start = 1; publish( 960 ); publish( 960 );

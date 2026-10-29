@@ -15,8 +15,18 @@
 #include <avrt.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 #include "wasapi_native.h"
+
+struct wasapi_native;
+
+/* Endpoint notifications arrive on a system thread; they only raise a flag
+   which the producer turns into a restart on the new default endpoint. */
+struct device_watch {
+  IMMNotificationClient iface; /* Must be first */
+  struct wasapi_native *native;
+};
 
 struct wasapi_native {
   HANDLE thread, stop, ready, data, audio;
@@ -26,7 +36,7 @@ struct wasapi_native {
   void (*notify)( void * );
   void *observer;
   _Atomic int32_t error;
-  _Atomic int started, attached;
+  _Atomic int started, attached, device_changed;
   const char *operation; /* Written before sticky error; read only after error. */
   /* Worker-only COM state. Never passed to the producer apartment. */
   IMMDeviceEnumerator *enumerator;
@@ -35,7 +45,9 @@ struct wasapi_native {
   IAudioRenderClient *render;
   WAVEFORMATEX *mix;
   HANDLE mmcss;
-  int initialized;
+  int initialized, watching;
+  struct device_watch watch;
+  WCHAR device_id[512]; /* Immutable once watching starts */
 };
 
 static HRESULT
@@ -114,6 +126,95 @@ format_read( const WAVEFORMATEX *mix, struct wasapi_format *format )
   return S_OK;
 }
 
+static void
+device_changed( struct wasapi_native *n )
+{
+  if( !atomic_exchange( &n->device_changed, 1 ) &&
+      atomic_load( &n->attached ) && n->notify ) n->notify( n->observer );
+}
+
+static int
+is_current( struct wasapi_native *n, LPCWSTR id )
+{
+  return id && n->device_id[0] && !wcscmp( id, n->device_id );
+}
+
+static HRESULT STDMETHODCALLTYPE
+watch_query( IMMNotificationClient *self, REFIID riid, void **object )
+{
+  if( IsEqualIID( riid, &IID_IUnknown ) ||
+      IsEqualIID( riid, &IID_IMMNotificationClient ) ) {
+    *object = self;
+    return S_OK;
+  }
+  *object = NULL;
+  return E_NOINTERFACE;
+}
+/* The object lives inside the native lifetime and is unregistered before
+   that is freed, so reference counting is not needed. */
+static ULONG STDMETHODCALLTYPE
+watch_addref( IMMNotificationClient *self ) { (void)self; return 1; }
+static ULONG STDMETHODCALLTYPE
+watch_release( IMMNotificationClient *self ) { (void)self; return 1; }
+
+static HRESULT STDMETHODCALLTYPE
+watch_state( IMMNotificationClient *self, LPCWSTR id, DWORD state )
+{
+  struct wasapi_native *n = ( (struct device_watch *)self )->native;
+  if( state != DEVICE_STATE_ACTIVE && is_current( n, id ) ) device_changed( n );
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE
+watch_added( IMMNotificationClient *self, LPCWSTR id )
+{
+  (void)self; (void)id; return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE
+watch_removed( IMMNotificationClient *self, LPCWSTR id )
+{
+  struct wasapi_native *n = ( (struct device_watch *)self )->native;
+  if( is_current( n, id ) ) device_changed( n );
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE
+watch_default( IMMNotificationClient *self, EDataFlow flow, ERole role,
+               LPCWSTR id )
+{
+  struct wasapi_native *n = ( (struct device_watch *)self )->native;
+  /* Follow the console default output, which is the one opened. With no
+     output left there is nothing to move to; wait for the next change. */
+  if( flow == eRender && role == eConsole && id && !is_current( n, id ) )
+    device_changed( n );
+  return S_OK;
+}
+static HRESULT STDMETHODCALLTYPE
+watch_property( IMMNotificationClient *self, LPCWSTR id, const PROPERTYKEY key )
+{
+  (void)self; (void)id; (void)key; return S_OK;
+}
+
+static IMMNotificationClientVtbl watch_vtbl = {
+  watch_query, watch_addref, watch_release, watch_state, watch_added,
+  watch_removed, watch_default, watch_property
+};
+
+/* Failing to watch is not fatal: output then stays on the opened endpoint */
+static void
+watch_start( struct wasapi_native *n )
+{
+  LPWSTR id = NULL;
+  if( SUCCEEDED( IMMDevice_GetId( n->device, &id ) ) && id ) {
+    wcsncpy( n->device_id, id, ARRAYSIZE( n->device_id ) - 1 );
+    n->device_id[ ARRAYSIZE( n->device_id ) - 1 ] = 0;
+    CoTaskMemFree( id );
+  }
+  n->watch.iface.lpVtbl = &watch_vtbl;
+  n->watch.native = n;
+  n->watching = SUCCEEDED(
+    IMMDeviceEnumerator_RegisterEndpointNotificationCallback( n->enumerator,
+                                                              &n->watch.iface ) );
+}
+
 static HRESULT
 activate( struct wasapi_native *n )
 {
@@ -143,6 +244,7 @@ negotiate( struct wasapi_native *n )
     NULL, CLSCTX_INPROC_SERVER, &IID_IMMDeviceEnumerator, (void **)&n->enumerator ) );
   NATIVE_CHECK( "default endpoint", IMMDeviceEnumerator_GetDefaultAudioEndpoint(
     n->enumerator, eRender, eConsole, &n->device ) );
+  watch_start( n );
   NATIVE_CHECK( "activate client", activate( n ) );
   NATIVE_CHECK( "mix format", IAudioClient_GetMixFormat( n->client, &n->mix ) );
   NATIVE_CHECK( "validate mix format", format_read( n->mix, &g->format ) );
@@ -293,6 +395,10 @@ stream_release( struct wasapi_native *n )
     result = IAudioClient_Stop( n->client );
     if( FAILED( result ) ) failure( n, "stop stream", result );
   }
+  if( n->watching )
+    IMMDeviceEnumerator_UnregisterEndpointNotificationCallback( n->enumerator,
+                                                                &n->watch.iface );
+  n->watching = 0;
   if( n->render ) IAudioRenderClient_Release( n->render );
   if( n->client ) IAudioClient_Release( n->client );
   if( n->device ) IMMDevice_Release( n->device );
@@ -337,9 +443,10 @@ static HRESULT
 state_init( struct wasapi_native *n )
 {
   atomic_init( &n->error, 0 ); atomic_init( &n->started, 0 );
-  atomic_init( &n->attached, 0 );
+  atomic_init( &n->attached, 0 ); atomic_init( &n->device_changed, 0 );
   if( !atomic_is_lock_free( &n->error ) || !atomic_is_lock_free( &n->started ) ||
-      !atomic_is_lock_free( &n->attached ) ) return E_NOTIMPL;
+      !atomic_is_lock_free( &n->attached ) ||
+      !atomic_is_lock_free( &n->device_changed ) ) return E_NOTIMPL;
   return S_OK;
 }
 
@@ -442,6 +549,14 @@ wasapi_native_data( struct wasapi_native *n )
   return SetEvent( n->data ) ? S_OK : HRESULT_FROM_WIN32( GetLastError() );
 }
 int wasapi_native_started( struct wasapi_native *n ) { return atomic_load( &n->started ); }
+int
+wasapi_native_device_changed( struct wasapi_native *n )
+{
+  /* An invalidated endpoint (unplugged, disabled, format change) is also a
+     reason to reopen the current default rather than to give up */
+  return atomic_load( &n->device_changed ) ||
+         atomic_load( &n->error ) == AUDCLNT_E_DEVICE_INVALIDATED;
+}
 int32_t
 wasapi_native_error( struct wasapi_native *n )
 {

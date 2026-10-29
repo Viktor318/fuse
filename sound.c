@@ -593,6 +593,13 @@ sound_frame( void )
   }
 }
 
+/* Reopen the output at the end of the frame (output device changed) */
+void
+sound_request_restart( void )
+{
+  if( sound_enabled ) sound_restart_pending = 1;
+}
+
 /* The AY player keeps more sound ahead than games do */
 void
 sound_set_long_buffer( int on )

@@ -24,6 +24,8 @@ int32_t wasapi_native_attach( struct wasapi_native *native,
                               unsigned int prefill );
 int32_t wasapi_native_data( struct wasapi_native *native );
 int wasapi_native_started( struct wasapi_native *native );
+/* Nonzero once the default output changed or the opened one went away */
+int wasapi_native_device_changed( struct wasapi_native *native );
 int32_t wasapi_native_error( struct wasapi_native *native );
 const char *wasapi_native_operation( struct wasapi_native *native );
 /* Called only while service state exists; observer wake does not grant space. */

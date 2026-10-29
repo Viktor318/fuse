@@ -128,6 +128,7 @@ extern int sound_stereo_ay;
    does not matter, hold-ups of the program are not heard) */
 extern int sound_long_buffer;
 void sound_set_long_buffer( int on );
+void sound_request_restart( void );
 
 /* settings_current.stereo_ay / volume_ay(_a/_b/_c) changed: apply while
    playing */

@@ -13,6 +13,9 @@ Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
   `fuse.exe` mostantól ezt használja. Kisebb késleltetés; a hangot egy külön
   szál adja a hangkártyának; amíg az AY lejátszó szól, 300 ms hang van
   előre.
+- A WASAPI követi a Windows alapértelmezett hangkimenetét: ha átállítod,
+  vagy a használt eszközt kihúzod, a hang a Fuse újraindítása nélkül átvált
+  az új alapértelmezett eszközre.
 - `fuse-directsound.exe`: ugyanez a program DirectSounddal, tartaléknak. A
   kettő ugyanazokat a beállításokat használja.
 

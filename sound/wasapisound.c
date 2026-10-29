@@ -24,7 +24,7 @@ static struct wasapi_geometry geometry;
 static struct wasapi_service service;
 static struct audio_pacing pacing;
 static struct audio_progress progress;
-static int progress_initialized, failure_reported;
+static int progress_initialized, failure_reported, restart_requested;
 static _Atomic bool native_negative;
 static unsigned int width, prefill_goal;
 /* While the AY player plays (sound_long_buffer), the FIFO is made larger when
@@ -125,7 +125,17 @@ healthy( void )
 {
   int32_t error;
   uint32_t generation;
-  if( !native ) return 0;
+  if( !native || restart_requested ) return 0;
+  if( wasapi_native_device_changed( native ) ) {
+    /* Hold production until the end of the frame, then reopen the output on
+       the current default endpoint */
+    restart_requested = 1;
+    failure_reported = 1;
+    ui_error_console( UI_ERROR_INFO, "WASAPI: output endpoint changed; "
+                      "restarting on the default endpoint" );
+    sound_request_restart();
+    return 0;
+  }
   error = wasapi_native_error( native );
   if( error < 0 ) {
     const char *operation = wasapi_native_operation( native );
@@ -218,7 +228,7 @@ report_startup( int requested_rate, unsigned int capacity )
             "%u input/%u endpoint channels; "
             "%s period-frames=%u, low-period result=0x%08lx, "
             "native capacity=%u, FIFO capacity=%u%s. "
-            "Default endpoint pinned until reinitialization",
+            "Default endpoint followed on change",
             requested_rate, geometry.format.rate,
             service.channels, geometry.format.channels,
             geometry.client3 ? "client3 selected" : "compatibility reported-default",
@@ -248,6 +258,7 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
     return 1;
   }
   failure_reported = 0;
+  restart_requested = 0;
   error = wasapi_native_open( &native, &geometry, &operation );
   if( error < 0 ) {
     retire( operation ? operation : "negotiate default endpoint", error );

@@ -448,6 +448,8 @@ resume_if_paused( void )
 
 /* Measuring the lengths of the whole list (one song after the other) */
 static int measuring = 0;
+/* Stop asked for: the song being measured is finished, then no more */
+static int measure_stopping = 0;
 static int measure_next_index = 0;
 /* The song that was playing when measuring started, and where it was;
    it goes on from there afterwards (-1: none) */
@@ -484,7 +486,8 @@ measure_next( void )
 {
   long frames;
 
-  while( measuring && measure_next_index < ayplaylist_count() ) {
+  while( measuring && !measure_stopping &&
+         measure_next_index < ayplaylist_count() ) {
     int index = measure_next_index++;
 
     if( ayplaylist_length( index, &frames ) ) continue;
@@ -496,6 +499,7 @@ measure_next( void )
   }
 
   measuring = 0;
+  measure_stopping = 0;
   ayplayer_stop();
 
   /* The song that was playing goes on where it was; or nothing plays */
@@ -528,8 +532,27 @@ win32_ayplayer_measure_all( void )
   }
 
   measuring = 1;
+  measure_stopping = 0;
   measure_next_index = 0;
   measure_next();
+}
+
+/* Stop measuring the lengths of the list: the song being measured is
+   finished first, so its length is not lost */
+void
+win32_ayplayer_measure_stop( void )
+{
+  if( !measuring || measure_stopping ) return;
+  measure_stopping = 1;
+  win32_ayplaylist_update_status();
+  /* Between two songs: over at once */
+  if( !ayplayer_scanning() ) measure_next();
+}
+
+int
+win32_ayplayer_measure_stopping( void )
+{
+  return measuring && measure_stopping;
 }
 
 int

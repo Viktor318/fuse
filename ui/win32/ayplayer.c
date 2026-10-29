@@ -55,8 +55,9 @@ static int meter_shown[ 3 ];
 static int meter_order[ 3 ] = { 0, 1, 2 };
 
 /* The stereo modes in the order of the combo box (and of the options) */
-static const char * const stereo_names[] = { "None", "ACB", "ABC", "BAC" };
-#define STEREO_COUNT 4
+static const char * const stereo_names[] =
+  { "None", "ACB", "ABC", "BAC", "CBA", "Custom" };
+#define STEREO_COUNT 6
 
 /* The length of a song is being measured (the status line shows it) */
 static HWND scan_window = NULL;
@@ -159,16 +160,18 @@ update_level_labels( void )
 {
   static const char * const sides[] = { "left", "middle", "right" };
   int stereo = option_enumerate_sound_stereo_ay();
+  int position[ 3 ];
   char text[ 64 ];
   int row;
 
   ay_engine_stereo_order( stereo, meter_order );
+  sound_ay_channel_positions( stereo, position );
   for( row = 0; row < 3; row++ ) {
     if( stereo == SOUND_STEREO_AY_NONE )
       _snprintf( text, sizeof( text ), "%c", 'A' + meter_order[ row ] );
     else
       _snprintf( text, sizeof( text ), "%c  %s", 'A' + meter_order[ row ],
-                 i18n( sides[ row ] ) );
+                 i18n( sides[ position[ meter_order[ row ] ] ] ) );
     text[ sizeof( text ) - 1 ] = '\0';
     set_text( IDC_AY_LEVEL_LABEL1 + row, text );
     /* Ticked: heard */

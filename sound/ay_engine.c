@@ -143,15 +143,17 @@ ay_engine_set_volume( int volume )
   ay_volume = volume < 0 ? 0 : volume > 100 ? 100 : volume;
 }
 
-/* The channels on the left, in the middle and on the right */
+/* The channels from left to right (those on the left first, then the
+   ones in the centre, then the ones on the right) */
 void
 ay_engine_stereo_order( int stereo, int order[ AY_CHANNELS ] )
 {
-  switch( stereo ) {
-  case SOUND_STEREO_AY_ACB: order[0] = 0; order[1] = 2; order[2] = 1; break;
-  case SOUND_STEREO_AY_BAC: order[0] = 1; order[1] = 0; order[2] = 2; break;
-  default:                  order[0] = 0; order[1] = 1; order[2] = 2; break;
-  }
+  int position[ AY_CHANNELS ], side, channel, n = 0;
+
+  sound_ay_channel_positions( stereo, position );
+  for( side = SOUND_AY_LEFT; side <= SOUND_AY_RIGHT; side++ )
+    for( channel = 0; channel < AY_CHANNELS; channel++ )
+      if( position[ channel ] == side ) order[ n++ ] = channel;
 }
 
 void
@@ -191,7 +193,7 @@ ay_engine_end( void )
 void
 ay_engine_set_outputs( Blip_Buffer *left, Blip_Buffer *right, int stereo )
 {
-  int order[ AY_CHANNELS ];
+  int position[ AY_CHANNELS ];
   int i;
 
   /* Take every channel back to zero where it was, at the start of the
@@ -214,14 +216,18 @@ ay_engine_set_outputs( Blip_Buffer *left, Blip_Buffer *right, int stereo )
     return;
   }
 
-  ay_engine_stereo_order( stereo, order );
-  blip_synth_set_output( synths[ order[0] ], left );
-  blip_synth_set_output( right_synths[ order[0] ], right );
-  blip_synth_set_output( synths[ order[1] ], left );
-  blip_synth_set_output( right_synths[ order[1] ], right );
-  both_sides[ order[1] ] = 1;
-  blip_synth_set_output( synths[ order[2] ], right );
-  blip_synth_set_output( right_synths[ order[2] ], left );
+  /* A channel in the centre is heard on both sides */
+  sound_ay_channel_positions( stereo, position );
+  for( i = 0; i < AY_CHANNELS; i++ ) {
+    if( position[i] == SOUND_AY_RIGHT ) {
+      blip_synth_set_output( synths[i], right );
+      blip_synth_set_output( right_synths[i], left );
+    } else {
+      blip_synth_set_output( synths[i], left );
+      blip_synth_set_output( right_synths[i], right );
+      both_sides[i] = position[i] == SOUND_AY_CENTRE;
+    }
+  }
 }
 
 static void

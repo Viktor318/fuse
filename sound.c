@@ -157,7 +157,9 @@ sound_init( const char *device )
   if( sound_stereo_ay != SOUND_STEREO_AY_NONE &&
       sound_stereo_ay != SOUND_STEREO_AY_ACB &&
       sound_stereo_ay != SOUND_STEREO_AY_ABC &&
-      sound_stereo_ay != SOUND_STEREO_AY_BAC ) {
+      sound_stereo_ay != SOUND_STEREO_AY_BAC &&
+      sound_stereo_ay != SOUND_STEREO_AY_CBA &&
+      sound_stereo_ay != SOUND_STEREO_AY_CUSTOM ) {
     ui_error( UI_ERROR_ERROR, "unknown AY stereo separation type: %d",
               sound_stereo_ay );
     fuse_abort();
@@ -263,7 +265,8 @@ sound_ay_stereo_changed( void )
   int stereo = option_enumerate_sound_stereo_ay();
 
   if( !sound_enabled ) return;	/* sound_init() reads it */
-  if( stereo == sound_stereo_ay ) return;
+  /* Custom: the places of the channels may have changed */
+  if( stereo == sound_stereo_ay && stereo != SOUND_STEREO_AY_CUSTOM ) return;
 
   if( ( stereo == SOUND_STEREO_AY_NONE ) !=
       ( sound_stereo_ay == SOUND_STEREO_AY_NONE ) ) {
@@ -277,6 +280,43 @@ sound_ay_stereo_changed( void )
      the next interval */
   sound_stereo_ay = stereo;
   sound_ay_route_pending = 1;
+}
+
+/* Where each channel is heard (left, centre, right) */
+void
+sound_ay_channel_positions( int stereo, int position[3] )
+{
+  int i;
+
+  switch( stereo ) {
+  case SOUND_STEREO_AY_ACB:
+    position[0] = SOUND_AY_LEFT; position[1] = SOUND_AY_RIGHT;
+    position[2] = SOUND_AY_CENTRE;
+    break;
+  case SOUND_STEREO_AY_ABC:
+    position[0] = SOUND_AY_LEFT; position[1] = SOUND_AY_CENTRE;
+    position[2] = SOUND_AY_RIGHT;
+    break;
+  case SOUND_STEREO_AY_BAC:
+    position[0] = SOUND_AY_CENTRE; position[1] = SOUND_AY_LEFT;
+    position[2] = SOUND_AY_RIGHT;
+    break;
+  case SOUND_STEREO_AY_CBA:
+    position[0] = SOUND_AY_RIGHT; position[1] = SOUND_AY_CENTRE;
+    position[2] = SOUND_AY_LEFT;
+    break;
+  case SOUND_STEREO_AY_CUSTOM:
+    position[0] = option_enumerate_sound_stereo_ay_a();
+    position[1] = option_enumerate_sound_stereo_ay_b();
+    position[2] = option_enumerate_sound_stereo_ay_c();
+    for( i = 0; i < 3; i++ )
+      if( position[i] < SOUND_AY_LEFT || position[i] > SOUND_AY_RIGHT )
+        position[i] = SOUND_AY_CENTRE;
+    break;
+  default:
+    for( i = 0; i < 3; i++ ) position[i] = SOUND_AY_CENTRE;
+    break;
+  }
 }
 
 void

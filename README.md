@@ -21,6 +21,13 @@ Download `Fuse-1.10.0-hu.1-windows.zip` from the
 [Releases](https://github.com/Viktor318/fuse/releases) page, unpack it into a
 folder of your choice and start `fuse.exe`. Nothing has to be installed.
 
+There are two programs in the package, with the same settings:
+
+- `fuse.exe` uses WASAPI, the sound system of today's Windows: lower
+  latency, and the sound is fed from a thread of its own.
+- `fuse-directsound.exe` uses the older DirectSound, as a fallback if the
+  sound doesn't work well with WASAPI on a computer.
+
 ## What this edition adds
 
 ### Hungarian or English user interface
@@ -100,7 +107,8 @@ demos – on an emulated Spectrum +2A, and Pro Tracker 3 (`.pt3`) modules.
 - **Confirm on exit** (Options > General, on by default).
 - The peripheral options grey out what the emulated machine can't have.
 - The menu bar is drawn with a clearly visible selection.
-- DirectSound: no old sound played again after a hold-up, no clicks.
+- Sound output: WASAPI (`fuse.exe`) or DirectSound (`fuse-directsound.exe`).
+  With DirectSound no old sound is played again after a hold-up, no clicks.
 
 ### Where Fuse keeps its files
 
@@ -131,8 +139,10 @@ sudo apt install gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
 ```
 
 The script fetches and builds libspectrum and then Fuse with the Win32
-user interface, and packages `fuse.exe` with the DLLs, ROMs and data files
-into `~/fuse-windows/Fuse-windows-<branch>.zip`. It works on a copy of the
+user interface twice (WASAPI: `fuse.exe`, DirectSound:
+`fuse-directsound.exe`), and packages them with the DLLs, ROMs and data files
+into `~/fuse-windows/Fuse-windows-<branch>.zip`. `FUSE_AUDIO_DRIVERS=wasapi`
+builds only one of them. It works on a copy of the
 source tree. Settings for building from VS Code connected to WSL are in
 `.vscode` (Ctrl+Shift+B).
 

@@ -7,6 +7,14 @@ in [ChangeLog](ChangeLog).
 
 ## Unreleased
 
+### Sound
+
+- WASAPI sound output (from the upstream `feature/wasapi-audio` branch):
+  `fuse.exe` now uses it. Lower latency; the sound is fed from a thread of
+  its own; while the AY player plays, 300 ms of sound are kept ahead.
+- `fuse-directsound.exe`: the same program with DirectSound, as a fallback.
+  Both use the same settings.
+
 ### AY music player
 
 - Pro Tracker 3 modules (`.pt3`, also from Vortex Tracker II) can be played

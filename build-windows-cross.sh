@@ -11,7 +11,10 @@
 #        perl zip git
 #   ./build-windows-cross.sh
 #
-# Result / Eredmény:  ~/fuse-windows/Fuse-windows-<branch>.zip
+# Result / Eredmény:  ~/fuse-windows/Fuse-windows-<branch>.zip, with
+#   fuse.exe               WASAPI sound output (the default)
+#   fuse-directsound.exe   DirectSound sound output (fallback / tartalék)
+# FUSE_AUDIO_DRIVERS="wasapi" builds only one of them.
 #
 # It works on a copy of the source, so a native Linux build in this tree is
 # not touched. libspectrum is fetched from GitHub and built as a static
@@ -68,26 +71,49 @@ fi
   make -j"$(nproc)"
   make install )
 
-# Clean copy of Fuse / Tiszta másolat a Fuse-ról
-rm -rf "$WORK/fuse"
-mkdir -p "$WORK/fuse"
-( cd "$SRCDIR" && git ls-files -z | xargs -0 tar -cf - ) | tar -xf - -C "$WORK/fuse"
+# One build per sound output, each in a clean copy of Fuse
+# Hangkimenetenként egy fordítás, mindegyik egy tiszta másolatban
+build_variant() {
+  driver=$1
+  dir="$WORK/fuse-$driver"
 
-cd "$WORK/fuse"
-./autogen.sh
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  ( cd "$SRCDIR" && git ls-files -z | xargs -0 tar -cf - ) | tar -xf - -C "$dir"
 
-# libspectrum is static: don't import its symbols from a DLL
-CPPFLAGS="-DLIBSPECTRUM_EXPORTS" ./configure --host=$HOST --disable-sdl2 \
-  --with-audio-driver="${FUSE_AUDIO_DRIVER:-wasapi}" --without-png --without-libxml2
+  ( cd "$dir"
+    ./autogen.sh
 
-# Some helper test programs don't link for Windows; fuse.exe is what we need
-make -k -j"$(nproc)" || true
-[ -f .libs/fuse.exe ] || { echo "fuse.exe was not built"; exit 1; }
+    # libspectrum is static: don't import its symbols from a DLL
+    CPPFLAGS="-DLIBSPECTRUM_EXPORTS" ./configure --host=$HOST --disable-sdl2 \
+      --with-audio-driver="$driver" --without-png --without-libxml2
+
+    # Some helper test programs don't link for Windows; fuse.exe is what we need
+    make -k -j"$(nproc)" || true
+    [ -f .libs/fuse.exe ] || { echo "fuse.exe ($driver) was not built"; exit 1; } )
+}
+
+DRIVERS="${FUSE_AUDIO_DRIVERS:-wasapi directsound}"
+for driver in $DRIVERS; do
+  build_variant "$driver"
+done
+
+# The files of the package come from the first build
+cd "$WORK/fuse-${DRIVERS%% *}"
 
 # Package / Csomag
 rm -rf "$NAME"
 mkdir -p "$NAME/roms" "$NAME/lib"
-cp .libs/fuse.exe "$NAME/"
+# fuse.exe: the first sound output; the others as fuse-<driver>.exe
+first=1
+for driver in $DRIVERS; do
+  if [ $first = 1 ]; then
+    cp "$WORK/fuse-$driver/.libs/fuse.exe" "$NAME/fuse.exe"
+    first=0
+  else
+    cp "$WORK/fuse-$driver/.libs/fuse.exe" "$NAME/fuse-$driver.exe"
+  fi
+done
 cp "/usr/$HOST/lib/zlib1.dll" "/usr/$HOST/lib/libwinpthread-1.dll" "$NAME/"
 cp roms/*.rom roms/README.copyright "$NAME/roms/"
 cp lib/*.bmp lib/*.png lib/*.jpg lib/*.scr "$NAME/lib/"
@@ -104,5 +130,5 @@ zip -qr "$OUTDIR/$NAME.zip" "$NAME"
 
 echo
 echo "Windows build ready / Elkészült:"
-echo "  $OUTDIR/$NAME/fuse.exe"
+for exe in "$OUTDIR/$NAME"/fuse*.exe; do echo "  $exe"; done
 echo "  $OUTDIR/$NAME.zip"

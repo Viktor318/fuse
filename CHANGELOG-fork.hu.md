@@ -7,6 +7,15 @@ Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
 ## Kiadatlan
 
+### Hang
+
+- WASAPI hangkimenet (az upstream `feature/wasapi-audio` ágból): a
+  `fuse.exe` mostantól ezt használja. Kisebb késleltetés; a hangot egy külön
+  szál adja a hangkártyának; amíg az AY lejátszó szól, 300 ms hang van
+  előre.
+- `fuse-directsound.exe`: ugyanez a program DirectSounddal, tartaléknak. A
+  kettő ugyanazokat a beállításokat használja.
+
 ### AY zenelejátszó
 
 - Pro Tracker 3 modulok (`.pt3`, a Vortex Tracker II-vel készültek is)

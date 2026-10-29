@@ -23,6 +23,13 @@ A [Releases](https://github.com/Viktor318/fuse/releases) oldalról töltsd le
 a `Fuse-1.10.0-hu.1-windows.zip` fájlt, csomagold ki egy tetszőleges
 mappába, és indítsd el a `fuse.exe`-t. Telepíteni nem kell semmit.
 
+A csomagban két program van, közös beállításokkal:
+
+- a `fuse.exe` a mai Windows hangrendszerét, a WASAPI-t használja: kisebb
+  a késleltetés, és a hangot egy külön szál adja a hangkártyának;
+- a `fuse-directsound.exe` a régebbi DirectSoundot használja, tartaléknak,
+  ha egy gépen a WASAPI-val nem szól jól a hang.
+
 ## Mit ad hozzá ez a kiadás
 
 ### Magyar vagy angol felület
@@ -112,7 +119,8 @@ megvan ebben a formában – egy emulált Spectrum +2A-n, valamint Pro Tracker 3
 - A perifériák beállításainál szürkék azok, amelyek az emulált gépen nem
   lehetnek.
 - A menüsor jól látható kijelöléssel jelenik meg.
-- DirectSound: nincs régi hang ismételt lejátszása akadás után, nincs
+- Hangkimenet: WASAPI (`fuse.exe`) vagy DirectSound (`fuse-directsound.exe`).
+  DirectSounddal nincs régi hang ismételt lejátszása akadás után, nincs
   kattogás.
 
 ### Hová menti a fájljait a Fuse
@@ -144,9 +152,10 @@ sudo apt install gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
 ```
 
 A szkript letölti és lefordítja a libspectrum könyvtárat, majd a Fuse-t a
-Windows-felülettel, és a `fuse.exe`-t a szükséges DLL-ekkel, ROM-okkal és
+Windows-felülettel kétszer (WASAPI: `fuse.exe`, DirectSound:
+`fuse-directsound.exe`), és ezeket a szükséges DLL-ekkel, ROM-okkal és
 adatfájlokkal együtt a `~/fuse-windows/Fuse-windows-<ág>.zip` fájlba
-csomagolja. A forrás egy másolatán dolgozik. A WSL-hez kapcsolódó VS Code-ból
+csomagolja. `FUSE_AUDIO_DRIVERS=wasapi` esetén csak az egyiket fordítja le. A forrás egy másolatán dolgozik. A WSL-hez kapcsolódó VS Code-ból
 való fordítás beállításai a `.vscode` mappában vannak (Ctrl+Shift+B).
 
 ## Licenc

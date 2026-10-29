@@ -965,6 +965,10 @@ play_pt3( void )
     machine_reset( 0 );
   }
 
+  /* All memory RAM (special paging 0,1,2,3), so that the DI; HALT at
+     address 0 is not written to the ROM: the processor must not run */
+  specplus3_memoryport2_write( 0x1ffd, 0x01 );
+
   silence();
   pt3_reset( ay_pt3 );
   ay_pt3_running = 1;

@@ -5,6 +5,18 @@
 Ennek a változatnak a módosításai a Fuse 1.10.0-hoz képest. Magának a
 Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
+## Kiadatlan
+
+### AY zenelejátszó
+
+- Pro Tracker 3 modulok (`.pt3`, a Vortex Tracker II-vel készültek is)
+  lejátszása: nem fut Z80-as lejátszó, a program képkockánként a modulból
+  számolja ki az AY-regisztereket (a lejátszó a ZXTune-é C-ben, képkockánként
+  összevetve Sergey Bulba Z80-as lejátszójával és a ZXTune-nal). A cím és a
+  szerző a modulból jön; a lista, a hosszmérés, a tekerés, a szintjelzők, a
+  sztereó és a csatornanémítás ugyanúgy működik, mint az `.ay` fájloknál. A
+  TurboSound moduloknak egyelőre csak az első AY-ja szól.
+
 ## v1.10.0-hu.1 – 2026-10-25
 
 A változat első kiadása.

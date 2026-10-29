@@ -5,6 +5,18 @@
 Changes of this fork on top of Fuse 1.10.0. The changes of Fuse itself are
 in [ChangeLog](ChangeLog).
 
+## Unreleased
+
+### AY music player
+
+- Pro Tracker 3 modules (`.pt3`, also from Vortex Tracker II) can be played
+  too: no Z80 player runs, the AY registers of every frame are worked out
+  from the module (the player is a C port of ZXTune's, checked frame by
+  frame against Sergey Bulba's Z80 player and against ZXTune). Title and
+  author come from the module; the playlist, length measurement, seeking,
+  level meters, stereo and channel muting work as for `.ay` files. Of
+  TurboSound modules only the first AY is played for now.
+
 ## v1.10.0-hu.1 – 2026-10-25
 
 The first release of the fork.

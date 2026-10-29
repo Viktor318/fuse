@@ -66,7 +66,8 @@ mappába, és indítsd el a `fuse.exe`-t. Telepíteni nem kell semmit.
 
 
 `.ay` (ZXAYEMUL) zenefájlokat játszik le – sok Spectrum-játék és demó zenéje
-megvan ebben a formában – egy emulált Spectrum +2A-n.
+megvan ebben a formában – egy emulált Spectrum +2A-n, valamint Pro Tracker 3
+(`.pt3`) modulokat.
 
 - **Megnyitás**: a *Média > AY zenelejátszó...* menüpont úgy nyitja meg a
   lejátszót, hogy nem szól semmi; a *Fájl > Megnyitás* (vagy a fájl Fuse-ra

@@ -50,6 +50,7 @@ fuse_SOURCES = display.c \
 	i18n.c \
 	i18n_hu.c \
 	ayplayer.c \
+	pt3player.c \
 	ayplaylist.c \
 	basic_text.c \
 	phantom_typist.c \

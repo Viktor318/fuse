@@ -194,11 +194,12 @@ ayplaylist_add_folder( const char *folder )
     WIN32_FIND_DATAA found;
     HANDLE find;
 
-    snprintf( path, sizeof( path ), "%s\\*.ay", folder );
+    snprintf( path, sizeof( path ), "%s\\*.*", folder );
     find = FindFirstFileA( path, &found );
     if( find != INVALID_HANDLE_VALUE ) {
       do {
         if( found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) continue;
+        if( !ayplayer_is_ay_file( found.cFileName ) ) continue;
         if( count == size ) {
           size = size ? size * 2 : 64;
           names = libspectrum_renew( char *, names, size );

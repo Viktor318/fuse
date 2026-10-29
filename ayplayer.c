@@ -48,6 +48,7 @@
 #include "machines/specplus3.h"
 #include "memory_pages.h"
 #include "periph.h"
+#include "pt3player.h"
 #include "compat.h"
 #include "settings.h"
 #include "snapshot.h"
@@ -66,6 +67,11 @@ static size_t ay_length = 0;
 static char ay_filename[ 256 ];
 static char ay_author[ 256 ];
 static char ay_misc[ 256 ];
+
+/* A Pro Tracker 3 module instead of an AY file: no Z80 code runs, the
+   module gives the AY registers of every frame */
+static pt3_module *ay_pt3 = NULL;
+static int ay_pt3_running = 0;
 
 static int ay_songs = 0;		/* number of songs */
 static int ay_first_song = 0;		/* 0 based */
@@ -191,15 +197,31 @@ song_data( int song )
   return pointer_at( songs + song * 4 + 2 );
 }
 
+static int
+has_extension( const char *filename, const char *extension )
+{
+  size_t length = strlen( filename ), ext = strlen( extension ), i;
+
+  if( length <= ext + 1 || filename[ length - ext - 1 ] != '.' ) return 0;
+  for( i = 0; i < ext; i++ ) {
+    char c = filename[ length - ext + i ];
+    if( c >= 'A' && c <= 'Z' ) c += 'a' - 'A';
+    if( c != extension[i] ) return 0;
+  }
+  return 1;
+}
+
+/* The files of the player: AY files and Pro Tracker 3 modules */
 int
 ayplayer_is_ay_file( const char *filename )
 {
-  size_t length = strlen( filename );
+  return has_extension( filename, "ay" ) || has_extension( filename, "pt3" );
+}
 
-  return length > 3 &&
-         ( filename[ length - 3 ] == '.' ) &&
-         ( filename[ length - 2 ] == 'a' || filename[ length - 2 ] == 'A' ) &&
-         ( filename[ length - 1 ] == 'y' || filename[ length - 1 ] == 'Y' );
+static int
+is_ay_data( const libspectrum_byte *data, size_t length )
+{
+  return length >= 20 && !memcmp( data, "ZXAYEMUL", 8 );
 }
 
 /* ------------------------------------------------------------------------
@@ -212,6 +234,9 @@ free_file( void )
   libspectrum_free( ay_data );
   ay_data = NULL;
   ay_length = 0;
+  if( ay_pt3 ) pt3_free( ay_pt3 );
+  ay_pt3 = NULL;
+  ay_pt3_running = 0;
   ay_songs = 0;
   ay_current = -1;
   sound_long_buffer = 0;
@@ -342,7 +367,8 @@ read_ay_file( const char *filename, libspectrum_byte **data, size_t *length )
 
   if( utils_read_file( filename, &file ) ) return 1;
 
-  if( file.length < 20 || memcmp( file.buffer, "ZXAYEMUL", 8 ) ) {
+  if( !is_ay_data( file.buffer, file.length ) &&
+      !pt3_check( file.buffer, file.length ) ) {
     ui_error( UI_ERROR_ERROR, "'%s' is not an AY music file", filename );
     utils_close_file( &file );
     return 1;
@@ -371,7 +397,15 @@ ayplayer_load( const char *filename )
   ay_length = length;
   ay_file_checksum = checksum( ay_data, ay_length );
 
-  if( song_data( 0 ) < 0 ) {
+  if( !is_ay_data( ay_data, ay_length ) ) {
+    ay_pt3 = pt3_load( ay_data, ay_length );
+    if( !ay_pt3 ) {
+      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PT3 music file",
+                filename );
+      free_file();
+      return 1;
+    }
+  } else if( song_data( 0 ) < 0 ) {
     ui_error( UI_ERROR_ERROR, "'%s' is not a valid AY music file", filename );
     free_file();
     return 1;
@@ -382,6 +416,14 @@ ayplayer_load( const char *filename )
   for( p = filename; *p; p++ )
     if( *p == '/' || *p == '\\' ) name = p + 1;
   snprintf( ay_filename, sizeof( ay_filename ), "%s", name );
+
+  if( ay_pt3 ) {
+    snprintf( ay_author, sizeof( ay_author ), "%s", pt3_author( ay_pt3 ) );
+    ay_misc[0] = '\0';
+    ay_songs = 1;
+    ay_first_song = 0;
+    return 0;
+  }
 
   string_at( 12, ay_author, sizeof( ay_author ) );
   string_at( 14, ay_misc, sizeof( ay_misc ) );
@@ -410,6 +452,27 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
 
   memset( info, 0, sizeof( *info ) );
   if( read_ay_file( filename, &data, &length ) ) return 1;
+
+  if( !is_ay_data( data, length ) ) {
+    pt3_module *module = pt3_load( data, length );
+
+    if( !module ) {
+      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PT3 music file",
+                filename );
+      error = 1;
+    } else {
+      info->checksum = checksum( data, length );
+      snprintf( info->author, sizeof( info->author ), "%s",
+                pt3_author( module ) );
+      info->songs = 1;
+      info->names = libspectrum_new( ayplayer_song_title, 1 );
+      snprintf( info->names[0], sizeof( info->names[0] ), "%s",
+                pt3_title( module ) );
+      pt3_free( module );
+    }
+    libspectrum_free( data );
+    return error;
+  }
 
   /* The reading functions work on the loaded file: lend them this one */
   ay_data = data;
@@ -483,6 +546,9 @@ ayplayer_close( void )
    Playing a song
    ------------------------------------------------------------------------ */
 
+static void song_started( int song, int length );
+static int play_pt3( void );
+
 static void
 poke( libspectrum_word address, libspectrum_byte value )
 {
@@ -519,6 +585,7 @@ silence( void )
 {
   int reg;
 
+  ay_pt3_running = 0;
   for( reg = 0; reg < 14; reg++ ) {
     writeport_internal( 0xfffd, reg );
     writeport_internal( 0xbffd, 0 );
@@ -728,6 +795,8 @@ ayplayer_play( int song )
   if( ay_scanning ) scan_end( 0, 0, 0 );
   ay_scan_finished = 0;
 
+  if( ay_pt3 ) return play_pt3();
+
   data = song_data( song );
   if( data < 0 ) return 1;
 
@@ -846,6 +915,14 @@ ayplayer_play( int song )
   z80.halted = 0;
 
   length = word_at( data + 4 );
+  song_started( song, length );
+  return 0;
+}
+
+/* The length from the file (0: not known), and the measured one */
+static void
+song_started( int song, int length )
+{
   ay_length_default = length <= 0;
   ay_length_measured = 0;
   ay_song_frames = length > 0 ? length : AY_DEFAULT_LENGTH;
@@ -872,7 +949,26 @@ ayplayer_play( int song )
       scan_begin();
     }
   }
+}
 
+/* A Pro Tracker 3 module: the processor waits with DI; HALT, and every
+   frame the registers come from the module */
+static int
+play_pt3( void )
+{
+  take_over();
+
+  /* A Spectrum +2A, as for AY files */
+  if( machine_current->machine != LIBSPECTRUM_MACHINE_PLUS2A ) {
+    if( machine_select( LIBSPECTRUM_MACHINE_PLUS2A ) ) return 1;
+  } else {
+    machine_reset( 0 );
+  }
+
+  silence();
+  pt3_reset( ay_pt3 );
+  ay_pt3_running = 1;
+  song_started( 0, 0 );
   return 0;
 }
 
@@ -887,6 +983,7 @@ ayplayer_stop( void )
   ay_engine_set_fade( 100 );
   if( ay_current < 0 ) return;
   ay_current = -1;
+  ay_pt3_running = 0;
   sound_long_buffer = 0;
 
   /* Silence: all AY registers to 0 (volumes too), and the processor waits
@@ -910,9 +1007,29 @@ ayplayer_set_frame_hook( void ( *hook )( void ) )
   frame_hook = hook;
 }
 
+/* The registers of the next frame of the module */
+static void
+pt3_registers( void )
+{
+  libspectrum_byte registers[ PT3_REGISTERS ];
+  unsigned int mask;
+  int reg;
+
+  if( !ay_pt3 || !ay_pt3_running || ay_current < 0 ) return;
+
+  pt3_frame( ay_pt3, registers, &mask );
+  for( reg = 0; reg < PT3_REGISTERS; reg++ ) {
+    if( !( mask & ( 1u << reg ) ) ) continue;
+    writeport_internal( 0xfffd, reg );
+    writeport_internal( 0xbffd, registers[ reg ] );
+  }
+}
+
 void
 ayplayer_frame( void )
 {
+  pt3_registers();
+
   if( ay_scanning ) {
     if( ay_current >= 0 ) scan_frame();
     if( frame_hook ) frame_hook();
@@ -978,9 +1095,14 @@ const char *ayplayer_misc( void ) { return ay_misc; }
 void
 ayplayer_song_name( int song, char *text, size_t length )
 {
-  long songs = pointer_at( 18 );
+  long songs;
 
   text[0] = '\0';
+  if( ay_pt3 ) {
+    if( song == 0 ) snprintf( text, length, "%s", pt3_title( ay_pt3 ) );
+    return;
+  }
+  songs = pointer_at( 18 );
   if( !ay_data || songs < 0 || song < 0 || song >= ay_songs ) return;
   string_at( songs + song * 4, text, length );
 }

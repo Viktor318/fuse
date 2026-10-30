@@ -39,6 +39,9 @@ in [ChangeLog](ChangeLog).
   playlist window no longer stops the song playing. Lengths that the earlier
   version gave up on are measured again. Seeking is instant in both
   directions.
+- The measured lengths are found at once (a hash table in memory), also in
+  long playlists; when a song is in the lengths file more than once, the
+  file is written again at the next start with one line for each song.
 - Pro Tracker 3 modules (`.pt3`, also from Vortex Tracker II) can be played
   too: no Z80 player runs, the AY registers of every frame are worked out
   from the module (the player is a C port of ZXTune's, checked frame by

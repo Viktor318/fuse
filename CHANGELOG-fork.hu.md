@@ -39,6 +39,9 @@ Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
   *Hosszak mérése* gombja már nem állítja le a szóló dalt. Azokat a hosszakat,
   amelyeknél az előző változat feladta a mérést, újra megméri. A tekerés
   mindkét irányban azonnali.
+- A mért hosszakat a program azonnal megtalálja (hash-tábla a memóriában),
+  hosszú lejátszási listáknál is; ha egy dal többször szerepel a hosszak
+  fájljában, a következő indításkor dalonként egy sorral újraírja a fájlt.
 - Pro Tracker 3 modulok (`.pt3`, a Vortex Tracker II-vel készültek is)
   lejátszása: nem fut Z80-as lejátszó, a program képkockánként a modulból
   számolja ki az AY-regisztereket (a lejátszó a ZXTune-é C-ben, képkockánként

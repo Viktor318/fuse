@@ -229,10 +229,14 @@ lengths_path( char *path, size_t size )
    found, the default length is used), the frame the music goes on from
    after the end (-1: the music ends), the version of the measuring (none:
    the first one). The last line of a song counts.
-   Read once, then kept in memory too */
+
+   Read once, then kept in memory, with a hash table to find a song at once
+   (the playlist looks up all of its songs). New lengths are added to the end
+   of the file; when a song is in it more than once, it is written again
+   when read, with one line for each song */
 typedef struct length_entry {
   libspectrum_dword sum;
-  int song;
+  int song, version;
   long frames, loop;
 } length_entry;
 
@@ -240,75 +244,169 @@ static length_entry *lengths = NULL;
 static size_t lengths_count = 0, lengths_size = 0;
 static int lengths_read = 0;
 
+/* Open addressing: entry index + 1, 0 for an empty slot. Kept at most half
+   full */
+static size_t *lengths_table = NULL;
+static size_t lengths_table_size = 0;
+
+static size_t
+lengths_hash( libspectrum_dword sum, int song )
+{
+  libspectrum_dword h = sum ^ ( (libspectrum_dword)song * 0x9e3779b9U );
+  h ^= h >> 16;
+  h *= 0x85ebca6bU;
+  h ^= h >> 13;
+  return h;
+}
+
+/* The slot of the song: where it is, or the empty one where it goes */
+static size_t
+lengths_slot( libspectrum_dword sum, int song )
+{
+  size_t mask = lengths_table_size - 1;
+  size_t slot = lengths_hash( sum, song ) & mask;
+
+  while( lengths_table[ slot ] ) {
+    const length_entry *e = &lengths[ lengths_table[ slot ] - 1 ];
+    if( e->sum == sum && e->song == song ) break;
+    slot = ( slot + 1 ) & mask;
+  }
+  return slot;
+}
+
 static void
-lengths_remember( libspectrum_dword sum, int song, long frames, long loop )
+lengths_table_grow( void )
 {
   size_t i;
 
+  lengths_table_size = lengths_table_size ? lengths_table_size * 2 : 256;
+  libspectrum_free( lengths_table );
+  lengths_table = libspectrum_new0( size_t, lengths_table_size );
   for( i = 0; i < lengths_count; i++ )
-    if( lengths[i].sum == sum && lengths[i].song == song ) break;
+    lengths_table[ lengths_slot( lengths[i].sum, lengths[i].song ) ] = i + 1;
+}
 
-  if( i == lengths_count ) {
+/* 1 if the song was there already */
+static int
+lengths_remember( libspectrum_dword sum, int song, long frames, long loop,
+                  int version )
+{
+  size_t slot, i;
+  int found;
+
+  if( ( lengths_count + 1 ) * 2 > lengths_table_size ) lengths_table_grow();
+  slot = lengths_slot( sum, song );
+  found = lengths_table[ slot ] != 0;
+
+  if( found ) {
+    i = lengths_table[ slot ] - 1;
+  } else {
     if( lengths_count == lengths_size ) {
       lengths_size = lengths_size ? lengths_size * 2 : 64;
       lengths = libspectrum_renew( length_entry, lengths, lengths_size );
     }
-    lengths_count++;
+    i = lengths_count++;
+    lengths_table[ slot ] = i + 1;
   }
   lengths[i].sum = sum;
   lengths[i].song = song;
   lengths[i].frames = frames;
   lengths[i].loop = loop;
+  lengths[i].version = version;
+  return found;
+}
+
+/* The file again, one line for each song. Written next to it first, so
+   that nothing is lost if writing fails */
+static void
+lengths_rewrite( const char *path )
+{
+  char new_path[ 1040 ];
+  size_t i;
+  FILE *f;
+
+  snprintf( new_path, sizeof( new_path ), "%s.new", path );
+  f = fopen( new_path, "w" );
+  if( !f ) return;
+  for( i = 0; i < lengths_count; i++ ) {
+    const length_entry *e = &lengths[i];
+    if( e->version > 1 )
+      fprintf( f, "%08lx %d %ld %ld %d\n", (unsigned long)e->sum, e->song,
+               e->frames, e->loop, e->version );
+    else
+      fprintf( f, "%08lx %d %ld %ld\n", (unsigned long)e->sum, e->song,
+               e->frames, e->loop );
+  }
+  if( fclose( f ) ) {
+    remove( new_path );
+    return;
+  }
+  remove( path );
+  rename( new_path, path );
+}
+
+static void
+lengths_load( void )
+{
+  char path[ 1024 ], new_path[ 1040 ], line[ 128 ];
+  unsigned long file_sum;
+  int file_song, version, fields, rewrite = 0;
+  long file_frames, file_loop;
+  FILE *f;
+
+  lengths_read = 1;
+  lengths_table_grow();
+  lengths_path( path, sizeof( path ) );
+  f = fopen( path, "r" );
+  if( !f ) {
+    /* Stopped while it was written again: the new one is complete */
+    snprintf( new_path, sizeof( new_path ), "%s.new", path );
+    if( rename( new_path, path ) ) return;
+    f = fopen( path, "r" );
+    if( !f ) return;
+  }
+
+  while( fgets( line, sizeof( line ), f ) ) {
+    version = 1;
+    fields = sscanf( line, "%lx %d %ld %ld %d", &file_sum, &file_song,
+                     &file_frames, &file_loop, &version );
+    if( fields < 4 ) continue;
+    /* Given up by the first measuring: measured again */
+    if( version < AY_LENGTHS_VERSION && file_frames <= 0 ) {
+      rewrite = 1;
+      continue;
+    }
+    if( lengths_remember( file_sum, file_song, file_frames, file_loop,
+                          version ) )
+      rewrite = 1;
+  }
+  fclose( f );
+
+  if( rewrite ) lengths_rewrite( path );
 }
 
 static int
 lengths_lookup( libspectrum_dword sum, int song, long *frames, long *loop )
 {
-  size_t i;
+  size_t slot;
 
-  if( !lengths_read ) {
-    char path[ 1024 ], line[ 128 ];
-    unsigned long file_sum;
-    int file_song, version, fields;
-    long file_frames, file_loop;
-    FILE *f;
+  if( !lengths_read ) lengths_load();
 
-    lengths_read = 1;
-    lengths_path( path, sizeof( path ) );
-    f = fopen( path, "r" );
-    if( f ) {
-      while( fgets( line, sizeof( line ), f ) ) {
-        version = 1;
-        fields = sscanf( line, "%lx %d %ld %ld %d", &file_sum, &file_song,
-                         &file_frames, &file_loop, &version );
-        if( fields < 4 ) continue;
-        /* Given up by the first measuring: measured again */
-        if( version < AY_LENGTHS_VERSION && file_frames <= 0 ) continue;
-        lengths_remember( file_sum, file_song, file_frames, file_loop );
-      }
-      fclose( f );
-    }
-  }
-
-  for( i = 0; i < lengths_count; i++ ) {
-    if( lengths[i].sum == sum && lengths[i].song == song ) {
-      *frames = lengths[i].frames;
-      *loop = lengths[i].loop;
-      return 1;
-    }
-  }
-  return 0;
+  slot = lengths_slot( sum, song );
+  if( !lengths_table[ slot ] ) return 0;
+  *frames = lengths[ lengths_table[ slot ] - 1 ].frames;
+  *loop = lengths[ lengths_table[ slot ] - 1 ].loop;
+  return 1;
 }
 
 static void
 lengths_store( libspectrum_dword sum, int song, long frames, long loop )
 {
   char path[ 1024 ];
-  long old_frames, old_loop;
   FILE *f;
 
-  lengths_lookup( sum, song, &old_frames, &old_loop );	/* read it first */
-  lengths_remember( sum, song, frames, loop );
+  if( !lengths_read ) lengths_load();
+  lengths_remember( sum, song, frames, loop, AY_LENGTHS_VERSION );
 
   lengths_path( path, sizeof( path ) );
   f = fopen( path, "a" );

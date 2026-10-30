@@ -36,6 +36,14 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - *Options > Sound* keeps only the AY volume and the stereo mode of the AY
   settings; the places and the channel volumes are in the mixer.
 
+### Snapshots
+
+- Loading a snapshot keeps the devices switched on in *Peripherals: sound*
+  (Fuller Box, Melodik, SpecDrum, Covox, uSpeech). Most formats can't
+  record them (`.z80` has no SpecDrum, for example), so loading used to
+  switch them off. A device the snapshot itself asks for is still switched
+  on.
+
 ### Upstream Fuse
 
 - Fix from upstream `master`: loading a snapshot now releases the joystick

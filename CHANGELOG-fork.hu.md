@@ -37,6 +37,14 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A *Beállítások > Hang* lapon az AY-beállítások közül az AY hangerő és a
   sztereó mód maradt; a helyek és a csatornahangerők a keverőben vannak.
 
+### Pillanatfelvételek
+
+- Pillanatfelvétel betöltésekor a *Perifériák: hang* lapon bekapcsolt
+  eszközök (Fuller Box, Melodik, SpecDrum, Covox, uSpeech) bekapcsolva
+  maradnak. A legtöbb formátum nem tárolja őket (a `.z80` például a
+  SpecDrumot sem), ezért eddig a betöltés kikapcsolta őket. Ha a
+  pillanatfelvétel maga kér egy eszközt, az továbbra is bekapcsol.
+
 ### Upstream Fuse
 
 - Az upstream `master` javítása: pillanatfelvétel betöltésekor a joystick

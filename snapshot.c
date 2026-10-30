@@ -37,6 +37,25 @@
 #include "ui/ui.h"
 #include "utils.h"
 
+/* Keep the sound peripherals the user has switched on. Most snapshot
+   formats can't record them (.z80 has no SpecDrum, Covox or uSpeech, .szx
+   no Fuller Box, Melodik or Covox), so loading one would switch them off.
+   A peripheral the snapshot itself asks for is still switched on. */
+static void
+snapshot_keep_sound_peripherals( libspectrum_snap *snap )
+{
+  if( settings_current.fuller )
+    libspectrum_snap_set_fuller_box_active( snap, 1 );
+  if( settings_current.melodik )
+    libspectrum_snap_set_melodik_active( snap, 1 );
+  if( settings_current.specdrum )
+    libspectrum_snap_set_specdrum_active( snap, 1 );
+  if( settings_current.covox )
+    libspectrum_snap_set_covox_active( snap, 1 );
+  if( settings_current.uspeech )
+    libspectrum_snap_set_uspeech_active( snap, 1 );
+}
+
 int snapshot_read( const char *filename )
 {
   utils_file file;
@@ -55,6 +74,8 @@ int snapshot_read( const char *filename )
 
   utils_close_file( &file );
 
+  snapshot_keep_sound_peripherals( snap );
+
   error = snapshot_copy_from( snap );
   if( error ) { libspectrum_snap_free( snap ); return error; }
 
@@ -72,7 +93,9 @@ snapshot_read_buffer( const unsigned char *buffer, size_t length,
 
   error = libspectrum_snap_read( snap, buffer, length, type, NULL );
   if( error ) { libspectrum_snap_free( snap ); return error; }
-    
+
+  snapshot_keep_sound_peripherals( snap );
+
   error = snapshot_copy_from( snap );
   if( error ) { libspectrum_snap_free( snap ); return error; }
 

@@ -87,7 +87,7 @@ static int ay_repeat_song = 0;
 #define AY_LENGTHS_FILE "fuse_ay_lengths.txt"
 /* Lengths found by the measuring of this version: the earlier one gave up
    after 15 seconds, so its "no repetition found" lines are measured again */
-#define AY_LENGTHS_VERSION 2
+#define AY_LENGTHS_VERSION 3
 
 static int ay_length_measured = 0;
 static libspectrum_dword ay_file_checksum = 0;

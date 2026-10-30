@@ -328,6 +328,14 @@ render_frame( void )
   unsigned int f;
   chip *c = &ay;
   long avail, n0, n1;
+  /* Channels with tone and noise off: the lowest and highest level in the
+     frame (digital music changes it all the time) */
+  int dc_low[ CHANNELS ], dc_high[ CHANNELS ];
+
+  for( channel = 0; channel < CHANNELS; channel++ ) {
+    dc_low[ channel ] = 16;
+    dc_high[ channel ] = -1;
+  }
 
   count = aysource_frame( source, writes, MAX_WRITES );
   song_frame();
@@ -352,7 +360,11 @@ render_frame( void )
       int level = volume & 16 ? c->env_counter : volume & 15;
       int output = channel_output( c, channel, envelope_level, tone_count );
 
-      if( ( ( c->registers[7] >> channel ) & 9 ) == 9 ) level = 0;
+      if( ( ( c->registers[7] >> channel ) & 9 ) == 9 ) {
+        if( level < dc_low[ channel ] ) dc_low[ channel ] = level;
+        if( level > dc_high[ channel ] ) dc_high[ channel ] = level;
+        level = 0;
+      }
       if( level > peak[ channel ] ) peak[ channel ] = level;
 
       for( side = 0; side < 2; side++ ) {
@@ -373,6 +385,12 @@ render_frame( void )
     position++;
   }
   next_tick = f - AYSOURCE_FRAME_TSTATES;
+
+  /* A level that keeps changing without tone or noise is heard (digital
+     music), one that stays is not: the meters see how much it changed */
+  for( channel = 0; channel < CHANNELS; channel++ )
+    if( dc_high[ channel ] - dc_low[ channel ] > peak[ channel ] )
+      peak[ channel ] = dc_high[ channel ] - dc_low[ channel ];
 
   for( side = 0; side < 2; side++ )
     blip_buffer_end_frame( buffers[ side ], AYSOURCE_FRAME_TSTATES );
@@ -436,13 +454,32 @@ ayplay_silent_frame( void )
   LOCK();
   if( active && !paused && source ) {
     int count = aysource_frame( source, writes, MAX_WRITES ), i, channel;
-    for( i = 0; i < count; i++ )
+    int dc_low[ CHANNELS ], dc_high[ CHANNELS ];
+
+    for( channel = 0; channel < CHANNELS; channel++ ) {
+      dc_low[ channel ] = 16;
+      dc_high[ channel ] = -1;
+    }
+    for( i = 0; i < count; i++ ) {
       chip_write( &ay, writes[i].reg, writes[i].value );
+      /* Without tone and noise: how much the level changes (digital
+         music), as when it is played */
+      channel = writes[i].reg - 8;
+      if( channel >= 0 && channel < CHANNELS &&
+          ( ( ay.registers[7] >> channel ) & 9 ) == 9 ) {
+        int volume = ay.registers[ 8 + channel ];
+        int level = volume & 16 ? 15 : volume & 15;
+        if( level < dc_low[ channel ] ) dc_low[ channel ] = level;
+        if( level > dc_high[ channel ] ) dc_high[ channel ] = level;
+      }
+    }
     /* The meters see the levels set */
     for( channel = 0; channel < CHANNELS; channel++ ) {
       int volume = ay.registers[ 8 + channel ];
       int level = volume & 16 ? 15 : volume & 15;
       if( ( ( ay.registers[7] >> channel ) & 9 ) == 9 ) level = 0;
+      if( dc_high[ channel ] - dc_low[ channel ] > level )
+        level = dc_high[ channel ] - dc_low[ channel ];
       if( level > peak[ channel ] ) peak[ channel ] = level;
     }
     song_frame();

@@ -53,6 +53,12 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   were open as Fuse exits. With *Resume last session* on, the same
   ones open at the next start (each on its own, always in normal size);
   the player stands on the last song, without playing.
+- The length of digital AY songs (playing samples) can be measured too:
+  they never repeat exactly, so Fuse compares how the volumes of the
+  channels go (e.g. KDF Soft's "AY Megademo Digital Part 2": 1:47). Songs
+  that could not be measured before are measured again.
+- The level meters show digital songs too (without tone and noise: how
+  much the volume changes).
 - The dash (–) of the player's song line and the » of the playlist's
   number show correctly on any code page.
 

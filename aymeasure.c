@@ -34,6 +34,27 @@
 #define CONFIRM 3000			/* a minute */
 #define CHECK_EVERY 250
 
+/* Digital music (samples played by writing the volumes many times a frame,
+   with tone and noise off) never repeats exactly: the samples fall on the
+   frames a little differently each time. It is told by its volume writes
+   in the first seconds, and measured by how it sounds instead: the mean
+   level of each channel in each frame, compared in blocks of BLOCK frames
+   first, then frame by frame */
+#define DIGITAL_WRITES 16		/* volume writes in a frame, on average */
+#define DIGITAL_SEEN 100		/* frames to tell digital music */
+#define DIGITAL_MAX_FRAMES ( 20L * 60 * 50 )	/* 20 minutes */
+#define DIGITAL_CHECK_EVERY 1000	/* 20 seconds */
+#define BLOCK 5				/* a tenth of a second */
+#define WINDOW 3000			/* compared: a minute, as CONFIRM */
+#define LEVEL_SCALE 16
+/* Mean difference of the levels (in thousandths of a level, 0-15) that
+   still counts as the same music: music differs some 0.4 to 1.2 levels
+   from other parts of itself, and some 0.04 where it repeats. The blocks,
+   averaged, differ less: they only choose the periods to check */
+#define SAME 100
+#define BLOCK_SAME 300
+#define MAX_WRITES 8192
+
 /* Has the music started again? The smallest period P for which the last
    max(P, a minute) frames are the same as P frames before; then back to the
    first frame S of the repetition. The song lasts until S + P and goes on
@@ -71,6 +92,65 @@ find( const unsigned int *hash, const unsigned char *silent, long n,
   }
 }
 
+/* Mean difference of the levels of frames a..a+count and b..b+count, in
+   thousandths of a level */
+static long
+difference( const unsigned char *level, long a, long b, long count )
+{
+  long i, sum = 0;
+  const unsigned char *p = level + a * 3, *q = level + b * 3;
+
+  for( i = 0; i < count * 3; i++ ) sum += abs( (int)p[i] - (int)q[i] );
+  return (long)( (double)sum * 1000 / ( count * 3 * LEVEL_SCALE ) );
+}
+
+/* As find(), for digital music: the smallest period P (at least
+   MIN_PERIOD) with which the last max(P, WINDOW) frames sound the same as P
+   frames before, then back to the first frame S that does. The song lasts
+   until S + P and goes on from S. -1: not yet */
+static long
+find_digital( const unsigned char *level, const unsigned char *block,
+              long n, long *loop )
+{
+  long blocks = n / BLOCK, period, need, start, p;
+
+  for( period = MIN_PERIOD / BLOCK; ; period++ ) {
+    long found = -1, found_difference = SAME + 1;
+
+    need = period > WINDOW / BLOCK ? period : WINDOW / BLOCK;
+    if( period + need > blocks ) return -1;
+    if( difference( block, blocks - need, blocks - need - period, need ) >
+        BLOCK_SAME )
+      continue;
+
+    /* A period to check: frame by frame, around the block */
+    for( p = period * BLOCK - BLOCK; p <= period * BLOCK + BLOCK; p++ ) {
+      long d, frames_need = p > WINDOW ? p : WINDOW;
+      if( p < MIN_PERIOD || p + frames_need > n ) continue;
+      d = difference( level, n - frames_need, n - frames_need - p,
+                      frames_need );
+      if( d < found_difference ) { found_difference = d; found = p; }
+    }
+    if( found < 0 ) continue;
+
+    period = found;
+    need = period > WINDOW ? period : WINDOW;
+    break;
+  }
+
+  /* Back to where the repetition starts, a second at a time */
+  start = n - need - period;
+  while( start >= 50 &&
+         difference( level, start - 50, start - 50 + period, 50 ) <= SAME )
+    start -= 50;
+  while( start > 0 &&
+         difference( level, start - 1, start - 1 + period, 1 ) <= SAME )
+    start--;
+
+  *loop = start;
+  return start + period;
+}
+
 long
 aymeasure_song( const unsigned char *data, size_t length, int song,
                 long *loop, volatile int *cancel )
@@ -78,24 +158,35 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
   aysource *source = aysource_new( data, length, song );
   unsigned int *hash = malloc( MAX_FRAMES * sizeof( *hash ) );
   unsigned char *silent = malloc( MAX_FRAMES );
-  long frames = 0, found = 0;
-  int i;
+  /* Digital music: the mean level of each channel in each frame and in
+     each block of frames */
+  unsigned char *level = malloc( DIGITAL_MAX_FRAMES * 3 );
+  unsigned char *block = malloc( DIGITAL_MAX_FRAMES / BLOCK * 3 + 3 );
+  aysource_write *writes = malloc( MAX_WRITES * sizeof( *writes ) );
+  long frames = 0, found = 0, volume_writes = 0;
+  long block_sum[3] = { 0, 0, 0 };
+  int i, digital = 0;
 
   *loop = 0;
-  if( !source || !hash || !silent ) {
+  if( !source || !hash || !silent || !level || !block || !writes ) {
     aysource_free( source );
     free( hash );
     free( silent );
+    free( level );
+    free( block );
+    free( writes );
     return 0;
   }
 
-  while( frames < MAX_FRAMES ) {
+  while( frames < ( digital ? DIGITAL_MAX_FRAMES : MAX_FRAMES ) ) {
     const unsigned char *r;
     unsigned int h = 2166136261U;
+    long sum[3] = { 0, 0, 0 }, count[3] = { 0, 0, 0 };
+    int written, channel;
 
     if( cancel && *cancel ) break;
 
-    aysource_frame( source, NULL, 0 );
+    written = aysource_frame( source, writes, MAX_WRITES );
     r = aysource_registers( source );
     for( i = 0; i < 14; i++ ) {
       h ^= r[i];
@@ -103,7 +194,38 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
     }
     hash[ frames ] = h;
     silent[ frames ] = !( ( r[8] | r[9] | r[10] ) & 0x1f );
+
+    /* The levels the volume writes set (an envelope counts as full) */
+    for( i = 0; i < written; i++ ) {
+      int reg = writes[i].reg;
+      if( reg >= 8 && reg <= 10 ) {
+        int value = writes[i].value & 0x1f;
+        sum[ reg - 8 ] += value & 16 ? 15 : value;
+        count[ reg - 8 ]++;
+      }
+    }
+    if( frames < DIGITAL_MAX_FRAMES ) {
+      for( channel = 0; channel < 3; channel++ ) {
+        int value = r[ 8 + channel ] & 0x1f;
+        int mean = count[ channel ] ?
+                   (int)( sum[ channel ] * LEVEL_SCALE / count[ channel ] ) :
+                   ( value & 16 ? 15 : value ) * LEVEL_SCALE;
+        level[ frames * 3 + channel ] = mean;
+        block_sum[ channel ] += mean;
+      }
+      if( ( frames + 1 ) % BLOCK == 0 ) {
+        for( channel = 0; channel < 3; channel++ ) {
+          block[ frames / BLOCK * 3 + channel ] = block_sum[ channel ] / BLOCK;
+          block_sum[ channel ] = 0;
+        }
+      }
+    }
+    volume_writes += count[0] + count[1] + count[2];
     frames++;
+
+    if( frames == DIGITAL_SEEN &&
+        volume_writes >= DIGITAL_WRITES * DIGITAL_SEEN )
+      digital = 1;
 
     if( frames % CHECK_EVERY == 0 ) {
       long end = find( hash, silent, frames, loop );
@@ -114,11 +236,22 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
         break;
       }
     }
+
+    if( digital && frames % DIGITAL_CHECK_EVERY == 0 ) {
+      long end = find_digital( level, block, frames, loop );
+      if( end >= 0 ) {
+        found = end;
+        break;
+      }
+    }
   }
 
   aysource_free( source );
   free( hash );
   free( silent );
+  free( level );
+  free( block );
+  free( writes );
   return found;
 }
 

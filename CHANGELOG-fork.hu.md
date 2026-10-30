@@ -67,6 +67,10 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A korábbi változatokkal mért hosszak megmaradnak és látszanak, de a dal
   lejátszásakor, illetve a *Hosszak mérése* gombra a Fuse újraméri őket
   (az új méréssel pontosabbak lehetnek).
+- Új *Újramérés* gomb a lejátszási listában (a *Hosszak mérése* alatt,
+  sosem szürke): a kijelölt dalokat, kijelölés nélkül az aktuálisat méri
+  újra, a már ismert hosszukat is. A futó mérést a *Mérés leállítása*
+  állítja meg. Az ablak legkisebb magassága ennyivel nőtt.
 - A szintjelzők a digitális dalokat is mutatják (hang és zaj nélkül a
   hangerő változását).
 - A lejátszó dal-sorában és a lista sorszámánál a gondolatjel (–) és a

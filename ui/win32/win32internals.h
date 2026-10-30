@@ -81,6 +81,7 @@ void win32_ayplayer_update( void );
 void win32_options_sound_sync( void );
 void win32_ayplayer_play_entry( int index );
 void win32_ayplayer_measure_all( void );
+void win32_ayplayer_remeasure( const int *indexes, int count );
 int win32_ayplayer_busy( void );
 void win32_ayplayer_measure_stop( void );
 int win32_ayplayer_measure_stopping( void );

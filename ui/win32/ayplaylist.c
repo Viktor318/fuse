@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <windows.h>
 #include <commctrl.h>
@@ -41,10 +42,11 @@ enum { COLUMN_NUMBER, COLUMN_TITLE, COLUMN_AUTHOR, COLUMN_LENGTH };
 
 /* The buttons keep their size and their distance from the right edge;
    the list and the line under it follow the size of the window */
-#define BUTTONS 11
+#define BUTTONS 12
 static const int button_ids[ BUTTONS ] = {
   IDC_AYL_ADD, IDC_AYL_ADD_FOLDER, IDC_AYL_REMOVE, IDC_AYL_CLEAR, IDC_AYL_UP,
-  IDC_AYL_DOWN, IDC_AYL_LOAD, IDC_AYL_SAVE, IDC_AYL_MEASURE, IDCLOSE, 0
+  IDC_AYL_DOWN, IDC_AYL_LOAD, IDC_AYL_SAVE, IDC_AYL_MEASURE, IDC_AYL_REMEASURE,
+  IDCLOSE, 0
 };
 static int button_top[ BUTTONS ], buttons_width;
 static int edge_margin, buttons_gap, list_bottom_gap, status_bottom_gap;
@@ -286,6 +288,26 @@ add_folder( void )
     return;
   ayplaylist_add_folder( path );
   win32_ayplaylist_update();
+}
+
+/* Measure again the songs chosen in the list, or, with none chosen, the
+   song of the player; their lengths found before are replaced */
+static void
+remeasure_chosen( void )
+{
+  HWND list = item( IDC_AYL_LIST );
+  int i, count = ListView_GetItemCount( list ), chosen = 0;
+  int *indexes = malloc( ( count + 1 ) * sizeof( *indexes ) );
+
+  if( !indexes ) return;
+  for( i = 0; i < count; i++ )
+    if( ListView_GetItemState( list, i, LVIS_SELECTED ) )
+      indexes[ chosen++ ] = i;
+  if( !chosen && ayplaylist_current() >= 0 )
+    indexes[ chosen++ ] = ayplaylist_current();
+
+  if( chosen ) win32_ayplayer_remeasure( indexes, chosen );
+  free( indexes );
 }
 
 static void
@@ -703,6 +725,9 @@ playlist_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     case IDC_AYL_SAVE:
       if( list_file_dialog( path, sizeof( path ), 1 ) )
         ayplaylist_save_m3u( path );
+      return TRUE;
+    case IDC_AYL_REMEASURE:
+      remeasure_chosen();
       return TRUE;
     case IDC_AYL_MEASURE:
       if( win32_ayplayer_busy() ) win32_ayplayer_measure_stop();

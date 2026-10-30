@@ -75,6 +75,11 @@ void ayplayer_set_frame_hook( void ( *hook )( void ) );
    result): 1 when a measuring is over */
 int ayplayer_poll( void );
 int ayplayer_measuring( void );
+
+/* Measure song `song' of the file again, also if its length is known; 0 if
+   it started. The measuring going on is given up */
+int ayplayer_remeasure( const char *filename, int song );
+void ayplayer_measure_cancel( void );
 int ayplayer_measuring_current( void );	/* the song playing */
 /* Measure a song of a file (playing nothing): 1 if it is known already or
    cannot be read */

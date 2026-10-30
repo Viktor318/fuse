@@ -65,6 +65,10 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - Lengths measured by earlier versions are kept and shown, but measured
   again when the song is played or with *Measure lengths* (the new
   measuring may be more exact).
+- New *Measure again* button in the playlist (under *Measure lengths*,
+  never greyed): measures the selected songs again, or with none
+  selected the current one, also if their lengths are known. *Stop
+  measuring* stops it. The smallest height of the window grew with it.
 - The level meters show digital songs too (without tone and noise: how
   much the volume changes).
 - The dash (–) of the player's song line and the » of the playlist's

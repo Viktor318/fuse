@@ -97,3 +97,4 @@
 #define IDC_AYL_LOAD        4259
 #define IDC_AYL_SAVE        4260
 #define IDC_AYL_MEASURE     4261
+#define IDC_AYL_REMEASURE   4262

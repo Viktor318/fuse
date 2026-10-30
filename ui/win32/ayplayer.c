@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <windows.h>
 #include <commctrl.h> /* windows.h must be included prior to commctrl.h */
@@ -490,6 +491,18 @@ static int measuring = 0;
 /* Stop asked for: the song being measured is finished, then no more */
 static int measure_stopping = 0;
 static int measure_next_index = 0;
+/* Measuring again chosen songs: their places in the list (NULL: the songs
+   of the list not measured yet) */
+static int *remeasure_indexes = NULL;
+static int remeasure_count = 0;
+
+static void
+remeasure_free( void )
+{
+  free( remeasure_indexes );
+  remeasure_indexes = NULL;
+  remeasure_count = 0;
+}
 
 static void
 play( int index )
@@ -497,6 +510,7 @@ play( int index )
   /* Chosen by the user: measuring (if any) is over */
   measuring = 0;
   measure_stopping = 0;
+  remeasure_free();
   resume_if_paused();
   ayplaylist_play( index );
   update_all();
@@ -521,7 +535,20 @@ measure_next( void )
 {
   long frames;
 
-  while( measuring && !measure_stopping &&
+  /* Chosen songs: each of them, measured or not */
+  while( measuring && !measure_stopping && remeasure_indexes &&
+         measure_next_index < remeasure_count ) {
+    int index = remeasure_indexes[ measure_next_index++ ];
+    const ayplaylist_entry *entry = ayplaylist_get( index );
+
+    if( !entry ) continue;
+    if( !ayplayer_remeasure( entry->path, entry->song ) ) {
+      win32_ayplaylist_update();
+      return;
+    }
+  }
+
+  while( measuring && !measure_stopping && !remeasure_indexes &&
          measure_next_index < ayplaylist_count() ) {
     int index = measure_next_index++;
     const ayplaylist_entry *entry = ayplaylist_get( index );
@@ -535,6 +562,7 @@ measure_next( void )
 
   measuring = 0;
   measure_stopping = 0;
+  remeasure_free();
   win32_ayplaylist_update();
 }
 
@@ -546,8 +574,29 @@ win32_ayplayer_measure_all( void )
   measuring = 1;
   measure_stopping = 0;
   measure_next_index = 0;
+  remeasure_free();
   /* The song playing is being measured: that first */
   if( !ayplayer_measuring() ) measure_next();
+}
+
+/* Measure again the songs at `indexes' of the list, measured or not; any
+   measuring going on is given up for it */
+void
+win32_ayplayer_remeasure( const int *indexes, int count )
+{
+  if( !fuse_hAYWnd || count <= 0 ) return;
+
+  remeasure_free();
+  remeasure_indexes = malloc( count * sizeof( *remeasure_indexes ) );
+  if( !remeasure_indexes ) return;
+  memcpy( remeasure_indexes, indexes, count * sizeof( *remeasure_indexes ) );
+  remeasure_count = count;
+
+  ayplayer_measure_cancel();
+  measuring = 1;
+  measure_stopping = 0;
+  measure_next_index = 0;
+  measure_next();
 }
 
 /* Stop measuring the lengths of the list: the song being measured is

@@ -663,6 +663,28 @@ ayplayer_measuring_current( void )
          measure_checksum == ay_file_checksum;
 }
 
+/* The measuring going on (if any) is given up */
+void
+ayplayer_measure_cancel( void )
+{
+  aymeasure_stop();
+  measure_busy = 0;
+}
+
+/* As ayplayer_measure(), also if the length is known: the new one
+   replaces it */
+int
+ayplayer_remeasure( const char *filename, int song )
+{
+  libspectrum_byte *data;
+  size_t length;
+
+  if( read_ay_file( filename, &data, &length ) ) return 1;
+  measure_start( data, length, checksum( data, length ), song );
+  libspectrum_free( data );
+  return 0;
+}
+
 int
 ayplayer_measure( const char *filename, int song )
 {

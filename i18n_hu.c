@@ -701,6 +701,8 @@ const i18n_entry i18n_hu_table[] = {
     "Az MLT kép („%s”) nem %d bájtos" },
   { "Machine id '%s' unknown",
     "Ismeretlen géptípus: „%s”" },
+  { "Measure a&gain",
+    "Ú&jramérés" },
   { "Memory Map",
     "Memóriatérkép" },
   { "Menu",

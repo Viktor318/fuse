@@ -25,6 +25,14 @@ fájlban vannak).
   BCA, CBA, CAB, Mono, Egyéni. A *Nincs* új neve **Mono** (`--separation
   mono`; a `none` és a *Nincs*-csel elmentett beállítás is működik, és a
   nevek kis- és nagybetűvel is megadhatók).
+- Új AY sztereó módok: **CBA** (az ABC tükörképe) és **Egyéni**: a
+  *Beállítások > Hang* lapon (vagy a `--ay-channel-a/b/c Left/Centre/Right`
+  kapcsolókkal) minden csatornához megadható, hogy balra, középen vagy jobbra
+  szóljon, így két csatorna egy oldalon is lehet.
+- A *Beállítások > Hang* lap és az AY lejátszó ugyanazokat az AY
+  beállításokat mutatja, és azonnal követik egymást (sztereó mód, a
+  csatornák helye, AY hangerő); a *Mégse* visszaállítja őket. A csatornák
+  helye csak Egyéni módban állítható.
 
 ### AY zenelejátszó
 
@@ -59,6 +67,19 @@ fájlban vannak).
   hangerő utáni szintet mutatják. A beállítás megmarad, és a *Beállítások >
   Hang* ablakban is ott van; a két ablak azonnal követi egymást. Az ablak
   kicsit szélesebb lett.
+- Szünet alatt a szintjelzők ott maradnak, ahol a zene megállt, és a zenével
+  együtt mennek tovább.
+- A lejátszási lista ablakban a hosszak mérése leállítható: a *Hosszak
+  mérése* gomb mérés közben *Mérés leállítása* lesz (az éppen mért dal
+  hosszát még megvárja).
+- A mentett lejátszási lista már nem elérhető fájljai (áthelyezve, törölve,
+  nem csatlakoztatott meghajtón) hibaüzenet nélkül kimaradnak; egy betöltött
+  listánál egyetlen üzenet szól a kimaradt fájlok számáról.
+
+### Egyéb
+
+- A *Súgó > Névjegy* megnyitása nem állítja meg az emulációt (a zene nem
+  ugrik meg).
 
 ## v1.10.0-hu.1 – 2026-10-25
 

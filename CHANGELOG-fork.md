@@ -23,6 +23,14 @@ Now based on Fuse 1.10.1 (its changes are in [ChangeLog](ChangeLog)).
   BCA, CBA, CAB, Mono, Custom. *None* is called **Mono** (`--separation
   mono`; `none` and settings saved with *None* still work, and the names
   are accepted in any case).
+- New AY stereo modes: **CBA** (ABC mirrored) and **Custom**: in *Options >
+  Sound* (or with `--ay-channel-a/b/c Left/Centre/Right`) each channel can be
+  on the left, in the centre or on the right, so two channels can be on the
+  same side too.
+- *Options > Sound* and the AY player show the same AY settings and follow
+  each other at once (stereo mode, places of the channels, AY volume);
+  *Cancel* restores them. The places of the channels can be set only in the
+  Custom mode.
 
 ### AY music player
 
@@ -56,6 +64,18 @@ Now based on Fuse 1.10.1 (its changes are in [ChangeLog](ChangeLog)).
   *Reset* sets all three back to 100%. The meters show the levels after
   these volumes. The volumes are kept, and are also in *Options > Sound*;
   both windows show changes at once. The window is a little wider.
+- While paused, the level meters stay where the music stopped and go on
+  with the music.
+- Measuring the lengths in the playlist window can be stopped: *Measure
+  lengths* becomes *Stop measuring* while measuring (the length of the song
+  being measured is still kept).
+- Files of the saved playlist that are not there any more (moved, deleted,
+  on a drive not connected) are left out without error messages; a list
+  loaded by the user gives one message with the number of files left out.
+
+### Other
+
+- *Help > About* no longer pauses the emulation (the music no longer jumps).
 
 ## v1.10.0-hu.1 – 2026-10-25
 

@@ -55,8 +55,13 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   the player stands on the last song, without playing.
 - The length of digital AY songs (playing samples) can be measured too:
   they never repeat exactly, so Fuse compares how the volumes of the
-  channels go (e.g. KDF Soft's "AY Megademo Digital Part 2": 1:47). Songs
-  that could not be measured before are measured again.
+  channels go (e.g. KDF Soft's "AY Megademo Digital Part 2": 1:47). The
+  digital part may also start in the middle of the song (X-agon of
+  Phantasy's "Digitune 1": 1:42). Songs that could not be measured before
+  are measured again.
+- The length measuring takes a volume left standing without tone and
+  noise as silence: songs that end so end there instead of repeating
+  their silence.
 - The level meters show digital songs too (without tone and noise: how
   much the volume changes).
 - The dash (–) of the player's song line and the » of the playlist's

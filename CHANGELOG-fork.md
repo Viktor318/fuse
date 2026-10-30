@@ -36,6 +36,13 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - *Options > Sound* keeps only the AY volume and the stereo mode of the AY
   settings; the places and the channel volumes are in the mixer.
 
+### SpecDrum and Covox
+
+- The emulator no longer crashes when, with the SpecDrum or Covox switched
+  on, a program writes to the device's port while the sound is off (during
+  fastloading, or with the sound disabled), as the SpecDrum *KIT EDITOR*
+  loader does. The bug is in upstream Fuse as well.
+
 ### Snapshots
 
 - Loading a snapshot keeps the devices switched on in *Peripherals: sound*

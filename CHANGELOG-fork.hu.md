@@ -37,6 +37,13 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A *Beállítások > Hang* lapon az AY-beállítások közül az AY hangerő és a
   sztereó mód maradt; a helyek és a csatornahangerők a keverőben vannak.
 
+### SpecDrum és Covox
+
+- Nem száll el az emulátor, ha bekapcsolt SpecDrum vagy Covox mellett egy
+  program hang nélkül ír az eszköz portjára (gyors betöltés közben, vagy ha
+  a hang ki van kapcsolva). Ez történt például a SpecDrum *KIT EDITOR*
+  betöltőjénél. A hiba az upstream Fuse-ban is megvan.
+
 ### Pillanatfelvételek
 
 - Pillanatfelvétel betöltésekor a *Perifériák: hang* lapon bekapcsolt

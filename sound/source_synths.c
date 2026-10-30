@@ -79,11 +79,16 @@ void
 sound_specdrum_write( libspectrum_word port GCC_UNUSED, libspectrum_byte val )
 {
   if( periph_is_active( PERIPH_TYPE_SPECDRUM ) ) {
-    libspectrum_dword time = sound_interval_time( tstates );
-    blip_synth_update( left_specdrum, time, ( val - 128 ) * 128 );
-    if( right_specdrum )
-      blip_synth_update( right_specdrum, time, ( val - 128 ) * 128 );
     machine_current->specdrum.specdrum_dac = val - 128;
+
+    /* The synths don't exist while the sound is off (e.g. during
+       fastloading), but loaders may still write to the port */
+    if( sound_enabled ) {
+      libspectrum_dword time = sound_interval_time( tstates );
+      blip_synth_update( left_specdrum, time, ( val - 128 ) * 128 );
+      if( right_specdrum )
+        blip_synth_update( right_specdrum, time, ( val - 128 ) * 128 );
+    }
   }
 }
 
@@ -92,10 +97,14 @@ sound_covox_write( libspectrum_word port GCC_UNUSED, libspectrum_byte val )
 {
   if( periph_is_active( PERIPH_TYPE_COVOX_FB ) ||
       periph_is_active( PERIPH_TYPE_COVOX_DD ) ) {
-    libspectrum_dword time = sound_interval_time( tstates );
-    blip_synth_update( left_covox, time, val * 128 );
-    if( right_covox ) blip_synth_update( right_covox, time, val * 128 );
     machine_current->covox.covox_dac = val;
+
+    /* As for the SpecDrum: no synths while the sound is off */
+    if( sound_enabled ) {
+      libspectrum_dword time = sound_interval_time( tstates );
+      blip_synth_update( left_covox, time, val * 128 );
+      if( right_covox ) blip_synth_update( right_covox, time, val * 128 );
+    }
   }
 }
 

@@ -64,6 +64,9 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   mérhető dalokat a Fuse újra megméri.
 - A hosszmérés a hang és zaj nélkül mozdulatlanul álló hangerőt csendnek
   veszi: az így véget érő dalok ott érnek véget, nem ismétlik a csendet.
+- A korábbi változatokkal mért hosszak megmaradnak és látszanak, de a dal
+  lejátszásakor, illetve a *Hosszak mérése* gombra a Fuse újraméri őket
+  (az új méréssel pontosabbak lehetnek).
 - A szintjelzők a digitális dalokat is mutatják (hang és zaj nélkül a
   hangerő változását).
 - A lejátszó dal-sorában és a lista sorszámánál a gondolatjel (–) és a

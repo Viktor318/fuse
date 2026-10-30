@@ -62,6 +62,9 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - The length measuring takes a volume left standing without tone and
   noise as silence: songs that end so end there instead of repeating
   their silence.
+- Lengths measured by earlier versions are kept and shown, but measured
+  again when the song is played or with *Measure lengths* (the new
+  measuring may be more exact).
 - The level meters show digital songs too (without tone and noise: how
   much the volume changes).
 - The dash (–) of the player's song line and the » of the playlist's

@@ -85,9 +85,12 @@ static int ay_repeat_song = 0;
    measured in the background (aymeasure.c) while it plays, and the length
    is kept in a file next to the settings, by file checksum */
 #define AY_LENGTHS_FILE "fuse_ay_lengths.txt"
-/* Lengths found by the measuring of this version: the earlier one gave up
-   after 15 seconds, so its "no repetition found" lines are measured again */
-#define AY_LENGTHS_VERSION 3
+/* Lengths found by the measuring of this version. Version 1 gave up after
+   15 seconds, so its "no repetition found" lines are dropped and measured
+   again. Lines of the versions before 4 (which did not know digital music
+   or a standing volume as silence) are kept and used, but measured again
+   when the song is played or the lengths of the list are measured */
+#define AY_LENGTHS_VERSION 4
 
 static int ay_length_measured = 0;
 static libspectrum_dword ay_file_checksum = 0;
@@ -372,7 +375,7 @@ lengths_load( void )
     fields = sscanf( line, "%lx %d %ld %ld %d", &file_sum, &file_song,
                      &file_frames, &file_loop, &version );
     if( fields < 4 ) continue;
-    /* Given up by the first measuring: measured again */
+    /* Given up by an earlier measuring: measured again */
     if( version < AY_LENGTHS_VERSION && file_frames <= 0 ) {
       rewrite = 1;
       continue;
@@ -398,6 +401,19 @@ lengths_lookup( libspectrum_dword sum, int song, long *frames, long *loop )
   *frames = lengths[ lengths_table[ slot ] - 1 ].frames;
   *loop = lengths[ lengths_table[ slot ] - 1 ].loop;
   return 1;
+}
+
+/* Known and measured by this version: no need to measure it again */
+static int
+lengths_current( libspectrum_dword sum, int song )
+{
+  size_t slot;
+
+  if( !lengths_read ) lengths_load();
+
+  slot = lengths_slot( sum, song );
+  return lengths_table[ slot ] &&
+         lengths[ lengths_table[ slot ] - 1 ].version >= AY_LENGTHS_VERSION;
 }
 
 static void
@@ -652,12 +668,11 @@ ayplayer_measure( const char *filename, int song )
 {
   libspectrum_byte *data;
   size_t length;
-  long frames, loop;
   libspectrum_dword sum;
 
   if( read_ay_file( filename, &data, &length ) ) return 1;
   sum = checksum( data, length );
-  if( lengths_lookup( sum, song, &frames, &loop ) ) {
+  if( lengths_current( sum, song ) ) {
     libspectrum_free( data );
     return 1;
   }
@@ -716,9 +731,9 @@ ayplayer_play( int song )
      music goes on while the emulation is held up a little */
   sound_set_long_buffer( !ayplay_output_independent() );
 
-  /* Not measured yet: measured now, while it plays */
-  if( !ay_length_measured &&
-      !lengths_lookup( ay_file_checksum, song, &measured, &loop ) ) {
+  /* Not measured yet, or by an earlier version: measured now, while it
+     plays */
+  if( !lengths_current( ay_file_checksum, song ) ) {
     if( !ayplayer_measuring_current() )
       measure_start( ay_data, ay_length, ay_file_checksum, song );
   }

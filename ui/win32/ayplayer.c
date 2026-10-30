@@ -649,7 +649,11 @@ command( WORD id, WORD code )
     break;
 
   case IDC_AY_MIXER:
-    if( code == BN_CLICKED ) win32_aymixer_show();
+    /* Opens the mixer, or closes it if it is open */
+    if( code == BN_CLICKED ) {
+      if( fuse_hAYMixWnd ) win32_aymixer_close();
+      else win32_aymixer_show();
+    }
     break;
 
   case IDC_AY_MIX_AUTO:

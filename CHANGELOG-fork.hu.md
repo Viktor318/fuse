@@ -26,6 +26,11 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   dalokhoz*, a dal a saját `.mix` fájljával szól, egy `.mix` nélküli dalig; a
   Fuse mentett beállításait ezek nem változtatják meg. A keverő címsora
   mutatja a használt fájlt.
+- Az AY lejátszó *Keverő...* gombja megnyitja a keverőt, vagy bezárja, ha
+  nyitva van. A `.mix` fájlok automatikus betöltése alapból be van kapcsolva.
+- Az AY sztereó mód ismét a közös beállítások között van (ahogy a Fuse-ban,
+  most mind a nyolc móddal) a többi felület kedvéért; Windowson a keverőben
+  és az AY lejátszóban állítható.
 - Az AY lejátszó ablaka ugyanolyan keskeny, mint a csatornahangerők előtt
   (azok most a keverőben vannak), hosszabb szintjelzőkkel; a *Keverő...*
   gomb a sztereó mód mellett van.

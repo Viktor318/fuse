@@ -42,6 +42,8 @@
 
 HWND fuse_hAYMixWnd = NULL;
 
+static void close_window( void );
+
 /* The stereo modes in the order of the combo box (as in the AY player) */
 static const char * const stereo_names[] =
   { "ABC", "ACB", "BAC", "BCA", "CBA", "CAB", "Mono", "Custom" };
@@ -225,6 +227,12 @@ restore_position( void )
   else if( fuse_hAYWnd && GetWindowRect( fuse_hAYWnd, &player ) )
     SetWindowPos( fuse_hAYMixWnd, NULL, player.right + 4, player.top, 0, 0,
                   SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
+}
+
+void
+win32_aymixer_close( void )
+{
+  close_window();
 }
 
 static void

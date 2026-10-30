@@ -66,6 +66,7 @@ extern HWND fuse_hAYListWnd;
 /* AY mixer window (aymixer.c) */
 extern HWND fuse_hAYMixWnd;
 void win32_aymixer_show( void );
+void win32_aymixer_close( void );
 void win32_aymixer_update( void );
 /* The AY mixer settings changed: every window shows them */
 void win32_aymix_changed( void );

@@ -33,6 +33,12 @@ my %combo_default;
 
 my @dialogs = Fuse::Dialog::read( shift @ARGV );
 
+# The AY stereo mode is set in the AY mixer window on Windows
+foreach my $dialog ( @dialogs ) {
+    @{ $dialog->{widgets} } =
+	grep { $_->{value} ne 'stereo_ay' } @{ $dialog->{widgets} };
+}
+
 print Fuse::GPL( 'options.c: options dialog boxes',
                  '2001-2013 Philip Kendall, Marek Januszewski, Stuart Brady' ) . << "CODE";
 

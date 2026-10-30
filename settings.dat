@@ -324,4 +324,4 @@ teletext_port_3, numeric, 19763
 teletext_port_4, numeric, 19764
 ayplayer_auto_next, boolean, 1
 ayplayer_repeat, boolean, 0
-ayplayer_mix_auto, boolean, 0
+ayplayer_mix_auto, boolean, 1

@@ -25,6 +25,11 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   the mixer settings of the songs automatically* in the AY player, a song is
   played with its `.mix` file, until a song without one; the saved settings
   of Fuse are not changed by them. The mixer title shows the file in use.
+- The *Mixer...* button of the AY player opens the mixer, or closes it if
+  it is open. Loading the `.mix` files automatically is on by default.
+- The AY stereo mode is in the shared options again (as in Fuse, now with
+  all eight modes), for the other user interfaces; on Windows it is set in
+  the mixer and the AY player.
 - The AY player window is as narrow as it was before the channel volumes
   (they are in the mixer now), with longer level meters; the *Mixer...*
   button is beside the stereo mode.

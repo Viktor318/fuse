@@ -457,7 +457,7 @@ void
 ayplay_update_mix( void )
 {
   int position[ CHANNELS ], channel;
-  int stereo = option_enumerate_sound_stereo_ay();
+  int stereo = sound_ay_stereo_setting();
   int volume[ CHANNELS ];
 
   volume[0] = settings_current.volume_ay_a;

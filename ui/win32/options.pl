@@ -314,7 +314,9 @@ CODE
   {
     int custom =
       SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_STEREO_AY, CB_GETCURSEL,
-                          0, 0 ) == SOUND_STEREO_AY_CUSTOM;
+                          0, 0 ) ==
+      SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_STEREO_AY, CB_GETCOUNT,
+                          0, 0 ) - 1;	/* Custom: the last one */
     EnableWindow( GetDlgItem( hwndDlg, IDC_OPT_SOUND_STEREO_AY_A ), custom );
     EnableWindow( GetDlgItem( hwndDlg, IDC_OPT_SOUND_STEREO_AY_B ), custom );
     EnableWindow( GetDlgItem( hwndDlg, IDC_OPT_SOUND_STEREO_AY_C ), custom );

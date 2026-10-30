@@ -102,7 +102,8 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   lejátszó továbblép.
 - **Szintek és hang**: a három AY-csatorna szintjelzője (a sztereó mód
   sorrendjében), csatornánként némító jelölőnégyzet, hangerő és sztereó mód
-  (nincs, ACB, ABC és az új BAC) – mind lejátszás közben, azonnal állítható.
+  (ABC, ACB, BAC, BCA, CBA, CAB, Mono és Egyéni) – mind lejátszás közben,
+  azonnal állítható.
 - A zene akkor is szól tovább, ha egy menü vagy párbeszédablak nyitva van, ha
   egy ablakot mozgatsz, vagy ha a Fuse kis méretre van állítva. WASAPI-val
   (`fuse.exe`) a zenének saját hangfolyama van, és egyáltalán nem kell hozzá

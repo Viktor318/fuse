@@ -150,7 +150,7 @@ sound_init( const char *device )
     return;
 
   /* only try for stereo if we need it */
-  sound_stereo_ay = option_enumerate_sound_stereo_ay();
+  sound_stereo_ay = sound_ay_stereo_setting();
   if( settings_current.sound &&
       sound_lowlevel_init( device, &settings_current.sound_freq,
                            &sound_stereo_ay ) )
@@ -160,6 +160,8 @@ sound_init( const char *device )
       sound_stereo_ay != SOUND_STEREO_AY_ABC &&
       sound_stereo_ay != SOUND_STEREO_AY_BAC &&
       sound_stereo_ay != SOUND_STEREO_AY_CBA &&
+      sound_stereo_ay != SOUND_STEREO_AY_BCA &&
+      sound_stereo_ay != SOUND_STEREO_AY_CAB &&
       sound_stereo_ay != SOUND_STEREO_AY_CUSTOM ) {
     ui_error( UI_ERROR_ERROR, "unknown AY stereo separation type: %d",
               sound_stereo_ay );
@@ -264,7 +266,7 @@ sound_register_startup( void )
 void
 sound_ay_stereo_changed( void )
 {
-  int stereo = option_enumerate_sound_stereo_ay();
+  int stereo = sound_ay_stereo_setting();
 
   ayplay_update_mix();
   if( !sound_enabled ) return;	/* sound_init() reads it */
@@ -283,6 +285,33 @@ sound_ay_stereo_changed( void )
      the next interval */
   sound_stereo_ay = stereo;
   sound_ay_route_pending = 1;
+}
+
+int
+sound_ay_stereo_setting( void )
+{
+  static const struct { const char *name; int mode; } modes[] = {
+    { "Mono", SOUND_STEREO_AY_NONE }, { "None", SOUND_STEREO_AY_NONE },
+    { "ABC", SOUND_STEREO_AY_ABC }, { "ACB", SOUND_STEREO_AY_ACB },
+    { "BAC", SOUND_STEREO_AY_BAC }, { "BCA", SOUND_STEREO_AY_BCA },
+    { "CBA", SOUND_STEREO_AY_CBA }, { "CAB", SOUND_STEREO_AY_CAB },
+    { "Custom", SOUND_STEREO_AY_CUSTOM },
+  };
+  const char *value = settings_current.stereo_ay;
+  size_t i, j;
+
+  if( !value ) return SOUND_STEREO_AY_NONE;
+  for( i = 0; i < ARRAY_SIZE( modes ); i++ ) {
+    const char *name = modes[i].name;
+    for( j = 0; name[j] && value[j]; j++ ) {
+      char c = value[j];
+      if( c >= 'a' && c <= 'z' ) c -= 'a' - 'A';
+      if( c != ( name[j] >= 'a' && name[j] <= 'z' ?
+                 name[j] - ( 'a' - 'A' ) : name[j] ) ) break;
+    }
+    if( !name[j] && !value[j] ) return modes[i].mode;
+  }
+  return SOUND_STEREO_AY_NONE;
 }
 
 /* Where each channel is heard (left, centre, right) */
@@ -306,6 +335,14 @@ sound_ay_channel_positions( int stereo, int position[3] )
     break;
   case SOUND_STEREO_AY_CBA:
     position[0] = SOUND_AY_RIGHT; position[1] = SOUND_AY_CENTRE;
+    position[2] = SOUND_AY_LEFT;
+    break;
+  case SOUND_STEREO_AY_BCA:
+    position[0] = SOUND_AY_RIGHT; position[1] = SOUND_AY_LEFT;
+    position[2] = SOUND_AY_CENTRE;
+    break;
+  case SOUND_STEREO_AY_CAB:
+    position[0] = SOUND_AY_CENTRE; position[1] = SOUND_AY_RIGHT;
     position[2] = SOUND_AY_LEFT;
     break;
   case SOUND_STEREO_AY_CUSTOM:

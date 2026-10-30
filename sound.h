@@ -115,6 +115,12 @@ extern int sound_framesiz;
 #define SOUND_STEREO_AY_BAC	3
 #define SOUND_STEREO_AY_CBA	4
 #define SOUND_STEREO_AY_CUSTOM	5
+#define SOUND_STEREO_AY_BCA	6
+#define SOUND_STEREO_AY_CAB	7
+
+/* The stereo mode set in settings_current.stereo_ay (the names of the
+   combo box, in any case; "None" is the old name of "Mono") */
+int sound_ay_stereo_setting( void );
 
 /* Where each AY channel is heard in a stereo mode */
 #define SOUND_AY_LEFT	0

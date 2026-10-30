@@ -58,6 +58,14 @@ static int captured_count, expected_count[100];
 static blip_resampled_time_t expected_offset[100];
 
 int option_enumerate_sound_stereo_ay( void ) { return selected_stereo; }
+/* sound.c reads the mode from the setting */
+static void
+select_stereo( int mode )
+{
+  selected_stereo = mode;
+  settings_current.stereo_ay = mode == SOUND_STEREO_AY_ABC ? (char *)"ABC" :
+                               (char *)"Mono";
+}
 int option_enumerate_sound_stereo_ay_a( void ) { return 0; }
 int option_enumerate_sound_stereo_ay_b( void ) { return 1; }
 int option_enumerate_sound_stereo_ay_c( void ) { return 2; }
@@ -144,7 +152,7 @@ int main( void )
   settings_current.volume_specdrum = settings_current.volume_covox = 50;
   settings_current.volume_uspeech = 50;
   for( stereo = 0; stereo < 2; stereo++ ) {
-    selected_stereo = stereo ? SOUND_STEREO_AY_ABC : SOUND_STEREO_AY_NONE;
+    select_stereo( stereo ? SOUND_STEREO_AY_ABC : SOUND_STEREO_AY_NONE );
     for( route = 0; route < 3; route++ ) {
       speaker = route == 0 ? SOUND_SPEAKER_TYPE_UNFILTERED :
                 route == 1 ? SOUND_SPEAKER_TYPE_BEEPER : SOUND_SPEAKER_TYPE_TV;

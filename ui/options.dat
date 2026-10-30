@@ -169,7 +169,7 @@ sound
 Sound Options
 Checkbox, (S)ound enabled, sound, INPUT_KEY_s
 Checkbox, (L)oading sound, sound_load, INPUT_KEY_l
-Combo, (A)Y stereo separation, stereo_ay, INPUT_KEY_a, *None|ACB|ABC|BAC|CBA|Custom
+Combo, (A)Y stereo separation, stereo_ay, INPUT_KEY_a, ABC|ACB|BAC|BCA|CBA|CAB|*Mono|Custom
 Combo, Custom stereo: A cha(n)nel, stereo_ay_a, INPUT_KEY_n, *Left|Centre|Right
 Combo, Custom stereo: (B) channel, stereo_ay_b, INPUT_KEY_b, Left|*Centre|Right
 Combo, Custom stereo: C c(h)annel, stereo_ay_c, INPUT_KEY_h, Left|Centre|*Right

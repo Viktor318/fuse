@@ -57,8 +57,13 @@ static int meter_order[ 3 ] = { 0, 1, 2 };
 
 /* The stereo modes in the order of the combo box (and of the options) */
 static const char * const stereo_names[] =
-  { "None", "ACB", "ABC", "BAC", "CBA", "Custom" };
-#define STEREO_COUNT 6
+  { "ABC", "ACB", "BAC", "BCA", "CBA", "CAB", "Mono", "Custom" };
+static const int stereo_modes[] = {
+  SOUND_STEREO_AY_ABC, SOUND_STEREO_AY_ACB, SOUND_STEREO_AY_BAC,
+  SOUND_STEREO_AY_BCA, SOUND_STEREO_AY_CBA, SOUND_STEREO_AY_CAB,
+  SOUND_STEREO_AY_NONE, SOUND_STEREO_AY_CUSTOM
+};
+#define STEREO_COUNT 8
 
 /* The length of a song is being measured (the status line shows it) */
 static HWND scan_window = NULL;
@@ -168,7 +173,7 @@ static void
 update_level_labels( void )
 {
   static const char * const sides[] = { "left", "middle", "right" };
-  int stereo = option_enumerate_sound_stereo_ay();
+  int stereo = sound_ay_stereo_setting();
   int position[ 3 ];
   char text[ 64 ];
   int row;
@@ -318,9 +323,12 @@ volume_changed( void )
 static void
 show_stereo( void )
 {
-  shown_stereo = option_enumerate_sound_stereo_ay();
-  SendDlgItemMessage( fuse_hAYWnd, IDC_AY_STEREO, CB_SETCURSEL, shown_stereo,
-                      0 );
+  int i;
+
+  shown_stereo = sound_ay_stereo_setting();
+  for( i = 0; i < STEREO_COUNT; i++ )
+    if( stereo_modes[i] == shown_stereo )
+      SendDlgItemMessage( fuse_hAYWnd, IDC_AY_STEREO, CB_SETCURSEL, i, 0 );
   update_level_labels();
 }
 
@@ -333,7 +341,7 @@ stereo_changed( void )
   if( stereo < 0 || stereo >= STEREO_COUNT ) return;
   settings_set_string( &settings_current.stereo_ay, stereo_names[ stereo ] );
   sound_ay_stereo_changed();
-  shown_stereo = stereo;
+  shown_stereo = stereo_modes[ stereo ];
   update_level_labels();
   win32_options_sound_sync();
 }
@@ -550,7 +558,7 @@ sync_sound_settings( void )
                         NULL, FALSE );
       break;
     }
-  if( option_enumerate_sound_stereo_ay() != shown_stereo ) {
+  if( sound_ay_stereo_setting() != shown_stereo ) {
     show_stereo();
   } else {
     /* Custom: the places of the channels may have changed */

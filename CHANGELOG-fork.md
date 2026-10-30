@@ -17,6 +17,10 @@ in [ChangeLog](ChangeLog).
   without restarting Fuse.
 - `fuse-directsound.exe`: the same program with DirectSound, as a fallback.
   Both use the same settings.
+- AY stereo modes: new **BCA** and **CAB**; the list is now ABC, ACB, BAC,
+  BCA, CBA, CAB, Mono, Custom. *None* is called **Mono** (`--separation
+  mono`; `none` and settings saved with *None* still work, and the names
+  are accepted in any case).
 
 ### AY music player
 

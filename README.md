@@ -92,7 +92,8 @@ AY sound generator of its own, apart from the emulated machine.
   3 seconds when the player moves on.
 - **Levels and sound**: level meters of the three AY channels (in the order
   of the stereo mode), a tick box to mute each channel, volume, and stereo
-  mode (none, ACB, ABC and the new BAC) – all changed at once while playing.
+  mode (ABC, ACB, BAC, BCA, CBA, CAB, Mono and Custom) – all changed at once
+  while playing.
 - The music goes on while a menu or a dialog box is open, while a window is
   moved or when Fuse is minimized. With WASAPI (`fuse.exe`) the music has a
   sound stream of its own and does not need the emulation at all; with

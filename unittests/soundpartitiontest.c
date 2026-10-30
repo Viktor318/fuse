@@ -78,6 +78,14 @@ void startup_manager_register( startup_manager_module module,
   (void)init; (void)context; (void)end;
 }
 int option_enumerate_sound_stereo_ay( void ) { return selected_stereo; }
+/* sound.c reads the mode from the setting */
+static void
+select_stereo( int mode )
+{
+  selected_stereo = mode;
+  settings_current.stereo_ay = mode == SOUND_STEREO_AY_ABC ? (char *)"ABC" :
+                               (char *)"Mono";
+}
 int option_enumerate_sound_stereo_ay_a( void ) { return 0; }
 int option_enumerate_sound_stereo_ay_b( void ) { return 1; }
 int option_enumerate_sound_stereo_ay_c( void ) { return 2; }
@@ -341,7 +349,7 @@ test_physical_pacing( void )
   test_sources = 7;
   test_route = 2;
   speaker = SOUND_SPEAKER_TYPE_TV;
-  selected_stereo = SOUND_STEREO_AY_ABC;
+  select_stereo( SOUND_STEREO_AY_ABC );
   test_machine.capabilities |= LIBSPECTRUM_MACHINE_CAPABILITY_AY;
   test_frame = 0;
   for( unsigned int i = 0; i < ARRAY_SIZE( endpoints ); i++ ) {
@@ -389,7 +397,7 @@ test_discontinuities( void )
   test_sources = 7;
   test_route = 2;
   speaker = SOUND_SPEAKER_TYPE_TV;
-  selected_stereo = SOUND_STEREO_AY_ABC;
+  select_stereo( SOUND_STEREO_AY_ABC );
   test_machine.capabilities |= LIBSPECTRUM_MACHINE_CAPABILITY_AY;
   test_frame = 0;
   for( int pass = 0; pass < 2; pass++ ) {
@@ -587,7 +595,7 @@ test_scheduler( void )
   scheduler_frame = event_register( scheduler_frame_end, "Test frame" );
   test_sources = 3;
   speaker = SOUND_SPEAKER_TYPE_TV;
-  selected_stereo = SOUND_STEREO_AY_ABC;
+  select_stereo( SOUND_STEREO_AY_ABC );
   test_machine.capabilities = LIBSPECTRUM_MACHINE_CAPABILITY_AY;
   movie_recording = 0;
   audio_cut_interval = 100;

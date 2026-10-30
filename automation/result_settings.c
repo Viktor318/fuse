@@ -34,6 +34,8 @@ stereo_name( int stereo )
          stereo == SOUND_STEREO_AY_ABC ? "abc" :
          stereo == SOUND_STEREO_AY_BAC ? "bac" :
          stereo == SOUND_STEREO_AY_CBA ? "cba" :
+         stereo == SOUND_STEREO_AY_BCA ? "bca" :
+         stereo == SOUND_STEREO_AY_CAB ? "cab" :
          stereo == SOUND_STEREO_AY_CUSTOM ? "custom" : "none";
 }
 

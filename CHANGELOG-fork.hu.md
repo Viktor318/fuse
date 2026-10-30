@@ -17,6 +17,10 @@ Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
   az új alapértelmezett eszközre.
 - `fuse-directsound.exe`: ugyanez a program DirectSounddal, tartaléknak. A
   kettő ugyanazokat a beállításokat használja.
+- AY sztereó módok: új a **BCA** és a **CAB**; a sorrend most ABC, ACB, BAC,
+  BCA, CBA, CAB, Mono, Egyéni. A *Nincs* új neve **Mono** (`--separation
+  mono`; a `none` és a *Nincs*-csel elmentett beállítás is működik, és a
+  nevek kis- és nagybetűvel is megadhatók).
 
 ### AY zenelejátszó
 

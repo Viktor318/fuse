@@ -18,6 +18,7 @@ group	context	english	hungarian
 1 Menü	File > Screenshot	S&ave Screen as SCR...	Képernyő mentése &SCR-ként...
 1 Menü	File > Screenshot	Op&en MLT Screenshot...	MLT képernyőkép m&egnyitása...
 1 Menü	File > Screenshot	Sa&ve Screen as MLT...	Képernyő mentése M&LT-ként...
+1 Menü	File > Screenshot	Save S&creen as PNG...	Képernyő mentése &PNG-ként...
 1 Menü	File	&Movie	&Videó
 1 Menü	File > Movie	R&ecord from RZX...	Felvétel &RZX-ből...
 1 Menü	File > Movie	&Pause	&Szünet
@@ -343,6 +344,7 @@ group	context	english	hungarian
 3 Ablakok	IDD_POKEMEM: PUSHBUTTON	&Cancel	&Mégse
 3 Ablakok	ablak címe	Fuse - Select Rollback Point	Fuse - Visszalépési pont kiválasztása
 3 Ablakok	ablak címe	Fuse - Select ROMs	Fuse - ROM-ok kiválasztása
+3 Ablakok	ablak címe	Fuse - Select Scaler	Fuse - Szűrő kiválasztása
 3 Ablakok	IDD_ROMS: GROUPBOX	ROM 0	ROM 0
 3 Ablakok	IDD_ROMS: PUSHBUTTON	Select...	Kiválasztás...
 3 Ablakok	IDD_ROMS: GROUPBOX	ROM 1	ROM 1
@@ -379,6 +381,7 @@ group	context	english	hungarian
 3 Ablakok	ablak címe	Fuse - Open MLT Screenshot	Fuse - MLT képernyőkép megnyitása
 3 Ablakok	ablak címe	Fuse - Save Screenshot as SCR	Fuse - Képernyő mentése SCR-ként
 3 Ablakok	ablak címe	Fuse - Save Screenshot as MLT	Fuse - Képernyő mentése MLT-ként
+3 Ablakok	ablak címe	Fuse - Save Screenshot as PNG	Fuse - Képernyő mentése PNG-ként
 3 Ablakok	ablak címe	Fuse - Record Movie File	Fuse - Videó felvétele
 3 Ablakok	ablak címe	Fuse - Start Recording	Fuse - Felvétel indítása
 3 Ablakok	ablak címe	Fuse - Load Snapshot	Fuse - Pillanatkép betöltése
@@ -387,6 +390,7 @@ group	context	english	hungarian
 3 Ablakok	ablak címe	Fuse - Write Tape	Fuse - Kazetta kiírása
 3 Ablakok	ablak címe	Fuse - Confirm	Fuse - Megerősítés
 3 Ablakok	ablak címe	Fuse - Select ROM	Fuse - ROM kiválasztása
+3 Ablakok	ablak címe	Fuse - Select Machine	Fuse - Gép kiválasztása
 3 Ablakok	ablak címe	Fuse - Warning	Fuse - Figyelmeztetés
 3 Ablakok	ablak címe	Fuse - Error	Fuse - Hiba
 3 Ablakok	ablak címe	Fuse - (Unknown Error Level)	Fuse - (ismeretlen szintű üzenet)

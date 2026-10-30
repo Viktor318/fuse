@@ -278,6 +278,30 @@ win32ui_menubar_texts_changed( void )
   DrawMenuBar( fuse_hWnd );
 }
 
+/* Draw a text of the user interface, or with DT_CALCRECT measure it. The
+   texts are in the process code page, UTF-8 on Windows 10 1903 and later
+   (see fuse.manifest), which the ANSI text functions don't take
+   everywhere (GDI goes by the code page of the font), so it is drawn as
+   Unicode */
+int
+win32ui_draw_text( HDC dc, const char *text, RECT *rect, UINT format )
+{
+  WCHAR buffer[ 512 ], *wide = buffer;
+  int length, result;
+
+  length = MultiByteToWideChar( CP_ACP, 0, text, -1, NULL, 0 );
+  if( length <= 0 ) return DrawTextA( dc, text, -1, rect, format );
+  if( length > (int)( sizeof( buffer ) / sizeof( buffer[0] ) ) ) {
+    wide = malloc( length * sizeof( *wide ) );
+    if( !wide ) return DrawTextA( dc, text, -1, rect, format );
+  }
+  MultiByteToWideChar( CP_ACP, 0, text, -1, wide, length );
+  result = DrawTextW( dc, wide, -1, rect, format );
+  if( wide != buffer ) free( wide );
+
+  return result;
+}
+
 static int
 menubar_text( int position, char *text, size_t length )
 {
@@ -311,7 +335,7 @@ menubar_measure( MEASUREITEMSTRUCT *measure )
 
   dc = GetDC( fuse_hWnd );
   if( menubar_font ) old_font = SelectObject( dc, menubar_font );
-  DrawTextA( dc, text, -1, &rect, DT_SINGLELINE | DT_CALCRECT );
+  win32ui_draw_text( dc, text, &rect, DT_SINGLELINE | DT_CALCRECT );
   if( old_font ) SelectObject( dc, old_font );
   ReleaseDC( fuse_hWnd, dc );
 
@@ -360,7 +384,7 @@ menubar_draw( DRAWITEMSTRUCT *draw )
     ( draw->itemState & ( ODS_GRAYED | ODS_DISABLED | ODS_INACTIVE ) ) ?
       COLOR_GRAYTEXT : COLOR_MENUTEXT ) );
   if( menubar_font ) old_font = SelectObject( dc, menubar_font );
-  DrawTextA( dc, text, -1, &rect, format );
+  win32ui_draw_text( dc, text, &rect, format );
   if( old_font ) SelectObject( dc, old_font );
 
   return 1;
@@ -1293,7 +1317,11 @@ window_recommended_width( HWND hwndDlg, LPCTSTR title )
 
   /* Calculate title width (pixels) */
   SetMapMode( dc, MM_TEXT );
-  GetTextExtentPoint32( dc, title, _tcslen( title ), &sz );
+  {
+    RECT title_rect = { 0, 0, 0, 0 };
+    win32ui_draw_text( dc, title, &title_rect, DT_SINGLELINE | DT_CALCRECT );
+    sz.cx = title_rect.right - title_rect.left;
+  }
   width = sz.cx; /* Actually in pixels because of MM_TEXT map mode */
   SelectObject( dc, hDefaultFont );
   DeleteObject( hCaptionFont );
@@ -1336,7 +1364,8 @@ selector_dialog_build( HWND hwndDlg, win32ui_select_info *items )
   RECT wr, cr, or;
 
   /* set the title of the window */
-  SendMessage( hwndDlg, WM_SETTEXT, 0, (LPARAM) items->dialog_title );
+  SendMessage( hwndDlg, WM_SETTEXT, 0,
+               (LPARAM) i18n( items->dialog_title ) );
 
   /* Get decorations (pixels) */
   GetWindowRect( hwndDlg, &wr );

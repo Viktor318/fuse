@@ -95,6 +95,7 @@ print hashline( __LINE__ ), << 'CODE';
 #include "fuse.h"
 #include "infrastructure/startup_manager.h"
 #include "machine.h"
+#include "i18n.h"
 #include "settings.h"
 #include "spectrum.h"
 #include "ui/ui.h"
@@ -580,6 +581,12 @@ parse_ini( utils_file *file, settings_info *settings )
 	  *val_char = libspectrum_new( char, n + 1 );
 	  (*val_char)[n] = '\\0';
 	  memcpy( *val_char, value, n );
+
+	  /* A path saved in the legacy code page by an older Fuse */
+	  {
+	    char *utf8 = i18n_legacy_to_utf8( *val_char );
+	    if( utf8 ) { libspectrum_free( *val_char ); *val_char = utf8; }
+	  }
 	}
     }
     /* skip 'new line' like chars */

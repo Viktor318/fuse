@@ -32,6 +32,7 @@
 #include "ayplayer.h"
 #include "ayplaylist.h"
 #include "compat.h"
+#include "i18n.h"
 #include "ui/ui.h"
 #include "utils.h"
 
@@ -328,6 +329,16 @@ ayplaylist_load_m3u( const char *path, int append )
                            end[-1] == ' ' ) )
       *--end = '\0';
     if( !line[0] || line[0] == '#' ) continue;
+
+    /* A list saved by an older Fuse or another player may be in the
+       legacy code page */
+    {
+      char *utf8 = i18n_legacy_to_utf8( line );
+      if( utf8 ) {
+        snprintf( line, sizeof( line ), "%s", utf8 );
+        libspectrum_free( utf8 );
+      }
+    }
 
     /* path::AY,song (the song may also be written $hex) */
     mark = strstr( line, "::" );

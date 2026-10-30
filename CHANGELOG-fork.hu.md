@@ -37,6 +37,26 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A *Beállítások > Hang* lapon az AY-beállítások közül az AY hangerő és a
   sztereó mód maradt; a helyek és a csatornahangerők a keverőben vannak.
 
+### Fájlok és képernyőképek
+
+- *Fájl > Képernyőkép > Képernyő mentése PNG-ként...*: a képernyőkép PNG
+  fájlba is menthető (a választott szűrővel).
+- A `.bz2` tömörítésű fájlok (pl. `játék.tzx.bz2`) is megnyithatók.
+- Mindkettő az exe-be van fordítva, nem kell hozzájuk újabb DLL.
+- A szűrő- és a gépválasztó ablak címe is magyarul jelenik meg.
+
+### Unicode felület
+
+- A felület minden szövege (ablakcímek, menük, párbeszédablakok) és a
+  fájlnevek UTF-8-ban mennek a Windowsnak (Windows 10 1903-tól), így az
+  „ő” és „ű” nem magyar nyelvű Windowson is helyesen látszik, nem „o” és
+  „u”-ként, és bármilyen nyelvű fájlnév megnyitható. Magyar Windowson a
+  megjelenés nem változik.
+- A korábban elmentett ékezetes útvonalakat (a `fuse.cfg`-ben és az AY
+  lejátszó mentett listájában) a Fuse automatikusan átalakítja; a régi
+  kódlapú `.m3u` listák és a zenefájlok régi kódlapú címei, szerzői is
+  helyesen jelennek meg.
+
 ### SpecDrum és Covox
 
 - Nem száll el az emulátor, ha bekapcsolt SpecDrum vagy Covox mellett egy

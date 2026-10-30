@@ -188,7 +188,7 @@ text_width( HWND window, const char *text )
   HFONT old = font ? SelectObject( dc, font ) : NULL;
   RECT rect = { 0, 0, 0, 0 };
 
-  DrawTextA( dc, text, -1, &rect, DT_CALCRECT | DT_SINGLELINE );
+  win32ui_draw_text( dc, text, &rect, DT_CALCRECT | DT_SINGLELINE );
   if( old ) SelectObject( dc, old );
   ReleaseDC( window, dc );
 

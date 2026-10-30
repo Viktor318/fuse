@@ -91,7 +91,11 @@ player_paused( void )
 static void
 set_text( int id, const char *text )
 {
-  SetDlgItemTextA( fuse_hAYWnd, id, text );
+  /* Texts from the music files are often in an old 8-bit code page */
+  char *utf8 = i18n_legacy_to_utf8( text );
+
+  SetDlgItemTextA( fuse_hAYWnd, id, utf8 ? utf8 : text );
+  libspectrum_free( utf8 );
 }
 
 static void
@@ -960,7 +964,12 @@ layout_play_row( void )
     for( j = k = 0; text[j] && k < (int)sizeof( plain ) - 1; j++ )
       if( text[j] != '&' ) plain[ k++ ] = text[j];
     plain[k] = '\0';
-    GetTextExtentPoint32A( dc, plain, k, &size );
+    {
+      RECT plain_rect = { 0, 0, 0, 0 };
+      win32ui_draw_text( dc, plain, &plain_rect,
+                         DT_SINGLELINE | DT_CALCRECT | DT_NOPREFIX );
+      size.cx = plain_rect.right - plain_rect.left;
+    }
 
     /* A radio button or tick box: the box and the room after it too */
     width = size.cx + ( i ? box + 6 : 0 );

@@ -36,6 +36,12 @@ const char *i18n( const char *english );
    follows the Windows display language) */
 int i18n_hungarian( void );
 
+/* Text read from a file that may still be in the system's legacy ANSI
+   code page (written by an older Fuse, or by another program), while
+   Fuse itself works in UTF-8: the text converted to UTF-8 in a new
+   string (free with libspectrum_free()), or NULL if it needs no change */
+char *i18n_legacy_to_utf8( const char *text );
+
 /* Called after the language setting may have changed */
 void i18n_posthook( void );
 

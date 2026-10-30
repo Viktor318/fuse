@@ -36,6 +36,26 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - *Options > Sound* keeps only the AY volume and the stereo mode of the AY
   settings; the places and the channel volumes are in the mixer.
 
+### Files and screenshots
+
+- *File > Screenshot > Save Screen as PNG...*: the screen can be saved as a
+  PNG file too (with the chosen filter).
+- `.bz2` compressed files (e.g. `game.tzx.bz2`) can be opened.
+- Both are built into the exe; no further DLLs are needed.
+- The titles of the filter and machine selection windows are translated
+  too.
+
+### Unicode user interface
+
+- Every text of the user interface (window titles, menus, dialogs) and the
+  file names go to Windows as UTF-8 (Windows 10 1903 and later), so
+  Hungarian "ő" and "ű" show correctly on a non-Hungarian Windows too,
+  instead of "o" and "u", and file names in any language can be opened.
+  On a Hungarian Windows nothing looks different.
+- Accented paths saved before (in `fuse.cfg` and the AY player's saved
+  list) are converted automatically; `.m3u` lists and the titles and
+  authors of music files in an old code page show correctly too.
+
 ### SpecDrum and Covox
 
 - The emulator no longer crashes when, with the SpecDrum or Covox switched

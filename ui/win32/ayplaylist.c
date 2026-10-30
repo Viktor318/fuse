@@ -83,14 +83,18 @@ static void
 set_cell( HWND list, int row, int column, const char *text )
 {
   LVITEMA cell;
+  /* Titles and authors from the music files are often in an old 8-bit
+     code page */
+  char *utf8 = i18n_legacy_to_utf8( text );
 
   memset( &cell, 0, sizeof( cell ) );
   cell.mask = LVIF_TEXT;
   cell.iItem = row;
   cell.iSubItem = column;
-  cell.pszText = (char *)text;
+  cell.pszText = utf8 ? utf8 : (char *)text;
   SendMessageA( list, column ? LVM_SETITEMTEXTA : LVM_INSERTITEMA,
                 column ? row : 0, (LPARAM)&cell );
+  libspectrum_free( utf8 );
 }
 
 void

@@ -157,9 +157,11 @@ sudo apt install gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
 ./build-windows-cross.sh
 ```
 
-The script fetches and builds libspectrum and then Fuse with the Win32
+The script fetches and builds libspectrum, libpng and bzip2 as static
+libraries and then Fuse with the Win32
 user interface twice (WASAPI: `fuse.exe`, DirectSound:
-`fuse-directsound.exe`), and packages them with the DLLs, ROMs and data files
+`fuse-directsound.exe`), and packages them with the two DLLs they need
+(`zlib1.dll`, `libwinpthread-1.dll`), the ROMs and data files
 into `~/fuse-windows/Fuse-windows-<branch>.zip`. `FUSE_AUDIO_DRIVERS=wasapi`
 builds only one of them. It works on a copy of the
 source tree. Settings for building from VS Code connected to WSL are in

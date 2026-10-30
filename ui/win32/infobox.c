@@ -46,7 +46,7 @@ fit_text( HWND dialog, const char *message )
   dc = GetDC( text );
   font = (HFONT)SendMessage( text, WM_GETFONT, 0, 0 );
   old_font = SelectObject( dc, font );
-  DrawText( dc, message, -1, &needed, DT_CALCRECT | DT_WORDBREAK );
+  win32ui_draw_text( dc, message, &needed, DT_CALCRECT | DT_WORDBREAK );
   SelectObject( dc, old_font );
   ReleaseDC( text, dc );
 

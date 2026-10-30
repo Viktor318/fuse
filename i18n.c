@@ -29,6 +29,8 @@
 #include <windows.h>
 #endif
 
+#include "libspectrum.h"
+
 #include "i18n.h"
 #include "settings.h"
 
@@ -106,6 +108,48 @@ i18n( const char *english )
   return ansi_text( entry - i18n_hu_table );
 #else
   return english;
+#endif
+}
+
+char*
+i18n_legacy_to_utf8( const char *text )
+{
+#ifdef WIN32
+  UINT legacy = 0;
+  wchar_t *wide;
+  char *utf8;
+  int length;
+
+  /* Only when the process code page is UTF-8 (see fuse.manifest); with
+     an ANSI code page the text is already in the one in use */
+  if( !text || GetACP() != CP_UTF8 ) return NULL;
+
+  /* Valid UTF-8 (this includes plain ASCII) needs no change */
+  if( MultiByteToWideChar( CP_UTF8, MB_ERR_INVALID_CHARS, text, -1,
+                           NULL, 0 ) )
+    return NULL;
+
+  if( !GetLocaleInfoW( LOCALE_SYSTEM_DEFAULT,
+                       LOCALE_IDEFAULTANSICODEPAGE | LOCALE_RETURN_NUMBER,
+                       (LPWSTR)&legacy, sizeof( legacy ) / sizeof( WCHAR ) )
+      || !legacy || legacy == CP_UTF8 )
+    legacy = 1252;
+
+  length = MultiByteToWideChar( legacy, 0, text, -1, NULL, 0 );
+  if( !length ) return NULL;
+  wide = malloc( length * sizeof( *wide ) );
+  if( !wide ) return NULL;
+  MultiByteToWideChar( legacy, 0, text, -1, wide, length );
+
+  length = WideCharToMultiByte( CP_UTF8, 0, wide, -1, NULL, 0, NULL, NULL );
+  utf8 = length ? libspectrum_new( char, length ) : NULL;
+  if( utf8 )
+    WideCharToMultiByte( CP_UTF8, 0, wide, -1, utf8, length, NULL, NULL );
+  free( wide );
+
+  return utf8;
+#else
+  return NULL;
 #endif
 }
 

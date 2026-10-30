@@ -17,14 +17,20 @@
 # FUSE_AUDIO_DRIVERS="wasapi" builds only one of them.
 #
 # It works on a copy of the source, so a native Linux build in this tree is
-# not touched. libspectrum is fetched from GitHub and built as a static
-# library with its internal GLib replacement.
+# not touched. libspectrum, libpng (PNG screenshots) and bzip2 (.bz2 files)
+# are fetched from GitHub and built as static libraries, libspectrum with
+# its internal GLib replacement; so only zlib1.dll and libwinpthread-1.dll
+# go beside the exe.
 # A forrás egy másolatán dolgozik, a Linuxos fordítást nem érinti.
 
 set -e
 
 HOST=x86_64-w64-mingw32
 LIBSPECTRUM_REPO="${LIBSPECTRUM_REPO:-https://github.com/fuse-emulator/libspectrum.git}"
+LIBPNG_REPO="${LIBPNG_REPO:-https://github.com/pnggroup/libpng.git}"
+LIBPNG_VERSION="${LIBPNG_VERSION:-v1.6.59}"
+BZIP2_REPO="${BZIP2_REPO:-https://github.com/libarchive/bzip2.git}"
+BZIP2_VERSION="${BZIP2_VERSION:-bzip2-1.0.8}"
 
 SRCDIR="$(cd "$(dirname "$0")" && pwd)"
 WORK="${XDG_CACHE_HOME:-$HOME/.cache}/fuse-windows-build"
@@ -55,6 +61,48 @@ mkdir -p "$WORK" "$PREFIX/lib/pkgconfig"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 export PKG_CONFIG_PATH=
 
+# zlib comes from the MinGW packages (zlib1.dll); tell pkg-config about it,
+# as libpng refers to it
+cat > "$PREFIX/lib/pkgconfig/zlib.pc" <<ZLIBPC
+prefix=/usr/$HOST
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: zlib
+Description: zlib compression library (MinGW package)
+Version: 1.2
+Cflags: -I\${includedir}
+Libs: -L\${libdir} -lz
+ZLIBPC
+
+# bzip2: static, built once per version. Its header declares DLL function
+# pointers on Windows unless BZ_EXPORT is defined, so everything using it
+# is compiled with -DBZ_EXPORT
+if [ ! -f "$PREFIX/.built-$BZIP2_VERSION" ]; then
+  rm -rf "$WORK/bzip2"
+  git clone --depth 1 --branch "$BZIP2_VERSION" "$BZIP2_REPO" "$WORK/bzip2"
+  ( cd "$WORK/bzip2"
+    make -j"$(nproc)" libbz2.a CC=$HOST-gcc AR=$HOST-ar RANLIB=$HOST-ranlib \
+         CFLAGS="-O2 -DBZ_EXPORT -D_FILE_OFFSET_BITS=64"
+    mkdir -p "$PREFIX/include" "$PREFIX/lib"
+    cp bzlib.h "$PREFIX/include/"
+    cp libbz2.a "$PREFIX/lib/" )
+  touch "$PREFIX/.built-$BZIP2_VERSION"
+fi
+
+# libpng: static, built once per version
+if [ ! -f "$PREFIX/.built-libpng-$LIBPNG_VERSION" ]; then
+  rm -rf "$WORK/libpng"
+  git clone --depth 1 --branch "$LIBPNG_VERSION" "$LIBPNG_REPO" "$WORK/libpng"
+  ( cd "$WORK/libpng"
+    [ -f configure ] || autoreconf -fi
+    ./configure --host=$HOST --prefix="$PREFIX" \
+                --disable-shared --enable-static
+    make -j"$(nproc)"
+    make install )
+  touch "$PREFIX/.built-libpng-$LIBPNG_VERSION"
+fi
+
 # libspectrum
 if [ ! -d "$WORK/libspectrum" ]; then
   git clone --depth 1 "$LIBSPECTRUM_REPO" "$WORK/libspectrum"
@@ -66,8 +114,8 @@ fi
   [ -f configure ] || ./autogen.sh
   [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
   ./configure --host=$HOST --prefix="$PREFIX" --with-fake-glib \
-              --without-libgcrypt --without-bzip2 \
-              --disable-shared --enable-static
+              --without-libgcrypt --disable-shared --enable-static \
+              CPPFLAGS="-I$PREFIX/include -DBZ_EXPORT" LDFLAGS="-L$PREFIX/lib"
   make -j"$(nproc)"
   make install )
 
@@ -84,9 +132,11 @@ build_variant() {
   ( cd "$dir"
     ./autogen.sh
 
-    # libspectrum is static: don't import its symbols from a DLL
-    CPPFLAGS="-DLIBSPECTRUM_EXPORTS" ./configure --host=$HOST --disable-sdl2 \
-      --with-audio-driver="$driver" --without-png --without-libxml2
+    # libspectrum is static: don't import its symbols from a DLL; it needs
+    # the static bzip2 too, and libpng zlib
+    CPPFLAGS="-DLIBSPECTRUM_EXPORTS -DBZ_EXPORT" LDFLAGS="-L$PREFIX/lib" \
+      LIBS="-lbz2 -lz" ./configure --host=$HOST --disable-sdl2 \
+      --with-audio-driver="$driver" --without-libxml2
 
     # Some helper test programs don't link for Windows; fuse.exe is what we need
     make -k -j"$(nproc)" || true

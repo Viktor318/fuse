@@ -171,9 +171,11 @@ sudo apt install gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
 ./build-windows-cross.sh
 ```
 
-A szkript letölti és lefordítja a libspectrum könyvtárat, majd a Fuse-t a
+A szkript letölti és statikus könyvtárként lefordítja a libspectrumot, a
+libpng-t és a bzip2-t, majd a Fuse-t a
 Windows-felülettel kétszer (WASAPI: `fuse.exe`, DirectSound:
-`fuse-directsound.exe`), és ezeket a szükséges DLL-ekkel, ROM-okkal és
+`fuse-directsound.exe`), és ezeket a két szükséges DLL-lel (`zlib1.dll`,
+`libwinpthread-1.dll`), a ROM-okkal és
 adatfájlokkal együtt a `~/fuse-windows/Fuse-windows-<ág>.zip` fájlba
 csomagolja. `FUSE_AUDIO_DRIVERS=wasapi` esetén csak az egyiket fordítja le. A forrás egy másolatán dolgozik. A WSL-hez kapcsolódó VS Code-ból
 való fordítás beállításai a `.vscode` mappában vannak (Ctrl+Shift+B).

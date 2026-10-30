@@ -100,8 +100,10 @@ static long pending_count = 0, pending_position = 0;
 static int mix_volume = 100;
 static int mix_channel_volume[ CHANNELS ] = { 100, 100, 100 };
 static int mix_muted[ CHANNELS ];
-/* The sides (left, right) on which each channel is heard */
-static int mix_sides[ CHANNELS ][ 2 ] = { { 1, 1 }, { 1, 1 }, { 1, 1 } };
+/* How loud each channel is on the left and the right side, in percent
+   (from its panorama) */
+static int mix_sides[ CHANNELS ][ 2 ] =
+  { { 100, 100 }, { 100, 100 }, { 100, 100 } };
 
 static volatile int peak[ CHANNELS ];
 
@@ -354,7 +356,7 @@ render_frame( void )
       if( level > peak[ channel ] ) peak[ channel ] = level;
 
       for( side = 0; side < 2; side++ ) {
-        int heard = mix_sides[ channel ][ side ] ? output : 0;
+        int heard = output * mix_sides[ channel ][ side ] / 100;
         if( heard != c->previous[ channel ][ side ] ) {
           blip_synth_update( synths[ channel ][ side ], f, heard );
           c->previous[ channel ][ side ] = heard;
@@ -456,14 +458,15 @@ ayplay_silent_frame( void )
 void
 ayplay_update_mix( void )
 {
-  int position[ CHANNELS ], channel;
+  int pan[ CHANNELS ], channel;
   int stereo = sound_ay_stereo_setting();
   int volume[ CHANNELS ];
 
   volume[0] = settings_current.volume_ay_a;
   volume[1] = settings_current.volume_ay_b;
   volume[2] = settings_current.volume_ay_c;
-  sound_ay_channel_positions( stereo, position );
+  for( channel = 0; channel < CHANNELS; channel++ )
+    pan[ channel ] = sound_ay_channel_pan( stereo, channel );
 
   LOCK();
   mix_volume = settings_current.volume_ay < 0 ? 0 :
@@ -473,10 +476,11 @@ ayplay_update_mix( void )
     mix_channel_volume[ channel ] = volume[ channel ] < 0 ? 0 :
                                     volume[ channel ] > 100 ? 100 :
                                     volume[ channel ];
-    mix_sides[ channel ][0] = stereo == SOUND_STEREO_AY_NONE ||
-                              position[ channel ] != SOUND_AY_RIGHT;
-    mix_sides[ channel ][1] = stereo == SOUND_STEREO_AY_NONE ||
-                              position[ channel ] != SOUND_AY_LEFT;
+    /* The side away from the panorama gets quieter */
+    mix_sides[ channel ][0] = pan[ channel ] <= 0 ? 100 :
+                              100 - pan[ channel ];
+    mix_sides[ channel ][1] = pan[ channel ] >= 0 ? 100 :
+                              100 + pan[ channel ];
   }
   UNLOCK();
 }

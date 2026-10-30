@@ -308,64 +308,20 @@ CODE
                   BST_CHECKED );
 CODE
     }
-    if( $_->{name} eq 'sound' ) {
-      print << "CODE";
-  /* The places of the channels only matter in the custom stereo mode */
-  {
-    int custom =
-      SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_STEREO_AY, CB_GETCURSEL,
-                          0, 0 ) ==
-      SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_STEREO_AY, CB_GETCOUNT,
-                          0, 0 ) - 1;	/* Custom: the last one */
-    EnableWindow( GetDlgItem( hwndDlg, IDC_OPT_SOUND_STEREO_AY_A ), custom );
-    EnableWindow( GetDlgItem( hwndDlg, IDC_OPT_SOUND_STEREO_AY_B ), custom );
-    EnableWindow( GetDlgItem( hwndDlg, IDC_OPT_SOUND_STEREO_AY_C ), custom );
-  }
-CODE
-    }
     print "}\n\n";
 
     if( $_->{name} eq 'sound' ) {
       print << "CODE";
-/* The AY settings that the AY player window can change too (stereo mode,
-   places of the channels, AY volume) are applied while this dialog is
-   open, so that both windows show the same; Cancel restores them */
+/* The AY volume, which the AY player and mixer windows can change too, is
+   applied while this dialog is open, so that the windows show the same;
+   Cancel restores it */
 static HWND sound_options_window = NULL;
 static int sound_options_syncing = 0;
-static char *sound_options_original[4];
-static int sound_options_original_volume[4];
-
-/* The AY volume and the volumes of the channels */
-static const int sound_options_volume_ids[4] = { IDC_OPT_SOUND_VOLUME_AY,
-  IDC_OPT_SOUND_VOLUME_AY_A, IDC_OPT_SOUND_VOLUME_AY_B,
-  IDC_OPT_SOUND_VOLUME_AY_C };
-
-static int *
-sound_options_volume( int i )
-{
-  switch( i ) {
-  case 0: return &settings_current.volume_ay;
-  case 1: return &settings_current.volume_ay_a;
-  case 2: return &settings_current.volume_ay_b;
-  default: return &settings_current.volume_ay_c;
-  }
-}
-
-static char **
-sound_options_string( int i )
-{
-  switch( i ) {
-  case 0: return &settings_current.stereo_ay;
-  case 1: return &settings_current.stereo_ay_a;
-  case 2: return &settings_current.stereo_ay_b;
-  default: return &settings_current.stereo_ay_c;
-  }
-}
+static int sound_options_original_volume;
 
 static void
 sound_options_apply( void )
 {
-  sound_ay_stereo_changed();
   sound_ay_volume_changed();
   win32_ayplayer_update();
 }
@@ -373,103 +329,44 @@ sound_options_apply( void )
 static void
 sound_options_live( HWND hwndDlg )
 {
-  static const int ids[4] = { IDC_OPT_SOUND_STEREO_AY,
-    IDC_OPT_SOUND_STEREO_AY_A, IDC_OPT_SOUND_STEREO_AY_B,
-    IDC_OPT_SOUND_STEREO_AY_C };
-  const char * const *names[4] = { sound_stereo_ay_combo,
-    sound_stereo_ay_a_combo, sound_stereo_ay_b_combo,
-    sound_stereo_ay_c_combo };
-  const int counts[4] = { sound_stereo_ay_combo_count,
-    sound_stereo_ay_a_combo_count, sound_stereo_ay_b_combo_count,
-    sound_stereo_ay_c_combo_count };
   char buffer[80];
-  int i, n;
 
   if( sound_options_syncing || !sound_options_window ) return;
-
-  for( i = 0; i < 4; i++ ) {
-    n = SendDlgItemMessage( hwndDlg, ids[i], CB_GETCURSEL, 0, 0 );
-    if( n >= 0 && n < counts[i] )
-      settings_set_string( sound_options_string( i ), names[i][n] );
-  }
-  for( i = 0; i < 4; i++ ) {
-    buffer[0] = '\\0';
-    SendDlgItemMessage( hwndDlg, sound_options_volume_ids[i], WM_GETTEXT, 80,
-                        (LPARAM) buffer );
-    if( buffer[0] ) *sound_options_volume( i ) = atoi( buffer );
-  }
-
+  buffer[0] = '\\0';
+  SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_VOLUME_AY, WM_GETTEXT, 80,
+                      (LPARAM) buffer );
+  if( buffer[0] ) settings_current.volume_ay = atoi( buffer );
   sound_options_apply();
 }
 
 static void
 sound_options_open( HWND hwndDlg )
 {
-  int i;
-
   sound_options_window = hwndDlg;
-  for( i = 0; i < 4; i++ ) {
-    char *value = *sound_options_string( i );
-    sound_options_original[i] = value ? utils_safe_strdup( value ) : NULL;
-  }
-  for( i = 0; i < 4; i++ )
-    sound_options_original_volume[i] = *sound_options_volume( i );
+  sound_options_original_volume = settings_current.volume_ay;
 }
 
 static void
 sound_options_close( int cancel )
 {
-  int i;
-
-  for( i = 0; i < 4; i++ ) {
-    if( cancel ) {
-      libspectrum_free( *sound_options_string( i ) );
-      *sound_options_string( i ) = sound_options_original[i];
-    } else {
-      libspectrum_free( sound_options_original[i] );
-    }
-    sound_options_original[i] = NULL;
-  }
   if( cancel ) {
-    for( i = 0; i < 4; i++ )
-      *sound_options_volume( i ) = sound_options_original_volume[i];
+    settings_current.volume_ay = sound_options_original_volume;
     sound_options_apply();
   }
   sound_options_window = NULL;
 }
 
-/* The AY player changed an AY setting: show it here too */
+/* The AY player changed the AY volume: show it here too */
 void
 win32_options_sound_sync( void )
 {
-  static const int ids[4] = { IDC_OPT_SOUND_STEREO_AY,
-    IDC_OPT_SOUND_STEREO_AY_A, IDC_OPT_SOUND_STEREO_AY_B,
-    IDC_OPT_SOUND_STEREO_AY_C };
-  const char * const *names[4] = { sound_stereo_ay_combo,
-    sound_stereo_ay_a_combo, sound_stereo_ay_b_combo,
-    sound_stereo_ay_c_combo };
-  const int counts[4] = { sound_stereo_ay_combo_count,
-    sound_stereo_ay_a_combo_count, sound_stereo_ay_b_combo_count,
-    sound_stereo_ay_c_combo_count };
   char buffer[80];
-  int i, n;
 
   if( !sound_options_window ) return;
   sound_options_syncing = 1;
-  for( i = 0; i < 4; i++ ) {
-    const char *value = *sound_options_string( i );
-    if( !value ) continue;
-    for( n = 0; n < counts[i]; n++ )
-      if( !strcmp( value, names[i][n] ) )
-        SendDlgItemMessage( sound_options_window, ids[i], CB_SETCURSEL, n,
-                            0 );
-  }
-  for( i = 0; i < 4; i++ ) {
-    snprintf( buffer, sizeof( buffer ), "%d", *sound_options_volume( i ) );
-    SendDlgItemMessage( sound_options_window, sound_options_volume_ids[i],
-                        WM_SETTEXT, 0, (LPARAM) buffer );
-  }
-  menu_options_sound_dependencies( sound_options_window );
+  snprintf( buffer, sizeof( buffer ), "%d", settings_current.volume_ay );
+  SendDlgItemMessage( sound_options_window, IDC_OPT_SOUND_VOLUME_AY,
+                      WM_SETTEXT, 0, (LPARAM) buffer );
   sound_options_syncing = 0;
 }
 
@@ -505,12 +402,8 @@ CODE
         menu_options_$_->{name}_dependencies( hwndDlg );
 CODE
     print << "CODE" if $_->{name} eq 'sound';
-      if( HIWORD( wParam ) == CBN_SELCHANGE ||
-          ( HIWORD( wParam ) == EN_CHANGE &&
-            ( LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY ||
-              LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY_A ||
-              LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY_B ||
-              LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY_C ) ) )
+      if( HIWORD( wParam ) == EN_CHANGE &&
+          LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY )
         sound_options_live( hwndDlg );
 CODE
     print << "CODE";

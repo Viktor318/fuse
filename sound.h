@@ -127,6 +127,17 @@ int sound_ay_stereo_setting( void );
 #define SOUND_AY_CENTRE	1
 #define SOUND_AY_RIGHT	2
 void sound_ay_channel_positions( int stereo, int position[3] );
+/* A place setting ("Left", "Centre", "Right") of the custom mode */
+int sound_ay_place_setting( const char *value, int def );
+
+/* The panorama of a channel (0=A, 1=B, 2=C) in a stereo mode: -100 left
+   only, 0 both sides at full level, 100 right only. Not set (pan_ay_a/b/c
+   SOUND_AY_PAN_MODE): where the stereo mode puts the channel */
+#define SOUND_AY_PAN_MODE 999
+int sound_ay_channel_pan( int stereo, int channel );
+void sound_ay_pan_set( int channel, int pan );
+/* All three where the stereo mode puts them (after changing the mode) */
+void sound_ay_pans_reset( void );
 
 extern int sound_stereo_ay;
 

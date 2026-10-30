@@ -114,6 +114,9 @@ volume_ay, numeric, 100
 volume_ay_a, numeric, 100
 volume_ay_b, numeric, 100
 volume_ay_c, numeric, 100
+pan_ay_a, numeric, 999
+pan_ay_b, numeric, 999
+pan_ay_c, numeric, 999
 volume_beeper, numeric, 100
 volume_specdrum, numeric, 100
 volume_covox, numeric, 100
@@ -321,3 +324,4 @@ teletext_port_3, numeric, 19763
 teletext_port_4, numeric, 19764
 ayplayer_auto_next, boolean, 1
 ayplayer_repeat, boolean, 0
+ayplayer_mix_auto, boolean, 0

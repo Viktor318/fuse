@@ -25,6 +25,9 @@ void ay_engine_stereo_order( int stereo, int order[ 3 ] );
 /* Silence a channel (0=A, 1=B, 2=C) while playing */
 void ay_engine_set_channel_muted( int channel, int muted );
 int ay_engine_channel_muted( int channel );
+/* Panorama of a channel (0=A, 1=B, 2=C) in stereo: -100 left only, 0 both
+   sides at full level, 100 right only */
+void ay_engine_set_channel_pan( int channel, int pan );
 /* Volume of a channel (0=A, 1=B, 2=C) in percent */
 void ay_engine_set_channel_volume( int channel, int percent );
 /* A level (0-15) of a channel as heard after its volume */

@@ -104,6 +104,20 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   sorrendjében), csatornánként némító jelölőnégyzet, hangerő és sztereó mód
   (ABC, ACB, BAC, BCA, CBA, CAB, Mono és Egyéni) – mind lejátszás közben,
   azonnal állítható.
+- **AY keverő** (a lejátszó *Keverő...* gombja, vagy *Beállítások > AY
+  keverő...*): a sztereó mód, Egyéni módban a csatornák helye, és
+  csatornánként a hangerő és a panoráma, a sztereó mód sorrendjében. A
+  játékokra is hat. Az *Alaphelyzet* a hangerőket 100%-ra, a panorámákat a
+  sztereó mód szerinti helyre állítja; módváltáskor a panorámák maguktól is
+  oda kerülnek.
+- **A dalok keverőbeállításai**: a keverő *Mentés...* gombja a dal mellé
+  egy `.mix` szövegfájlba menti őket (`Dal.mix`; egy fájl 3. dalához
+  `Dal.3.mix`, ez előbbre való a `Dal.mix`-nél; ha a dal mappája nem
+  írható, a `%APPDATA%\Fuse\mix` mappába). Ha a lejátszóban be van pipálva a
+  *Keverőbeállítások automatikus betöltése a dalokhoz*, a `.mix` fájllal
+  rendelkező dal azzal szól; a következő, `.mix` nélküli dalnál visszajönnek
+  a saját beállításaid. A `.mix` fájl soha nem változtatja meg a mentett
+  beállításokat.
 - A zene akkor is szól tovább, ha egy menü vagy párbeszédablak nyitva van, ha
   egy ablakot mozgatsz, vagy ha a Fuse kis méretre van állítva. WASAPI-val
   (`fuse.exe`) a zenének saját hangfolyama van, és egyáltalán nem kell hozzá

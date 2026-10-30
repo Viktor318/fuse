@@ -5,6 +5,32 @@
 Changes of this fork on top of Fuse 1.10.1 (until v1.10.0-hu.1: 1.10.0).
 The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
+## Unreleased
+
+### AY mixer
+
+- New **AY mixer** window (*Mixer...* in the AY player, *Options > AY
+  mixer...*): the stereo mode, the places of the channels in the Custom mode
+  (shown greyed out in the other modes), and the volume and **panorama** of
+  each channel, in the order of the stereo mode. The panorama works as a
+  balance: in the middle both sides are at full level, towards one side the
+  other side gets quieter; where the stereo mode puts a channel it sounds as
+  before. Games and the AY player hear these settings. *Reset*: volumes 100%,
+  panoramas where the mode puts the channels (changing the mode does that
+  too). Settings that can be changed in more than one window follow each
+  other at once.
+- **`.mix` files**: *Save...* in the mixer writes the mixer settings into a
+  text file next to the song (`Song.mix`, or `Song.3.mix` for song 3 of a
+  file; in `%APPDATA%\Fuse\mix` if the folder cannot be written). With *Load
+  the mixer settings of the songs automatically* in the AY player, a song is
+  played with its `.mix` file, until a song without one; the saved settings
+  of Fuse are not changed by them. The mixer title shows the file in use.
+- The AY player window is as narrow as it was before the channel volumes
+  (they are in the mixer now), with longer level meters; the *Mixer...*
+  button is beside the stereo mode.
+- *Options > Sound* keeps only the AY volume of the AY settings; the stereo
+  mode, the places and the channel volumes are in the mixer.
+
 ## v1.10.1-hu.1 – 2026-10-30
 
 Now based on Fuse 1.10.1 (its changes are in [ChangeLog](ChangeLog)).

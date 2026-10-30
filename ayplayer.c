@@ -37,6 +37,7 @@
 #include "ayplay.h"
 #include "ayplayer.h"
 #include "aymeasure.h"
+#include "aymix.h"
 #include "fuse.h"
 #include "pt3player.h"
 #include "compat.h"
@@ -573,6 +574,8 @@ void
 ayplayer_close( void )
 {
   ayplayer_stop();
+  /* The settings of the user, not those of a .mix file, are kept */
+  aymix_restore_user();
   aymeasure_stop();
   measure_busy = 0;
   free_file();
@@ -694,6 +697,10 @@ ayplayer_play( int song )
     ay_song_loop = measured > 0 ? loop : 0;
     if( ay_song_loop >= ay_song_frames ) ay_song_loop = 0;
   }
+
+  /* The .mix file of the song, if it is to be loaded */
+  aymix_song_started( ay_path, song, ay_songs,
+                      settings_current.ayplayer_mix_auto );
 
   if( ayplay_start( ay_data, ay_length, song, ay_song_frames, ay_song_loop,
                     ay_length_default ) ) {

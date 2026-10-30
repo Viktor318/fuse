@@ -23,8 +23,11 @@
 
 #include "config.h"
 
+#include <string.h>
+
 #include "libspectrum.h"
 
+#include "aymix.h"
 #include "basic_text.h"
 #include "event.h"
 #include "fuse.h"
@@ -32,6 +35,7 @@
 
 #ifdef UI_WIN32
 void win32_ayplayer_show( void );
+void win32_aymixer_show( void );
 #endif
 #include "movie.h"
 #include "machines/specplus3.h"
@@ -377,10 +381,26 @@ MENU_CALLBACK( menu_media_ayplayer )
 #endif
 }
 
-MENU_CALLBACK( menu_options_save )
+/* The AY mixer: stereo mode, volume and panorama of the AY channels */
+MENU_CALLBACK( menu_options_aymixer )
 {
   ui_widget_finish();
-  settings_write_config( &settings_current );
+#ifdef UI_WIN32
+  win32_aymixer_show();
+#endif
+}
+
+MENU_CALLBACK( menu_options_save )
+{
+  settings_info settings;
+
+  ui_widget_finish();
+  /* The AY mixer settings of the user, not those of a song's .mix file */
+  memset( &settings, 0, sizeof( settings ) );
+  settings_copy( &settings, &settings_current );
+  aymix_user_settings( &settings );
+  settings_write_config( &settings );
+  settings_free( &settings );
 }
 
 MENU_CALLBACK( menu_machine_profiler_start )

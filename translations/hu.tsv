@@ -601,3 +601,17 @@ extra	AY playlist	%d files of the list are not available and were left out	A lis
 2 Beállítások (Options)	legördülő lista értéke: Custom stereo	Centre	Közép
 2 Beállítások (Options)	legördülő lista értéke: Custom stereo	Right	Jobb
 extra	AY playlist	&Stop measuring	Mé&rés leállítása
+extra	AY player	Mi&xer...	&Keverő...
+extra	AY player	Load the mixer settings of the songs &automatically	Keverőbeállítások &automatikus betöltése a dalokhoz
+extra	AY mixer	Fuse - AY Mixer	Fuse - AY keverő
+extra	AY mixer	Place	Hely
+extra	AY mixer	Volume	Hangerő
+extra	AY mixer	Panorama	Panoráma
+extra	AY mixer	&Save...	&Mentés...
+1 Menü	Options	&AY mixer...	&AY keverő...
+extra	AY mixer	L %d%%	B %d%%
+extra	AY mixer	R %d%%	J %d%%
+extra	AY mixer	C	K
+extra	AY mixer	AY mixer settings (*.mix)	AY keverőbeállítások (*.mix)
+extra	AY mixer	Save AY mixer settings	AY keverőbeállítások mentése
+extra	AY mixer	Could not write '%s'	Nem sikerült írni: '%s'

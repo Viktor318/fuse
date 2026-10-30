@@ -6,6 +6,32 @@ Ennek a változatnak a módosításai a Fuse 1.10.1-hez képest (a
 v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
+## Kiadatlan
+
+### AY keverő
+
+- Új **AY keverő** ablak (az AY lejátszó *Keverő...* gombja, *Beállítások >
+  AY keverő...*): a sztereó mód, Egyéni módban a csatornák helye (a többi
+  módban szürkén látszik), és csatornánként a hangerő és a **panoráma**, a
+  sztereó mód sorrendjében. A panoráma egyensúlyként működik: középen
+  mindkét oldal teljes erővel szól, oldalra húzva a másik oldal halkul; a
+  mód szerinti helyen a csatorna úgy szól, mint eddig. A játékokra és az AY
+  lejátszóra is hat. *Alaphelyzet*: a hangerők 100%, a panorámák a mód
+  szerinti helyre (módváltáskor is így lesz). A több ablakban is állítható
+  beállítások azonnal követik egymást.
+- **`.mix` fájlok**: a keverő *Mentés...* gombja a keverőbeállításokat a dal
+  mellé egy szövegfájlba menti (`Dal.mix`, vagy egy fájl 3. dalához
+  `Dal.3.mix`; ha a mappa nem írható, a `%APPDATA%\Fuse\mix` mappába). Ha az
+  AY lejátszóban be van pipálva a *Keverőbeállítások automatikus betöltése a
+  dalokhoz*, a dal a saját `.mix` fájljával szól, egy `.mix` nélküli dalig; a
+  Fuse mentett beállításait ezek nem változtatják meg. A keverő címsora
+  mutatja a használt fájlt.
+- Az AY lejátszó ablaka ugyanolyan keskeny, mint a csatornahangerők előtt
+  (azok most a keverőben vannak), hosszabb szintjelzőkkel; a *Keverő...*
+  gomb a sztereó mód mellett van.
+- A *Beállítások > Hang* lapon az AY-beállítások közül csak az AY hangerő
+  maradt; a sztereó mód, a helyek és a csatornahangerők a keverőben vannak.
+
 ## v1.10.1-hu.1 – 2026-10-30
 
 Mostantól a Fuse 1.10.1-re épül (ennek változásai a [ChangeLog](ChangeLog)

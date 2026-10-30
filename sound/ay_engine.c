@@ -46,7 +46,8 @@ static struct ay_change changes[AY_CHANGE_MAX];
 static int change_count, change_position;
 /* Next tick in the current frame; carry its phase across video boundaries. */
 static libspectrum_dword next_tick;
-static int previous[AY_CHANNELS];
+/* Last level sent to the left and the right side of each channel */
+static int previous[AY_CHANNELS][2];
 static libspectrum_byte registers[AY_REGISTERS];
 static unsigned int levels[AY_ENV_STEPS];
 static unsigned int tone_tick[AY_CHANNELS], tone_high[AY_CHANNELS];
@@ -57,8 +58,10 @@ static int rng = 1, noise_toggle, env_first = 1, env_reverse;
 static int env_counter = AY_ENV_STEPS - 1;
 static Blip_Synth *synths[AY_CHANNELS];
 static Blip_Synth *right_synths[AY_CHANNELS];
-/* Channels heard on both sides (the middle one of a stereo mode) */
-static int both_sides[AY_CHANNELS];
+/* Stereo output: each channel is heard on both sides, as its panorama
+   says (-100: left only, 0: both at full level, 100: right only) */
+static int stereo_output;
+static int channel_pan[AY_CHANNELS];
 /* AY volume in percent; applied to the amplitudes so that it can be changed
    while playing (changing a Blip_Synth's volume would leave a DC step) */
 static int ay_volume = 100;
@@ -126,7 +129,6 @@ ay_engine_init( int volume, int stereo )
     right_synths[i] = new_Blip_Synth();
     blip_synth_set_volume( right_synths[i], 1.0 );
     blip_synth_set_treble_eq( right_synths[i], 0.0 );
-    both_sides[i] = 0;
     meter_peak[i] = 0;
   }
   ( void )stereo;
@@ -220,7 +222,6 @@ ay_engine_end( void )
 void
 ay_engine_set_outputs( Blip_Buffer *left, Blip_Buffer *right, int stereo )
 {
-  int position[ AY_CHANNELS ];
   int i;
 
   /* Take every channel back to zero where it was, at the start of the
@@ -231,30 +232,21 @@ ay_engine_set_outputs( Blip_Buffer *left, Blip_Buffer *right, int stereo )
     if( right_synths[i] && right_synths[i]->impl.buf &&
         right_synths[i]->impl.last_amp )
       blip_synth_update( right_synths[i], 0, 0 );
-    both_sides[i] = 0;
   }
   memset( previous, 0, sizeof( previous ) );
 
-  if( stereo == SOUND_STEREO_AY_NONE || !right ) {
-    for( i = 0; i < AY_CHANNELS; i++ ) {
-      blip_synth_set_output( synths[i], left );
-      blip_synth_set_output( right_synths[i], left );
-    }
-    return;
-  }
-
-  /* A channel in the centre is heard on both sides */
-  sound_ay_channel_positions( stereo, position );
+  stereo_output = stereo != SOUND_STEREO_AY_NONE && right;
   for( i = 0; i < AY_CHANNELS; i++ ) {
-    if( position[i] == SOUND_AY_RIGHT ) {
-      blip_synth_set_output( synths[i], right );
-      blip_synth_set_output( right_synths[i], left );
-    } else {
-      blip_synth_set_output( synths[i], left );
-      blip_synth_set_output( right_synths[i], right );
-      both_sides[i] = position[i] == SOUND_AY_CENTRE;
-    }
+    blip_synth_set_output( synths[i], left );
+    blip_synth_set_output( right_synths[i], stereo_output ? right : left );
   }
+}
+
+void
+ay_engine_set_channel_pan( int channel, int pan )
+{
+  if( channel < 0 || channel >= AY_CHANNELS ) return;
+  channel_pan[ channel ] = pan < -100 ? -100 : pan > 100 ? 100 : pan;
 }
 
 static void
@@ -364,14 +356,26 @@ ay_channel_output( int channel, int envelope_level, unsigned int tone_count )
 }
 
 static void
-ay_emit_channel( int channel, libspectrum_dword at_tstates, int output,
-                 int *previous )
+ay_emit_channel( int channel, libspectrum_dword at_tstates, int output )
 {
-  if( *previous == output ) return;
-  blip_synth_update( synths[channel], at_tstates, output );
-  if( both_sides[channel] )
-    blip_synth_update( right_synths[channel], at_tstates, output );
-  *previous = output;
+  int pan = channel_pan[ channel ], level[2], side;
+
+  if( !stereo_output ) {
+    if( previous[ channel ][0] == output ) return;
+    blip_synth_update( synths[ channel ], at_tstates, output );
+    previous[ channel ][0] = output;
+    return;
+  }
+
+  /* The side away from the panorama gets quieter */
+  level[0] = pan <= 0 ? output : output * ( 100 - pan ) / 100;
+  level[1] = pan >= 0 ? output : output * ( 100 + pan ) / 100;
+  for( side = 0; side < 2; side++ ) {
+    if( previous[ channel ][ side ] == level[ side ] ) continue;
+    blip_synth_update( side ? right_synths[ channel ] : synths[ channel ],
+                       at_tstates, level[ side ] );
+    previous[ channel ][ side ] = level[ side ];
+  }
 }
 
 static void
@@ -426,8 +430,7 @@ ay_engine_render( libspectrum_dword endpoint )
     for( channel = 0; channel < AY_CHANNELS; channel++ )
       ay_emit_channel(
         channel, sound_interval_time( f ),
-        ay_channel_output( channel, envelope_level, tone_count ),
-        &previous[channel] );
+        ay_channel_output( channel, envelope_level, tone_count ) );
     ay_clock_noise( noise_count );
   }
   next_tick = f;

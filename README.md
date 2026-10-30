@@ -94,6 +94,19 @@ AY sound generator of its own, apart from the emulated machine.
   of the stereo mode), a tick box to mute each channel, volume, and stereo
   mode (ABC, ACB, BAC, BCA, CBA, CAB, Mono and Custom) – all changed at once
   while playing.
+- **AY mixer** (*Mixer...* in the player, or *Options > AY mixer...*): the
+  stereo mode, the places of the channels in the Custom mode, and the volume
+  and panorama of each channel, in the order of the stereo mode. Games hear
+  them too. *Reset* sets the volumes to 100% and the panoramas where the
+  stereo mode puts the channels; changing the mode does that for the
+  panoramas.
+- **Mixer settings of a song**: *Save...* in the mixer writes them into a
+  `.mix` text file next to the song (`Song.mix`; `Song.3.mix` for song 3 of
+  a file, used before `Song.mix`; in `%APPDATA%\Fuse\mix` if the folder of
+  the song cannot be written). With *Load the mixer settings of the songs
+  automatically* ticked in the player, a song with a `.mix` file is played
+  with it; the next song without one gets your own settings back. A `.mix`
+  file never changes the saved settings.
 - The music goes on while a menu or a dialog box is open, while a window is
   moved or when Fuse is minimized. With WASAPI (`fuse.exe`) the music has a
   sound stream of its own and does not need the emulation at all; with

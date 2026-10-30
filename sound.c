@@ -268,7 +268,8 @@ sound_ay_stereo_changed( void )
 {
   int stereo = sound_ay_stereo_setting();
 
-  ayplay_update_mix();
+  /* The panoramas depend on the mode */
+  sound_ay_volume_changed();
   if( !sound_enabled ) return;	/* sound_init() reads it */
   /* Custom: the places of the channels may have changed */
   if( stereo == sound_stereo_ay && stereo != SOUND_STEREO_AY_CUSTOM ) return;
@@ -314,6 +315,56 @@ sound_ay_stereo_setting( void )
   return SOUND_STEREO_AY_NONE;
 }
 
+int
+sound_ay_place_setting( const char *value, int def )
+{
+  if( !value ) return def;
+  if( !strcmp( value, "Left" ) ) return SOUND_AY_LEFT;
+  if( !strcmp( value, "Centre" ) ) return SOUND_AY_CENTRE;
+  if( !strcmp( value, "Right" ) ) return SOUND_AY_RIGHT;
+  return def;
+}
+
+static int *
+pan_setting( int channel )
+{
+  switch( channel ) {
+  case 0: return &settings_current.pan_ay_a;
+  case 1: return &settings_current.pan_ay_b;
+  default: return &settings_current.pan_ay_c;
+  }
+}
+
+int
+sound_ay_channel_pan( int stereo, int channel )
+{
+  int position[3], pan;
+
+  if( channel < 0 || channel > 2 || stereo == SOUND_STEREO_AY_NONE ) return 0;
+  pan = *pan_setting( channel );
+  if( pan >= -100 && pan <= 100 ) return pan;
+  /* Not set: where the stereo mode puts the channel */
+  sound_ay_channel_positions( stereo, position );
+  return position[ channel ] == SOUND_AY_LEFT ? -100 :
+         position[ channel ] == SOUND_AY_RIGHT ? 100 : 0;
+}
+
+void
+sound_ay_pan_set( int channel, int pan )
+{
+  if( channel < 0 || channel > 2 ) return;
+  *pan_setting( channel ) = pan;
+}
+
+void
+sound_ay_pans_reset( void )
+{
+  int channel;
+
+  for( channel = 0; channel < 3; channel++ )
+    *pan_setting( channel ) = SOUND_AY_PAN_MODE;
+}
+
 /* Where each channel is heard (left, centre, right) */
 void
 sound_ay_channel_positions( int stereo, int position[3] )
@@ -346,9 +397,12 @@ sound_ay_channel_positions( int stereo, int position[3] )
     position[2] = SOUND_AY_LEFT;
     break;
   case SOUND_STEREO_AY_CUSTOM:
-    position[0] = option_enumerate_sound_stereo_ay_a();
-    position[1] = option_enumerate_sound_stereo_ay_b();
-    position[2] = option_enumerate_sound_stereo_ay_c();
+    position[0] = sound_ay_place_setting( settings_current.stereo_ay_a,
+                                          SOUND_AY_LEFT );
+    position[1] = sound_ay_place_setting( settings_current.stereo_ay_b,
+                                          SOUND_AY_CENTRE );
+    position[2] = sound_ay_place_setting( settings_current.stereo_ay_c,
+                                          SOUND_AY_RIGHT );
     for( i = 0; i < 3; i++ )
       if( position[i] < SOUND_AY_LEFT || position[i] > SOUND_AY_RIGHT )
         position[i] = SOUND_AY_CENTRE;
@@ -366,6 +420,12 @@ sound_ay_volume_changed( void )
   ay_engine_set_channel_volume( 0, settings_current.volume_ay_a );
   ay_engine_set_channel_volume( 1, settings_current.volume_ay_b );
   ay_engine_set_channel_volume( 2, settings_current.volume_ay_c );
+  {
+    int channel, stereo = sound_ay_stereo_setting();
+    for( channel = 0; channel < 3; channel++ )
+      ay_engine_set_channel_pan( channel,
+                                 sound_ay_channel_pan( stereo, channel ) );
+  }
   ayplay_update_mix();
 }
 

@@ -27,6 +27,7 @@
 #include "ayplayer.h"
 #include "../../ayplay.h"
 #include "../../ayplayer.h"
+#include "../../aymix.h"
 #include "../../ayplaylist.h"
 #include "fuse.h"
 #include "i18n.h"
@@ -77,13 +78,8 @@ static int shown_volume = -1;
 static int shown_stereo = -1;
 /* The places of the channels shown in the level meter labels */
 static int shown_positions[3] = { -1, -1, -1 };
-/* Volumes of the channels A, B and C shown on the sliders */
+/* Volumes of the channels A, B and C the meters were drawn with */
 static int shown_channel_volume[3] = { -1, -1, -1 };
-/* Tooltips of the channel volume sliders: the volume while the mouse is
-   over one, and the percent above the thumb while it is moved */
-static HWND hover_tip = NULL, drag_tip = NULL;
-static int drag_row = -1;
-static void show_channel_volumes( void );
 
 /* Pausing stops the music only: the emulated machine goes on */
 static int
@@ -197,8 +193,6 @@ update_level_labels( void )
     InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + row ), NULL,
                     FALSE );
   }
-  /* The rows may show other channels now */
-  show_channel_volumes();
 }
 
 /* The level of a channel of the music, after its volume */
@@ -339,225 +333,28 @@ stereo_changed( void )
                                    0, 0 );
 
   if( stereo < 0 || stereo >= STEREO_COUNT ) return;
-  settings_set_string( &settings_current.stereo_ay, stereo_names[ stereo ] );
-  sound_ay_stereo_changed();
-  shown_stereo = stereo_modes[ stereo ];
-  update_level_labels();
-  win32_options_sound_sync();
+  /* The AY mixer shows it too */
+  aymix_set_stereo( stereo_names[ stereo ] );
 }
 
-/* ------------------------------------------------------------------------
-   Volumes of the channels
-   ------------------------------------------------------------------------ */
-
-static int *
-channel_volume_setting( int channel )
-{
-  switch( channel ) {
-  case 0: return &settings_current.volume_ay_a;
-  case 1: return &settings_current.volume_ay_b;
-  default: return &settings_current.volume_ay_c;
-  }
-}
-
-static int
-channel_volume( int channel )
-{
-  int volume = *channel_volume_setting( channel );
-  return volume < 0 ? 0 : volume > 100 ? 100 : volume;
-}
-
-static void
-show_channel_volumes( void )
-{
-  int row;
-
-  if( !fuse_hAYWnd ) return;
-  for( row = 0; row < 3; row++ ) {
-    int channel = meter_order[ row ];
-    SendDlgItemMessage( fuse_hAYWnd, IDC_AY_CHANNEL_VOLUME1 + row,
-                        TBM_SETPOS, TRUE, channel_volume( channel ) );
-  }
-  for( row = 0; row < 3; row++ )
-    shown_channel_volume[ row ] = *channel_volume_setting( row );
-}
-
-static void
-channel_volumes_applied( void )
-{
-  int row;
-
-  sound_ay_volume_changed();
-  win32_options_sound_sync();
-  for( row = 0; row < 3; row++ ) {
-    shown_channel_volume[ row ] = *channel_volume_setting( row );
-    InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + row ), NULL,
-                    FALSE );
-  }
-}
-
-/* The percent above the thumb of the slider being moved */
-static void
-drag_tip_show( int row )
-{
-  HWND slider = GetDlgItem( fuse_hAYWnd, IDC_AY_CHANNEL_VOLUME1 + row );
-  TOOLINFOA tool;
-  char text[ 16 ];
-  RECT thumb;
-  POINT point;
-  LRESULT size;
-
-  if( !drag_tip ) return;
-
-  _snprintf( text, sizeof( text ), "%d%%",
-             (int)SendMessage( slider, TBM_GETPOS, 0, 0 ) );
-  text[ sizeof( text ) - 1 ] = '\0';
-
-  memset( &tool, 0, sizeof( tool ) );
-  tool.cbSize = TTTOOLINFOA_V2_SIZE;
-  tool.hwnd = fuse_hAYWnd;
-  tool.uId = 1;
-  tool.lpszText = text;
-  SendMessage( drag_tip, TTM_UPDATETIPTEXTA, 0, (LPARAM)&tool );
-
-  SendMessage( slider, TBM_GETTHUMBRECT, 0, (LPARAM)&thumb );
-  point.x = ( thumb.left + thumb.right ) / 2;
-  point.y = thumb.top;
-  ClientToScreen( slider, &point );
-  size = SendMessage( drag_tip, TTM_GETBUBBLESIZE, 0, (LPARAM)&tool );
-  point.x -= LOWORD( size ) / 2;
-  point.y -= HIWORD( size ) + 2;
-
-  if( drag_row != row ) {
-    drag_row = row;
-    if( hover_tip ) SendMessage( hover_tip, TTM_ACTIVATE, FALSE, 0 );
-    SendMessage( drag_tip, TTM_TRACKACTIVATE, TRUE, (LPARAM)&tool );
-  }
-  SendMessage( drag_tip, TTM_TRACKPOSITION, 0, MAKELPARAM( point.x, point.y ) );
-}
-
-static void
-drag_tip_hide( void )
-{
-  TOOLINFOA tool;
-
-  if( drag_row < 0 || !drag_tip ) return;
-  drag_row = -1;
-  memset( &tool, 0, sizeof( tool ) );
-  tool.cbSize = TTTOOLINFOA_V2_SIZE;
-  tool.hwnd = fuse_hAYWnd;
-  tool.uId = 1;
-  SendMessage( drag_tip, TTM_TRACKACTIVATE, FALSE, (LPARAM)&tool );
-  if( hover_tip ) SendMessage( hover_tip, TTM_ACTIVATE, TRUE, 0 );
-}
-
-static void
-channel_volume_scroll( int row, WORD code )
-{
-  int volume = SendDlgItemMessage( fuse_hAYWnd, IDC_AY_CHANNEL_VOLUME1 + row,
-                                   TBM_GETPOS, 0, 0 );
-  int channel = meter_order[ row ];
-
-  if( volume != *channel_volume_setting( channel ) ) {
-    *channel_volume_setting( channel ) = volume;
-    channel_volumes_applied();
-  }
-
-  if( code == TB_THUMBTRACK ) drag_tip_show( row );
-  else if( code == TB_ENDTRACK || code == TB_THUMBPOSITION ) drag_tip_hide();
-}
-
-static void
-channel_volumes_reset( void )
-{
-  int channel;
-
-  for( channel = 0; channel < 3; channel++ )
-    *channel_volume_setting( channel ) = 100;
-  show_channel_volumes();
-  channel_volumes_applied();
-}
-
-static void
-channel_volume_tips_create( HWND dialog )
-{
-  TOOLINFOA tool;
-  int row;
-
-  hover_tip = CreateWindowExA( WS_EX_TOPMOST, TOOLTIPS_CLASSA, NULL,
-                               WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
-                               CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                               CW_USEDEFAULT, dialog, NULL, fuse_hInstance,
-                               NULL );
-  if( hover_tip ) {
-    for( row = 0; row < 3; row++ ) {
-      memset( &tool, 0, sizeof( tool ) );
-      tool.cbSize = TTTOOLINFOA_V2_SIZE;
-      tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
-      tool.hwnd = dialog;
-      tool.uId = (UINT_PTR)GetDlgItem( dialog, IDC_AY_CHANNEL_VOLUME1 + row );
-      tool.lpszText = LPSTR_TEXTCALLBACKA;
-      SendMessage( hover_tip, TTM_ADDTOOLA, 0, (LPARAM)&tool );
-    }
-  }
-
-  drag_tip = CreateWindowExA( WS_EX_TOPMOST, TOOLTIPS_CLASSA, NULL,
-                              WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
-                              CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                              CW_USEDEFAULT, dialog, NULL, fuse_hInstance,
-                              NULL );
-  if( drag_tip ) {
-    memset( &tool, 0, sizeof( tool ) );
-    tool.cbSize = TTTOOLINFOA_V2_SIZE;
-    tool.uFlags = TTF_TRACK | TTF_ABSOLUTE;
-    tool.hwnd = dialog;
-    tool.uId = 1;
-    tool.lpszText = (char *)"";
-    SendMessage( drag_tip, TTM_ADDTOOLA, 0, (LPARAM)&tool );
-  }
-  drag_row = -1;
-}
-
-/* The text of the tooltip of a slider, when the mouse is over it */
-static int
-channel_volume_tip_text( NMHDR *header )
-{
-  NMTTDISPINFOA *info = (NMTTDISPINFOA *)header;
-  static char text[ 64 ];
-  int row;
-
-  if( header->hwndFrom != hover_tip || header->code != TTN_GETDISPINFOA )
-    return 0;
-  for( row = 0; row < 3; row++ ) {
-    if( (HWND)header->idFrom ==
-        GetDlgItem( fuse_hAYWnd, IDC_AY_CHANNEL_VOLUME1 + row ) ) {
-      int channel = meter_order[ row ];
-      _snprintf( text, sizeof( text ), i18n( "Channel %c volume: %d%%" ),
-                 'A' + channel, channel_volume( channel ) );
-      text[ sizeof( text ) - 1 ] = '\0';
-      info->lpszText = text;
-      return 1;
-    }
-  }
-  return 0;
-}
-
-/* Changed in the options meanwhile? */
+/* Changed in the options or in the AY mixer meanwhile? */
 static void
 sync_sound_settings( void )
 {
-  int channel;
+  int volume[3], channel;
 
+  if( !fuse_hAYWnd ) return;
   if( settings_current.volume_ay != shown_volume ) show_volume();
-  for( channel = 0; channel < 3; channel++ )
-    if( *channel_volume_setting( channel ) != shown_channel_volume[ channel ] ) {
-      show_channel_volumes();
-      sound_ay_volume_changed();
-      for( channel = 0; channel < 3; channel++ )
-        InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + channel ),
-                        NULL, FALSE );
-      break;
-    }
+  /* The meters show the levels after the volumes of the channels */
+  volume[0] = settings_current.volume_ay_a;
+  volume[1] = settings_current.volume_ay_b;
+  volume[2] = settings_current.volume_ay_c;
+  if( memcmp( volume, shown_channel_volume, sizeof( volume ) ) ) {
+    memcpy( shown_channel_volume, volume, sizeof( volume ) );
+    for( channel = 0; channel < 3; channel++ )
+      InvalidateRect( GetDlgItem( fuse_hAYWnd, IDC_AY_LEVEL1 + channel ),
+                      NULL, FALSE );
+  }
   if( sound_ay_stereo_setting() != shown_stereo ) {
     show_stereo();
   } else {
@@ -567,6 +364,16 @@ sync_sound_settings( void )
     if( memcmp( position, shown_positions, sizeof( position ) ) )
       update_level_labels();
   }
+}
+
+/* The AY mixer settings changed (in any window, or a .mix file was
+   loaded): every window shows them */
+void
+win32_aymix_changed( void )
+{
+  sync_sound_settings();
+  win32_aymixer_update();
+  win32_options_sound_sync();
 }
 
 /* ------------------------------------------------------------------------
@@ -773,9 +580,6 @@ close_window( void )
   measuring = 0;
   win32_ayplaylist_close();
   DestroyWindow( fuse_hAYWnd );
-  /* The tooltips went with the window */
-  hover_tip = drag_tip = NULL;
-  drag_row = -1;
   fuse_hAYWnd = NULL;
   if( song_font ) {
     DeleteObject( song_font );
@@ -844,8 +648,22 @@ command( WORD id, WORD code )
     if( code == CBN_SELCHANGE ) stereo_changed();
     break;
 
-  case IDC_AY_CHANNEL_RESET:
-    if( code == BN_CLICKED ) channel_volumes_reset();
+  case IDC_AY_MIXER:
+    if( code == BN_CLICKED ) win32_aymixer_show();
+    break;
+
+  case IDC_AY_MIX_AUTO:
+    if( code == BN_CLICKED ) {
+      settings_current.ayplayer_mix_auto =
+        IsDlgButtonChecked( fuse_hAYWnd, IDC_AY_MIX_AUTO ) == BST_CHECKED;
+      /* At once for the song playing too */
+      if( ayplayer_current_song() >= 0 )
+        aymix_song_started( ayplayer_path(), ayplayer_current_song(),
+                            ayplayer_song_count(),
+                            settings_current.ayplayer_mix_auto );
+      else if( !settings_current.ayplayer_mix_auto )
+        aymix_restore_user();
+    }
     break;
 
   case IDC_AY_STOP:
@@ -1024,13 +842,10 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETRANGE, FALSE,
                           MAKELPARAM( 0, 100 ) );
       SendDlgItemMessage( hWnd, IDC_AY_VOLUME, TBM_SETPAGESIZE, 0, 10 );
-      for( i = 0; i < 3; i++ ) {
-        SendDlgItemMessage( hWnd, IDC_AY_CHANNEL_VOLUME1 + i, TBM_SETRANGE,
-                            FALSE, MAKELPARAM( 0, 100 ) );
-        SendDlgItemMessage( hWnd, IDC_AY_CHANNEL_VOLUME1 + i,
-                            TBM_SETPAGESIZE, 0, 10 );
-      }
-      channel_volume_tips_create( hWnd );
+      CheckDlgButton( hWnd, IDC_AY_MIX_AUTO,
+                      settings_current.ayplayer_mix_auto ?
+                      BST_CHECKED : BST_UNCHECKED );
+      aymix_set_changed_hook( win32_aymix_changed );
       /* The meters show the channels after their volumes even without
          sound */
       sound_ay_volume_changed();
@@ -1071,19 +886,6 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       volume_changed();
       return 0;
     }
-    {
-      int row;
-      for( row = 0; row < 3; row++ )
-        if( (HWND)lParam ==
-            GetDlgItem( hWnd, IDC_AY_CHANNEL_VOLUME1 + row ) ) {
-          channel_volume_scroll( row, LOWORD( wParam ) );
-          return 0;
-        }
-    }
-    break;
-
-  case WM_NOTIFY:
-    if( channel_volume_tip_text( (NMHDR *)lParam ) ) return TRUE;
     break;
 
   case WM_DRAWITEM:

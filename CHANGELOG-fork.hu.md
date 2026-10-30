@@ -51,6 +51,11 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   maradnak. A legtöbb formátum nem tárolja őket (a `.z80` például a
   SpecDrumot sem), ezért eddig a betöltés kikapcsolta őket. Ha a
   pillanatfelvétel maga kér egy eszközt, az továbbra is bekapcsol.
+- Betöltődnek azok a `.z80` fájlok is, amelyek végén az utolsó
+  memóriablokk után felesleges adat van (például a SpecDrum
+  hangkészlet-pillanatfelvételeinek végén 64 bájt). Eddig ezekre a
+  „read_v2_block: not enough data in buffer” hibát kaptuk; a felesleget
+  most kihagyja.
 
 ### Upstream Fuse
 

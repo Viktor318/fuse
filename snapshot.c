@@ -37,6 +37,43 @@
 #include "ui/ui.h"
 #include "utils.h"
 
+/* Some .z80 files have junk after the last memory block (e.g. 64 stray
+   bytes from the program that saved them). libspectrum reads it as one
+   more block, which runs past the end of the file, and refuses the whole
+   snapshot. Return the length up to the end of the last whole block, so
+   the junk is left out; otherwise return the length unchanged. */
+static size_t
+snapshot_z80_usable_length( const unsigned char *buffer, size_t length )
+{
+  size_t offset, extra, block, blocks = 0;
+
+  /* Only version 2 and 3 files (PC zero in the main header) have blocks */
+  if( length < 32 || buffer[6] || buffer[7] ) return length;
+
+  extra = buffer[30] | ( buffer[31] << 8 );
+  offset = 32 + extra;
+  if( offset > length ) return length;
+
+  while( offset + 3 <= length ) {
+    block = buffer[ offset ] | ( buffer[ offset + 1 ] << 8 );
+
+    /* An empty block for page 0 starts SLT data; leave the rest alone */
+    if( !block && !buffer[ offset + 2 ] ) return length;
+
+    if( block == 0xffff ) block = 0x4000;	/* Uncompressed page */
+
+    if( offset + 3 + block > length ) break;
+
+    offset += 3 + block;
+    blocks++;
+  }
+
+  /* Keep the length if nothing was readable or nothing is left over */
+  if( !blocks || offset == length ) return length;
+
+  return offset;
+}
+
 /* Keep the sound peripherals the user has switched on. Most snapshot
    formats can't record them (.z80 has no SpecDrum, Covox or uSpeech, .szx
    no Fuller Box, Melodik or Covox), so loading one would switch them off.
@@ -60,13 +97,28 @@ int snapshot_read( const char *filename )
 {
   utils_file file;
   libspectrum_snap *snap = libspectrum_snap_alloc();
+  libspectrum_id_t type;
+  size_t length;
   int error;
 
   error = utils_read_file( filename, &file );
   if( error ) { libspectrum_snap_free( snap ); return error; }
 
-  error = libspectrum_snap_read( snap, file.buffer, file.length,
-				 LIBSPECTRUM_ID_UNKNOWN, filename );
+  /* Raw: a compressed .z80 is left as it is */
+  error = libspectrum_identify_file_raw( &type, filename, file.buffer,
+                                        file.length );
+  if( error ) {
+    utils_close_file( &file ); libspectrum_snap_free( snap );
+    return error;
+  }
+
+  length = file.length;
+  if( type == LIBSPECTRUM_ID_SNAPSHOT_Z80 )
+    length = snapshot_z80_usable_length( file.buffer, length );
+
+  /* libspectrum still identifies the file itself (e.g. compressed ones) */
+  error = libspectrum_snap_read( snap, file.buffer, length,
+                                 LIBSPECTRUM_ID_UNKNOWN, filename );
   if( error ) {
     utils_close_file( &file ); libspectrum_snap_free( snap );
     return error;
@@ -90,6 +142,9 @@ snapshot_read_buffer( const unsigned char *buffer, size_t length,
 {
   libspectrum_snap *snap = libspectrum_snap_alloc();
   int error;
+
+  if( type == LIBSPECTRUM_ID_SNAPSHOT_Z80 )
+    length = snapshot_z80_usable_length( buffer, length );
 
   error = libspectrum_snap_read( snap, buffer, length, type, NULL );
   if( error ) { libspectrum_snap_free( snap ); return error; }

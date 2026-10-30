@@ -50,6 +50,10 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   record them (`.z80` has no SpecDrum, for example), so loading used to
   switch them off. A device the snapshot itself asks for is still switched
   on.
+- `.z80` files with junk after the last memory block (e.g. 64 stray bytes
+  at the end of the SpecDrum kit snapshots) now load. They used to fail
+  with "read_v2_block: not enough data in buffer"; the junk is now left
+  out.
 
 ### Upstream Fuse
 

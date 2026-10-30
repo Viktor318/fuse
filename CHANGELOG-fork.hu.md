@@ -28,14 +28,14 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   mutatja a használt fájlt.
 - Az AY lejátszó *Keverő...* gombja megnyitja a keverőt, vagy bezárja, ha
   nyitva van. A `.mix` fájlok automatikus betöltése alapból be van kapcsolva.
-- Az AY sztereó mód ismét a közös beállítások között van (ahogy a Fuse-ban,
-  most mind a nyolc móddal) a többi felület kedvéért; Windowson a keverőben
-  és az AY lejátszóban állítható.
+- Az AY sztereó mód ismét a *Beállítások > Hang* lapon is ott van (*AY
+  sztereó mód*, ahogy a Fuse-ban, most mind a nyolc móddal); azonnal követi
+  a keverőt és az AY lejátszót, a *Mégse* visszaállítja.
 - Az AY lejátszó ablaka ugyanolyan keskeny, mint a csatornahangerők előtt
   (azok most a keverőben vannak), hosszabb szintjelzőkkel; a *Keverő...*
   gomb a sztereó mód mellett van.
-- A *Beállítások > Hang* lapon az AY-beállítások közül csak az AY hangerő
-  maradt; a sztereó mód, a helyek és a csatornahangerők a keverőben vannak.
+- A *Beállítások > Hang* lapon az AY-beállítások közül az AY hangerő és a
+  sztereó mód maradt; a helyek és a csatornahangerők a keverőben vannak.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

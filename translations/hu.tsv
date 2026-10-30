@@ -223,7 +223,7 @@ group	context	english	hungarian
 2 Beállítások (Options)	IDD_OPT_RZX: AUTOCHECKBOX	Always &embed snapshot	Pillanatkép &mindig beágyazva
 2 Beállítások (Options)	IDD_OPT_SOUND: AUTOCHECKBOX	&Sound enabled	&Hang bekapcsolva
 2 Beállítások (Options)	IDD_OPT_SOUND: AUTOCHECKBOX	&Loading sound	&Betöltés hangja
-2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	&AY stereo separation	&AY sztereó szétválasztás
+2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	&AY stereo separation	&AY sztereó mód
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	Speaker &type	Hangszóró &típusa
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	A&Y volume	A&Y hangerő
 2 Beállítások (Options)	IDD_OPT_SOUND: LTEXT	AY channel A &volume	AY A csatorna han&gereje

@@ -28,7 +28,7 @@ const i18n_entry i18n_hu_table[] = {
   { "&AY music player...",
     "&AY zenelejátszó..." },
   { "&AY stereo separation",
-    "&AY sztereó szétválasztás" },
+    "&AY sztereó mód" },
   { "&About...",
     "&Névjegy..." },
   { "&Add",

@@ -30,12 +30,6 @@ use Fuse::Dialog;
 die "No data file specified" unless @ARGV;
 
 my @dialogs = Fuse::Dialog::read( shift @ARGV );
-
-# The AY stereo mode is set in the AY mixer window on Windows
-foreach my $dialog ( @dialogs ) {
-    @{ $dialog->{widgets} } =
-	grep { $_->{value} ne 'stereo_ay' } @{ $dialog->{widgets} };
-}
 my $internal = 1;
 
 $internal = 0 if( @ARGV && shift( @ARGV ) eq 'public' );

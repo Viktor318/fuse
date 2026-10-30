@@ -33,12 +33,6 @@ my %combo_default;
 
 my @dialogs = Fuse::Dialog::read( shift @ARGV );
 
-# The AY stereo mode is set in the AY mixer window on Windows
-foreach my $dialog ( @dialogs ) {
-    @{ $dialog->{widgets} } =
-	grep { $_->{value} ne 'stereo_ay' } @{ $dialog->{widgets} };
-}
-
 print Fuse::GPL( 'options.c: options dialog boxes',
                  '2001-2013 Philip Kendall, Marek Januszewski, Stuart Brady' ) . << "CODE";
 
@@ -58,6 +52,7 @@ print Fuse::GPL( 'options.c: options dialog boxes',
 #include "options.h"
 #include "options_internals.h"
 #include "periph.h"
+#include "aymix.h"
 #include "settings.h"
 #include "sound.h"
 #include "ui/win32/win32internals.h"
@@ -324,25 +319,32 @@ CODE
 static HWND sound_options_window = NULL;
 static int sound_options_syncing = 0;
 static int sound_options_original_volume;
+static char *sound_options_original_stereo;
+static int sound_options_original_pan[3];
 
+/* The AY volume and the stereo mode, which the AY player and mixer windows
+   can change too, are applied while this dialog is open, so that the
+   windows show the same; Cancel restores them */
 static void
-sound_options_apply( void )
-{
-  sound_ay_volume_changed();
-  win32_ayplayer_update();
-}
-
-static void
-sound_options_live( HWND hwndDlg )
+sound_options_live( HWND hwndDlg, int id )
 {
   char buffer[80];
+  int n;
 
   if( sound_options_syncing || !sound_options_window ) return;
+  if( id == IDC_OPT_SOUND_STEREO_AY ) {
+    n = SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_STEREO_AY, CB_GETCURSEL,
+                            0, 0 );
+    if( n >= 0 && n < sound_stereo_ay_combo_count )
+      aymix_set_stereo( sound_stereo_ay_combo[n] );
+    return;
+  }
   buffer[0] = '\\0';
   SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_VOLUME_AY, WM_GETTEXT, 80,
                       (LPARAM) buffer );
   if( buffer[0] ) settings_current.volume_ay = atoi( buffer );
-  sound_options_apply();
+  sound_ay_volume_changed();
+  win32_ayplayer_update();
 }
 
 static void
@@ -350,6 +352,11 @@ sound_options_open( HWND hwndDlg )
 {
   sound_options_window = hwndDlg;
   sound_options_original_volume = settings_current.volume_ay;
+  sound_options_original_stereo = settings_current.stereo_ay ?
+    utils_safe_strdup( settings_current.stereo_ay ) : NULL;
+  sound_options_original_pan[0] = settings_current.pan_ay_a;
+  sound_options_original_pan[1] = settings_current.pan_ay_b;
+  sound_options_original_pan[2] = settings_current.pan_ay_c;
 }
 
 static void
@@ -357,22 +364,44 @@ sound_options_close( int cancel )
 {
   if( cancel ) {
     settings_current.volume_ay = sound_options_original_volume;
-    sound_options_apply();
+    settings_set_string( &settings_current.stereo_ay,
+                         sound_options_original_stereo );
+    settings_current.pan_ay_a = sound_options_original_pan[0];
+    settings_current.pan_ay_b = sound_options_original_pan[1];
+    settings_current.pan_ay_c = sound_options_original_pan[2];
+    sound_options_window = NULL;
+    sound_ay_stereo_changed();
+    aymix_changed();
   }
+  libspectrum_free( sound_options_original_stereo );
+  sound_options_original_stereo = NULL;
   sound_options_window = NULL;
 }
 
-/* The AY player changed the AY volume: show it here too */
+/* The AY player or mixer changed the AY volume or the stereo mode: show it
+   here too */
 void
 win32_options_sound_sync( void )
 {
   char buffer[80];
+  int stereo = sound_ay_stereo_setting(), n;
 
   if( !sound_options_window ) return;
   sound_options_syncing = 1;
   snprintf( buffer, sizeof( buffer ), "%d", settings_current.volume_ay );
   SendDlgItemMessage( sound_options_window, IDC_OPT_SOUND_VOLUME_AY,
                       WM_SETTEXT, 0, (LPARAM) buffer );
+  for( n = 0; n < sound_stereo_ay_combo_count; n++ ) {
+    char *saved = settings_current.stereo_ay;
+    int same;
+    /* The mode the name of the combo means */
+    settings_current.stereo_ay = (char *)sound_stereo_ay_combo[n];
+    same = sound_ay_stereo_setting() == stereo;
+    settings_current.stereo_ay = saved;
+    if( same )
+      SendDlgItemMessage( sound_options_window, IDC_OPT_SOUND_STEREO_AY,
+                          CB_SETCURSEL, n, 0 );
+  }
   sound_options_syncing = 0;
 }
 
@@ -408,9 +437,11 @@ CODE
         menu_options_$_->{name}_dependencies( hwndDlg );
 CODE
     print << "CODE" if $_->{name} eq 'sound';
-      if( HIWORD( wParam ) == EN_CHANGE &&
-          LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY )
-        sound_options_live( hwndDlg );
+      if( ( HIWORD( wParam ) == EN_CHANGE &&
+            LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY ) ||
+          ( HIWORD( wParam ) == CBN_SELCHANGE &&
+            LOWORD( wParam ) == IDC_OPT_SOUND_STEREO_AY ) )
+        sound_options_live( hwndDlg, LOWORD( wParam ) );
 CODE
     print << "CODE";
 

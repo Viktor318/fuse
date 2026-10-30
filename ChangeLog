@@ -1,4 +1,4 @@
-2026-10-25  Fredrick Meunier  <fredm@spamcop.net>
+2026-10-30  Fredrick Meunier  <fredm@spamcop.net>
 
         * Fuse 1.10.1 released.
 
@@ -22,6 +22,8 @@
             Meunier).
           * Fix undefined behaviour in UDI disk image decoding (Fredrick
             Meunier).
+          * Clear joystick button state when resetting or loading snapshots,
+            preventing stuck direction and fire inputs (Fredrick Meunier).
 
         * Machine specific improvements:
           * Fix loading of Timex cartridges with gaps between populated
@@ -78,6 +80,8 @@
             Meunier).
           * Improve development automation checks and documentation, including
             configurable T-state offsets for PC sampling (Fredrick Meunier).
+          * Annotate deliberate switch fallthroughs to avoid compiler
+            warnings (patch #514) (Fredrick Meunier).
 
         * Testing improvements:
           * Expand regression coverage for audio scheduling, buffering,

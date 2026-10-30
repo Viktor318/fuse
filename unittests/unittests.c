@@ -60,6 +60,7 @@
 #include "peripherals/ide/zxcf.h"
 #include "peripherals/if1.h"
 #include "peripherals/if2.h"
+#include "peripherals/joystick.h"
 #include "peripherals/multiface.h"
 #include "peripherals/sound/uspeech.h"
 #include "peripherals/speccyboot.h"
@@ -1025,6 +1026,32 @@ snapshot_copy_from_releases_keyboard_test( void )
     TEST_ASSERT( keyboard_return_values[i] == 0xff );
   }
 
+  TEST_ASSERT( libspectrum_snap_free( snap ) == 0 );
+
+  return 0;
+}
+
+static int
+snapshot_copy_from_releases_joystick_test( void )
+{
+  libspectrum_snap *snap;
+  libspectrum_byte attached;
+  int old_output = settings_current.joystick_1_output;
+
+  snap = libspectrum_snap_alloc();
+  TEST_ASSERT( snap != NULL );
+
+  settings_current.joystick_1_output = JOYSTICK_TYPE_NONE;
+  TEST_ASSERT( snapshot_copy_to( snap ) == 0 );
+
+  settings_current.joystick_1_output = JOYSTICK_TYPE_KEMPSTON;
+  joystick_press( 0, JOYSTICK_BUTTON_FIRE, 1 );
+  TEST_ASSERT( ( joystick_kempston_read( 0, &attached ) & 0x10 ) != 0 );
+
+  TEST_ASSERT( snapshot_copy_from( snap ) == 0 );
+  TEST_ASSERT( joystick_kempston_read( 0, &attached ) == 0 );
+
+  settings_current.joystick_1_output = old_output;
   TEST_ASSERT( libspectrum_snap_free( snap ) == 0 );
 
   return 0;
@@ -4617,6 +4644,7 @@ unittests_run( void )
   r += ay_tail_write_survives_frame_boundary_test();
   r += floating_bus_merge_test();
   r += snapshot_copy_from_releases_keyboard_test();
+  r += snapshot_copy_from_releases_joystick_test();
   r += snapshot_custom_rom_is_replaced_by_soft_reset_test();
   r += snapshot_machine_rom_without_file_test();
   r += snapshot_missing_rom_file_uses_snapshot_rom_test();

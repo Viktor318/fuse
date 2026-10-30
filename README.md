@@ -3,7 +3,7 @@
 **English** | [Magyar](README.hu.md)
 
 This is a fork of [Fuse](https://fuse-emulator.sourceforge.net/), the Free
-Unix Spectrum Emulator (version 1.10.0), made for using it on Windows with
+Unix Spectrum Emulator (version 1.10.1), made for using it on Windows with
 its native Windows interface, in Hungarian or English. It adds a Hungarian
 user interface and keyboard support, typing BASIC programs as text, an AY
 music player with a playlist, integer-scaled full screen, and several
@@ -17,7 +17,7 @@ The changes of this fork are listed in [CHANGELOG-fork.md](CHANGELOG-fork.md).
 
 ## Download
 
-Download `Fuse-1.10.0-hu.1-windows.zip` from the
+Download `Fuse-1.10.1-hu.1-windows.zip` from the
 [Releases](https://github.com/Viktor318/fuse/releases) page, unpack it into a
 folder of your choice and start `fuse.exe`. Nothing has to be installed.
 

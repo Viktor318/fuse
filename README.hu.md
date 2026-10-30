@@ -3,7 +3,7 @@
 [English](README.md) | **Magyar**
 
 Ez a [Fuse](https://fuse-emulator.sourceforge.net/) (Free Unix Spectrum
-Emulator, 1.10.0-s verzió) ZX Spectrum emulátor egy változata, amely a Fuse
+Emulator, 1.10.1-es verzió) ZX Spectrum emulátor egy változata, amely a Fuse
 saját Windows-felületével, magyarul vagy angolul használható. Magyar
 felülettel és magyar billentyűzet-támogatással, BASIC programok
 szövegként való betöltésével és mentésével, lejátszási listás AY
@@ -20,7 +20,7 @@ olvashatók.
 ## Letöltés
 
 A [Releases](https://github.com/Viktor318/fuse/releases) oldalról töltsd le
-a `Fuse-1.10.0-hu.1-windows.zip` fájlt, csomagold ki egy tetszőleges
+a `Fuse-1.10.1-hu.1-windows.zip` fájlt, csomagold ki egy tetszőleges
 mappába, és indítsd el a `fuse.exe`-t. Telepíteni nem kell semmit.
 
 A csomagban két program van, közös beállításokkal:

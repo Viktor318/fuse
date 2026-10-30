@@ -2,10 +2,14 @@
 
 [English](CHANGELOG-fork.md) | **Magyar**
 
-Ennek a változatnak a módosításai a Fuse 1.10.0-hoz képest. Magának a
-Fuse-nak a változásai a [ChangeLog](ChangeLog) fájlban vannak (angolul).
+Ennek a változatnak a módosításai a Fuse 1.10.1-hez képest (a
+v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
+[ChangeLog](ChangeLog) fájlban vannak (angolul).
 
-## Kiadatlan
+## v1.10.1-hu.1 – 2026-10-30
+
+Mostantól a Fuse 1.10.1-re épül (ennek változásai a [ChangeLog](ChangeLog)
+fájlban vannak).
 
 ### Hang
 

@@ -31,6 +31,7 @@
 #include "ui/ui.h"
 #include "utils.h"
 #include "win32internals.h"
+#include "win32text.h"
 
 /* FIXME: remember the last directory when opening/saving
 static char *current_folder;
@@ -168,11 +169,7 @@ run_dialog( const char *title, int is_saving )
 /* ofn.pvReserved = NULL; */
 /* ofn.FlagsEx = 0; */
 
-  if( is_saving ) {
-    result = GetSaveFileName( &ofn );
-  } else {
-    result = GetOpenFileName( &ofn );
-  }
+  result = win32text_file_dialog( &ofn, is_saving );
 
   if( !basic_text ) filter_index = ofn.nFilterIndex;
 

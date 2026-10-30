@@ -179,6 +179,22 @@ control_kind( HWND window )
   return KIND_OTHER;
 }
 
+/* Width of a Unicode text in pixels, with the control's font */
+static int
+text_width_wide( HWND window, const WCHAR *text )
+{
+  HDC dc = GetDC( window );
+  HFONT font = (HFONT)SendMessageA( window, WM_GETFONT, 0, 0 );
+  HFONT old = font ? SelectObject( dc, font ) : NULL;
+  RECT rect = { 0, 0, 0, 0 };
+
+  DrawTextW( dc, text, -1, &rect, DT_CALCRECT | DT_SINGLELINE );
+  if( old ) SelectObject( dc, old );
+  ReleaseDC( window, dc );
+
+  return rect.right - rect.left;
+}
+
 /* Width of a control's text in pixels, with its font */
 static int
 text_width( HWND window, const char *text )
@@ -221,11 +237,17 @@ collect_control( HWND window, LPARAM data )
     if( !_stricmp( class_name, "ComboBox" ) ) {
       LRESULT items = SendMessageA( window, CB_GETCOUNT, 0, 0 ), i;
       int widest = 0;
+      /* As Unicode: with the UTF-8 code page the ANSI messages may cut
+         texts with accented letters */
       for( i = 0; i < items; i++ ) {
-        if( SendMessageA( window, CB_GETLBTEXTLEN, i, 0 ) >= (LRESULT)sizeof( text ) )
+        WCHAR item[ 256 ];
+        int width;
+        if( SendMessageW( window, CB_GETLBTEXTLEN, i, 0 ) >=
+            (LRESULT)( sizeof( item ) / sizeof( item[0] ) ) )
           continue;
-        SendMessageA( window, CB_GETLBTEXT, i, (LPARAM)text );
-        if( text_width( window, text ) > widest ) widest = text_width( window, text );
+        SendMessageW( window, CB_GETLBTEXT, i, (LPARAM)item );
+        width = text_width_wide( window, item );
+        if( width > widest ) widest = width;
       }
       widest += GetSystemMetrics( SM_CXVSCROLL ) + 10;
       if( widest > c->rect.right - c->rect.left ) {
@@ -494,6 +516,18 @@ static void
 language_changed( void )
 {
   translate_menu();
+}
+
+const char*
+win32i18n_menu_english( HMENU menu, int position )
+{
+  size_t i;
+
+  for( i = 0; i < menu_text_count; i++ )
+    if( menu_texts[i].menu == menu && menu_texts[i].position == position )
+      return menu_texts[i].english;
+
+  return NULL;
 }
 
 void

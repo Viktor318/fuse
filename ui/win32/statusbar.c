@@ -28,6 +28,7 @@
 #include "settings.h"
 #include "ui/ui.h"
 #include "win32internals.h"
+#include "win32text.h"
 
 HBITMAP
   icon_tape_inactive, icon_tape_active,
@@ -131,7 +132,7 @@ win32statusbar_set_visibility( int visible )
 void
 win32statusbar_update_machine( const char *name )
 {
-  SendMessage( fuse_hStatusWindow, SB_SETTEXT, (WPARAM) 0, (LPARAM) name );
+  win32text_statusbar_text( fuse_hStatusWindow, 0, name );
 }
 
 int

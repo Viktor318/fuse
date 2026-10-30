@@ -32,6 +32,7 @@
 #include "ui/ui.h"
 #include "i18n.h"
 #include "win32internals.h"
+#include "win32text.h"
 
 #include "rollback.h"
 
@@ -54,8 +55,8 @@ dialog_init( HWND hwndDlg )
   lvc.fmt = LVCFMT_LEFT;
   lvc.cx = 100; /* FIXME: preferably calculate the whole length */
   lvc.pszText = (LPTSTR) i18n( "Seconds" );
-  SendDlgItemMessage( hwndDlg, IDC_ROLLBACK_LV, LVM_INSERTCOLUMN, 0,
-                        ( LPARAM ) &lvc );
+  win32text_listview_insert_column( GetDlgItem( hwndDlg, IDC_ROLLBACK_LV ),
+                                    0, &lvc );
 }
 
 static int

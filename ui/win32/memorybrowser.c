@@ -32,6 +32,7 @@
 #include "memory_pages.h"
 #include "i18n.h"
 #include "win32internals.h"
+#include "win32text.h"
 
 #include "memorybrowser.h"
 
@@ -349,8 +350,8 @@ memorybrowser_init( HWND hwndDlg )
       lvc.mask |= LVCF_SUBITEM;
     lvc.cx = column_widths[i];
     lvc.pszText = (TCHAR *)i18n( titles[i] );
-    SendDlgItemMessage( hwndDlg, IDC_MEM_LV, LVM_INSERTCOLUMN, i,
-                        ( LPARAM ) &lvc );
+    win32text_listview_insert_column( GetDlgItem( hwndDlg, IDC_MEM_LV ), i,
+                                      &lvc );
   }
   
   /* set font of the listview to monospaced one */

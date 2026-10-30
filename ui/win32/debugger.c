@@ -46,6 +46,7 @@
 #include "ui/ui.h"
 #include "i18n.h"
 #include "win32internals.h"
+#include "win32text.h"
 #include "z80/z80.h"
 #include "z80/z80_macros.h"
 
@@ -394,8 +395,8 @@ create_breakpoints( void )
       lvc.mask |= LVCF_SUBITEM;
     lvc.cx = _tcslen( breakpoint_titles[i] ) * 8 + 10;
     lvc.pszText = (LPTSTR)i18n( breakpoint_titles[i] );
-    SendDlgItemMessage( fuse_hDBGWnd, IDC_DBG_LV_BPS, LVM_INSERTCOLUMN, i,
-                        ( LPARAM ) &lvc );
+    win32text_listview_insert_column( GetDlgItem( fuse_hDBGWnd, IDC_DBG_LV_BPS ),
+                                      i, &lvc );
   }
   
   return 0;
@@ -436,8 +437,8 @@ create_disassembly( HFONT font )
   for( i = 0; i < 2; i++ ) {
     if( i != 0 ) lvc.mask |= LVCF_SUBITEM;
     lvc.pszText = (LPTSTR)i18n( disassembly_titles[i] );
-    SendDlgItemMessage( fuse_hDBGWnd, IDC_DBG_LV_PC, LVM_INSERTCOLUMN, i,
-                        ( LPARAM ) &lvc );
+    win32text_listview_insert_column( GetDlgItem( fuse_hDBGWnd, IDC_DBG_LV_PC ),
+                                      i, &lvc );
   }
 
   /* Set columns width */
@@ -487,8 +488,8 @@ create_stack_display( HFONT font )
   for( i = 0; i < 2; i++ ) {
     if( i != 0 ) lvc.mask |= LVCF_SUBITEM;
     lvc.pszText = (LPTSTR)i18n( stack_titles[i] );
-    SendDlgItemMessage( fuse_hDBGWnd, IDC_DBG_LV_STACK, LVM_INSERTCOLUMN, i,
-                        ( LPARAM ) &lvc );
+    win32text_listview_insert_column( GetDlgItem( fuse_hDBGWnd, IDC_DBG_LV_STACK ),
+                                      i, &lvc );
   }
 
   /* Set columns width */
@@ -554,8 +555,8 @@ create_events( void )
   for( i = 0; i < 2; i++ ) {
     if( i != 0 ) lvc.mask |= LVCF_SUBITEM;
     lvc.pszText = (LPTSTR)i18n( titles[i] );
-    SendDlgItemMessage( fuse_hDBGWnd, IDC_DBG_LV_EVENTS, LVM_INSERTCOLUMN, i,
-                        ( LPARAM ) &lvc );
+    win32text_listview_insert_column( GetDlgItem( fuse_hDBGWnd, IDC_DBG_LV_EVENTS ),
+                                      i, &lvc );
   }
 
   /* Set columns width */

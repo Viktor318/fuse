@@ -38,6 +38,7 @@
 #include "sound.h"
 #include "sound/ay_engine.h"
 #include "win32internals.h"
+#include "win32text.h"
 #include "winstate.h"
 
 HWND fuse_hAYMixWnd = NULL;
@@ -185,7 +186,7 @@ save( void )
   dialog.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY |
                  OFN_NOCHANGEDIR;
 
-  if( GetSaveFileNameA( &dialog ) ) aymix_save( filename );
+  if( win32text_file_dialog( &dialog, 1 ) ) aymix_save( filename );
 }
 
 static void

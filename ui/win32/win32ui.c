@@ -53,6 +53,7 @@
 #include "ui/win32/menu_data.h"
 #include "utils.h"
 #include "win32internals.h"
+#include "win32text.h"
 #include "win32joystick.h"
 #include "winstate.h"
 
@@ -138,10 +139,11 @@ handle_drop( HDROP hDrop )
   char *namebuf;
 
   /* Check that only one file was dropped */
-  if( DragQueryFile( hDrop, ~0UL, NULL, 0 ) == 1) {
-    bufsize = DragQueryFile( hDrop, 0, NULL, 0 ) + 1;
-    if( ( namebuf = malloc( bufsize ) ) ) {
-      DragQueryFile( hDrop, 0, namebuf, bufsize );
+  if( DragQueryFileW( hDrop, ~0UL, NULL, 0 ) == 1) {
+    /* UTF-8 takes up to 3 bytes for one letter of the name */
+    bufsize = DragQueryFileW( hDrop, 0, NULL, 0 ) * 3 + 1;
+    if( ( namebuf = malloc( bufsize ) ) &&
+        win32text_drag_query_file( hDrop, 0, namebuf, bufsize ) ) {
 
       fuse_emulation_pause();
 
@@ -152,6 +154,8 @@ handle_drop( HDROP hDrop )
       display_refresh_all();
 
       fuse_emulation_unpause();
+    } else {
+      free( namebuf );
     }
   }
   DragFinish( hDrop );
@@ -253,26 +257,28 @@ win32ui_menubar_texts_changed( void )
 
   if( !menu ) return;
 
+  /* As Unicode: with the UTF-8 code page GetMenuItemInfoA cuts a text
+     with accented letters to as many bytes as it has letters */
   count = GetMenuItemCount( menu );
   for( i = 0; i < count; i++ ) {
-    MENUITEMINFOA info;
-    char text[ 256 ];
+    MENUITEMINFOW info;
+    WCHAR text[ 256 ];
 
     memset( &info, 0, sizeof( info ) );
     info.cbSize = sizeof( info );
     info.fMask = MIIM_FTYPE | MIIM_DATA | MIIM_ID | MIIM_STATE |
                  MIIM_SUBMENU | MIIM_STRING;
     info.dwTypeData = text;
-    info.cch = sizeof( text );
-    if( !GetMenuItemInfoA( menu, i, TRUE, &info ) ) continue;
+    info.cch = sizeof( text ) / sizeof( text[0] );
+    if( !GetMenuItemInfoW( menu, i, TRUE, &info ) ) continue;
     if( ( info.dwItemData & MENUBAR_MAGIC_MASK ) != MENUBAR_MAGIC ) continue;
-    text[ sizeof( text ) - 1 ] = '\0';
+    text[ sizeof( text ) / sizeof( text[0] ) - 1 ] = L'\0';
 
     /* RemoveMenu keeps the drop down menu, it goes back in the new item */
     if( !RemoveMenu( menu, i, MF_BYPOSITION ) ) continue;
     info.dwTypeData = text;
-    info.cch = strlen( text );
-    InsertMenuItemA( menu, i, TRUE, &info );
+    info.cch = lstrlenW( text );
+    InsertMenuItemW( menu, i, TRUE, &info );
   }
 
   DrawMenuBar( fuse_hWnd );
@@ -303,25 +309,26 @@ win32ui_draw_text( HDC dc, const char *text, RECT *rect, UINT format )
 }
 
 static int
-menubar_text( int position, char *text, size_t length )
+menubar_text( int position, WCHAR *text, size_t length )
 {
-  MENUITEMINFOA info;
+  MENUITEMINFOW info;
 
+  /* As Unicode, see win32ui_menubar_texts_changed() */
   memset( &info, 0, sizeof( info ) );
   info.cbSize = sizeof( info );
   info.fMask = MIIM_STRING;
   info.dwTypeData = text;
   info.cch = length;
-  if( !GetMenuItemInfoA( GetMenu( fuse_hWnd ), position, TRUE, &info ) )
+  if( !GetMenuItemInfoW( GetMenu( fuse_hWnd ), position, TRUE, &info ) )
     return 1;
-  text[ length - 1 ] = '\0';
+  text[ length - 1 ] = L'\0';
   return 0;
 }
 
 static int
 menubar_measure( MEASUREITEMSTRUCT *measure )
 {
-  char text[ 256 ];
+  WCHAR text[ 256 ];
   RECT rect = { 0, 0, 0, 0 };
   HDC dc;
   HFONT old_font = NULL;
@@ -330,12 +337,13 @@ menubar_measure( MEASUREITEMSTRUCT *measure )
       ( measure->itemData & MENUBAR_MAGIC_MASK ) != MENUBAR_MAGIC )
     return 0;
 
-  if( menubar_text( measure->itemData & 0xffff, text, sizeof( text ) ) )
+  if( menubar_text( measure->itemData & 0xffff, text,
+                    sizeof( text ) / sizeof( text[0] ) ) )
     return 0;
 
   dc = GetDC( fuse_hWnd );
   if( menubar_font ) old_font = SelectObject( dc, menubar_font );
-  win32ui_draw_text( dc, text, &rect, DT_SINGLELINE | DT_CALCRECT );
+  DrawTextW( dc, text, -1, &rect, DT_SINGLELINE | DT_CALCRECT );
   if( old_font ) SelectObject( dc, old_font );
   ReleaseDC( fuse_hWnd, dc );
 
@@ -348,7 +356,7 @@ menubar_measure( MEASUREITEMSTRUCT *measure )
 static int
 menubar_draw( DRAWITEMSTRUCT *draw )
 {
-  char text[ 256 ];
+  WCHAR text[ 256 ];
   RECT rect = draw->rcItem;
   HDC dc = draw->hDC;
   HFONT old_font = NULL;
@@ -359,7 +367,8 @@ menubar_draw( DRAWITEMSTRUCT *draw )
       ( draw->itemData & MENUBAR_MAGIC_MASK ) != MENUBAR_MAGIC )
     return 0;
 
-  if( menubar_text( draw->itemData & 0xffff, text, sizeof( text ) ) )
+  if( menubar_text( draw->itemData & 0xffff, text,
+                    sizeof( text ) / sizeof( text[0] ) ) )
     return 0;
 
   /* Background: the same grey as the rest of the menu bar, or a darker
@@ -384,7 +393,7 @@ menubar_draw( DRAWITEMSTRUCT *draw )
     ( draw->itemState & ( ODS_GRAYED | ODS_DISABLED | ODS_INACTIVE ) ) ?
       COLOR_GRAYTEXT : COLOR_MENUTEXT ) );
   if( menubar_font ) old_font = SelectObject( dc, menubar_font );
-  win32ui_draw_text( dc, text, &rect, format );
+  DrawTextW( dc, text, -1, &rect, format );
   if( old_font ) SelectObject( dc, old_font );
 
   return 1;
@@ -411,16 +420,19 @@ menubar_menuchar( WPARAM wParam, LPARAM lParam )
   CharLowerA( key );
   count = GetMenuItemCount( menu );
   for( i = 0; i < count; i++ ) {
-    char text[ 256 ], letter[2] = { 0, 0 };
-    const char *amp;
+    WCHAR text[ 256 ], letter[2] = { 0, 0 };
+    const WCHAR *amp;
 
-    if( menubar_text( i, text, sizeof( text ) ) ) continue;
-    for( amp = strchr( text, '&' ); amp && amp[1] == '&';
-         amp = strchr( amp + 2, '&' ) ) ;
+    if( menubar_text( i, text, sizeof( text ) / sizeof( text[0] ) ) )
+      continue;
+    for( amp = wcschr( text, L'&' ); amp && amp[1] == L'&';
+         amp = wcschr( amp + 2, L'&' ) ) ;
     if( !amp || !amp[1] ) continue;
     letter[0] = amp[1];
-    CharLowerA( letter );
-    if( letter[0] == key[0] ) return MAKELRESULT( i, MNC_EXECUTE );
+    CharLowerW( letter );
+    /* The access letters are plain ASCII ones */
+    if( letter[0] == (WCHAR)(unsigned char)key[0] )
+      return MAKELRESULT( i, MNC_EXECUTE );
   }
 
   return 0;
@@ -1177,7 +1189,15 @@ set_active( HMENU menu, const char *path, int active )
   menu_count = GetMenuItemCount( menu );
   for( i = 0; i < menu_count; i++ ) {
 
-    if( GetMenuString( menu, i, menu_text, 255, MF_BYPOSITION ) == 0 ) continue;
+    /* The paths are English: compare with the English text, whatever the
+       language of the menu */
+    const char *english = win32i18n_menu_english( menu, i );
+    if( english ) {
+      _snprintf( menu_text, sizeof( menu_text ), "%s", english );
+      menu_text[ sizeof( menu_text ) - 1 ] = '\0';
+    } else if( GetMenuString( menu, i, menu_text, 255, MF_BYPOSITION ) == 0 ) {
+      continue;
+    }
 
     const char *p = menu_text, *q = path;
 

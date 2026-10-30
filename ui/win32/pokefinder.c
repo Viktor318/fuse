@@ -34,6 +34,7 @@
 #include "ui/ui.h"
 #include "i18n.h"
 #include "win32internals.h"
+#include "win32text.h"
 
 void menu_machine_pokefinder( int action );
 void move_button( int button, int dlg_height );
@@ -258,13 +259,13 @@ menu_machine_pokefinder( int action GCC_UNUSED )
     lvc.fmt = LVCFMT_LEFT;
     lvc.cx = cx;
     lvc.pszText = (LPTSTR) i18n( "Page" );
-    SendDlgItemMessage( fuse_hPFWnd, IDC_PF_LIST, LVM_INSERTCOLUMN, 0,
-                        ( LPARAM ) &lvc );
+    win32text_listview_insert_column( GetDlgItem( fuse_hPFWnd, IDC_PF_LIST ),
+                                      0, &lvc );
     lvc.mask |= LVCF_SUBITEM;
     lvc.cx = cx;
     lvc.pszText = (LPTSTR) i18n( "Offset" );
-    SendDlgItemMessage( fuse_hPFWnd, IDC_PF_LIST, LVM_INSERTCOLUMN, 1,
-                        ( LPARAM ) &lvc );
+    win32text_listview_insert_column( GetDlgItem( fuse_hPFWnd, IDC_PF_LIST ),
+                                      1, &lvc );
 
     /* store listview width */
     GetWindowRect( lv_hWnd, &rect );

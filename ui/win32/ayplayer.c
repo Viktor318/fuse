@@ -956,20 +956,18 @@ layout_play_row( void )
 
   for( i = 0; i < 4; i++ ) {
     HWND control = GetDlgItem( fuse_hAYWnd, ids[i] );
-    char text[ 128 ], plain[ 128 ];
+    WCHAR text[ 128 ], plain[ 128 ];
     SIZE size;
     int j, k, width;
 
-    GetWindowTextA( control, text, sizeof( text ) );
-    for( j = k = 0; text[j] && k < (int)sizeof( plain ) - 1; j++ )
-      if( text[j] != '&' ) plain[ k++ ] = text[j];
-    plain[k] = '\0';
-    {
-      RECT plain_rect = { 0, 0, 0, 0 };
-      win32ui_draw_text( dc, plain, &plain_rect,
-                         DT_SINGLELINE | DT_CALCRECT | DT_NOPREFIX );
-      size.cx = plain_rect.right - plain_rect.left;
-    }
+    /* As Unicode: with the UTF-8 code page the ANSI functions may cut
+       texts with accented letters */
+    GetWindowTextW( control, text, sizeof( text ) / sizeof( text[0] ) );
+    for( j = k = 0; text[j] && k < (int)( sizeof( plain ) /
+                                          sizeof( plain[0] ) ) - 1; j++ )
+      if( text[j] != L'&' ) plain[ k++ ] = text[j];
+    plain[k] = L'\0';
+    GetTextExtentPoint32W( dc, plain, k, &size );
 
     /* A radio button or tick box: the box and the room after it too */
     width = size.cx + ( i ? box + 6 : 0 );

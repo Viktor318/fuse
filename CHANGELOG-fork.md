@@ -55,6 +55,12 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - Accented paths saved before (in `fuse.cfg` and the AY player's saved
   list) are converted automatically; `.m3u` lists and the titles and
   authors of music files in an old code page show correctly too.
+- Where Windows doesn't use the process UTF-8 code page, Fuse passes the
+  text as Unicode: the column titles and rows of lists (e.g. the AY
+  playlist), the status bar, the file and folder selection windows, the
+  names of dropped files and the owner drawn menu bar.
+- Menu items are enabled and greyed in the Hungarian user interface too
+  (the translated menu items weren't found before).
 
 ### SpecDrum and Covox
 

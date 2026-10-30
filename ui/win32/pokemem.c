@@ -32,6 +32,7 @@
 #include "ui/ui.h"
 #include "i18n.h"
 #include "win32internals.h"
+#include "win32text.h"
 
 void menu_machine_pokememory( int action );
 void initialize_dialog( HWND hwnd_dialog );
@@ -387,13 +388,13 @@ initialize_dialog( HWND hwnd_dialog )
   lvc.fmt = LVCFMT_LEFT;
   lvc.cx = cx - ( cx >> 2 );
   lvc.pszText = (LPTSTR) i18n( "Trainer" );
-  SendMessage( hwnd_list, LVM_INSERTCOLUMN, 0, (LPARAM) &lvc );
+  win32text_listview_insert_column( hwnd_list, 0, &lvc );
 
   /* Create value column */
   lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
   lvc.cx = cx >> 2;
   lvc.pszText = (LPTSTR) i18n( "Value" );
-  SendMessage( hwnd_list, LVM_INSERTCOLUMN, 1, (LPARAM) &lvc );
+  win32text_listview_insert_column( hwnd_list, 1, &lvc );
 
   /* Fill listview with data */
   if( trainer_list ) {
@@ -425,11 +426,16 @@ trainer_add( gpointer data, gpointer user_data )
   lvi.mask = LVIF_TEXT | LVIF_PARAM;
   lvi.iItem = i;
   lvi.iSubItem = 0;
-  _sntprintf( buffer, 80, "%s", trainer->name );
+  /* .pok files are often in an old 8-bit code page */
+  {
+    char *utf8 = i18n_legacy_to_utf8( trainer->name );
+    _sntprintf( buffer, 80, "%s", utf8 ? utf8 : trainer->name );
+    libspectrum_free( utf8 );
+  }
   buffer[80] = '\0';
   lvi.pszText = buffer;
   lvi.lParam = (LPARAM)trainer;
-  SendMessage( hwnd_list, LVM_INSERTITEM, 0, (LPARAM) &lvi );
+  win32text_listview_item( hwnd_list, LVM_INSERTITEMA, 0, &lvi );
 
   /* add value */
   if( trainer->ask_value ) {

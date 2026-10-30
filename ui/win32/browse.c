@@ -34,6 +34,7 @@
 #include "ui/ui.h"
 #include "i18n.h"
 #include "win32internals.h"
+#include "win32text.h"
 
 #include "browse.h"
 
@@ -94,8 +95,8 @@ dialog_init( HWND hwndDlg )
       lvc.mask |= LVCF_SUBITEM;
     lvc.cx = titles_widths[i];
     lvc.pszText = (LPTSTR)i18n( titles[i] );
-    SendDlgItemMessage( hwndDlg, IDC_BROWSE_LV, LVM_INSERTCOLUMN, i,
-                        ( LPARAM ) &lvc );
+    win32text_listview_insert_column( GetDlgItem( hwndDlg, IDC_BROWSE_LV ),
+                                      i, &lvc );
   }
 
   /* create image list for the listview */

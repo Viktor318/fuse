@@ -56,6 +56,12 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   lejátszó mentett listájában) a Fuse automatikusan átalakítja; a régi
   kódlapú `.m3u` listák és a zenefájlok régi kódlapú címei, szerzői is
   helyesen jelennek meg.
+- Ahol a Windows nem a program UTF-8 kódlapját használja, ott a Fuse
+  Unicode-dal adja át a szöveget: a listák (pl. az AY lejátszási lista)
+  oszlopfejlécei és sorai, az állapotsor, a fájl- és mappaválasztó
+  ablakok, a behúzott fájlok neve és a saját rajzolású menüsor.
+- Magyar felületen is működik a menüpontok engedélyezése és szürkítése
+  (eddig a lefordított menüben nem találta meg a pontokat).
 
 ### SpecDrum és Covox
 

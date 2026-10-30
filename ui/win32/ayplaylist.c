@@ -31,6 +31,7 @@
 #include "../../ayplaylist.h"
 #include "i18n.h"
 #include "win32internals.h"
+#include "win32text.h"
 #include "winstate.h"
 
 HWND fuse_hAYListWnd = NULL;
@@ -92,8 +93,8 @@ set_cell( HWND list, int row, int column, const char *text )
   cell.iItem = row;
   cell.iSubItem = column;
   cell.pszText = utf8 ? utf8 : (char *)text;
-  SendMessageA( list, column ? LVM_SETITEMTEXTA : LVM_INSERTITEMA,
-                column ? row : 0, (LPARAM)&cell );
+  win32text_listview_item( list, column ? LVM_SETITEMTEXTA : LVM_INSERTITEMA,
+                           column ? row : 0, &cell );
   libspectrum_free( utf8 );
 }
 
@@ -250,7 +251,7 @@ add_files( void )
               OFN_HIDEREADONLY | OFN_PATHMUSTEXIST;
   ofn.lpstrTitle = i18n( "Fuse - Add AY Files" );
 
-  if( !GetOpenFileNameA( &ofn ) ) return;
+  if( !win32text_file_dialog( &ofn, 0 ) ) return;
 
   /* One file: its full name; more: the folder, then the names */
   name = buffer + strlen( buffer ) + 1;
@@ -269,19 +270,15 @@ add_files( void )
 static void
 add_folder( void )
 {
-  BROWSEINFOA browse;
-  LPITEMIDLIST folder;
-  char path[ MAX_PATH ];
+  /* UTF-8 can take up to 3 bytes for a letter of a MAX_PATH long name */
+  char path[ MAX_PATH * 3 ];
 
-  memset( &browse, 0, sizeof( browse ) );
-  browse.hwndOwner = fuse_hAYListWnd;
-  browse.lpszTitle = i18n( "The .ay files of this folder are added:" );
-  browse.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-
-  folder = SHBrowseForFolderA( &browse );
-  if( !folder ) return;
-  if( SHGetPathFromIDListA( folder, path ) ) ayplaylist_add_folder( path );
-  CoTaskMemFree( folder );
+  if( !win32text_browse_folder( fuse_hAYListWnd,
+                                i18n( "The .ay files of this folder are added:" ),
+                                BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE,
+                                path, sizeof( path ) ) )
+    return;
+  ayplaylist_add_folder( path );
   win32_ayplaylist_update();
 }
 
@@ -328,20 +325,21 @@ list_file_dialog( char *path, size_t size, int save )
   ofn.lpstrTitle = i18n( save ? "Fuse - Save Playlist" :
                                 "Fuse - Load Playlist" );
 
-  return save ? GetSaveFileNameA( &ofn ) : GetOpenFileNameA( &ofn );
+  return win32text_file_dialog( &ofn, save );
 }
 
 static void
 dropped( HDROP drop )
 {
-  char path[ MAX_PATH ];
-  UINT i, count = DragQueryFileA( drop, 0xffffffff, NULL, 0 );
+  char path[ MAX_PATH * 3 ];
+  UINT i, count = DragQueryFileW( drop, 0xffffffff, NULL, 0 );
 
   for( i = 0; i < count; i++ ) {
     size_t length;
     DWORD attributes;
 
-    if( !DragQueryFileA( drop, i, path, sizeof( path ) ) ) continue;
+    if( !win32text_drag_query_file( drop, i, path, sizeof( path ) ) )
+      continue;
     attributes = GetFileAttributesA( path );
     length = strlen( path );
 
@@ -499,7 +497,7 @@ add_column( HWND list, int index, const char *title, int width, int format )
   column.fmt = format;
   column.cx = width;
   column.pszText = (char *)i18n( title );
-  SendMessageA( list, LVM_INSERTCOLUMNA, index, (LPARAM)&column );
+  win32text_listview_insert_column( list, index, &column );
 }
 
 /* After the texts were translated (which may make the buttons and the

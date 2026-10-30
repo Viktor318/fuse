@@ -171,6 +171,10 @@ void win32ui_infobox( const char *message );
 void win32i18n_init( void );
 void win32i18n_end( void );
 
+/* The English text of a menu item (with its & and shortcut), whatever the
+   language of the menu; NULL if it is not known */
+const char *win32i18n_menu_english( HMENU menu, int position );
+
 typedef enum win32ui_picture_format {
   PICTURE_SCR,
   PICTURE_PNG,

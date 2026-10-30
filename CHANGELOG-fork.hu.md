@@ -46,6 +46,10 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   kicsinyítődik, jön vissza és zárul be. A Lejátszó nélkül (*Beállítások >
   AY keverő...*) továbbra is magában is megnyitható, pl. egy játék
   zenéjéhez.
+- A Lejátszó bezáráskor megjegyzi, hogy a Lista és a Keverő nyitva volt-e
+  vele, és legközelebb vele együtt az nyílik meg, ami nyitva volt (eddig
+  a Lista mindig megnyílt). Az első alkalommal a Lista megnyílik, a Keverő
+  nem.
 - Az AY lejátszó, a Lista, a Keverő és a Billentyűzet (*Súgó >
   Billentyűzet*) helyét a Fuse folyamatosan megjegyzi, és kilépéskor azt
   is, melyik volt nyitva. Ha a *Folytatás ott, ahol abbahagytam* be van

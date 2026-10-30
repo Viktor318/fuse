@@ -94,6 +94,7 @@ void win32_ayplaylist_update_status( void );
 int win32_ayplaylist_selected( void );
 void win32_ayplayer_show( void );
 void win32_ayplayer_reopen( int with_list, int song );
+void win32_ayplayer_remember_companions( void );
 int win32ui_picture_is_open( void );
 void menu_help_keyboard( int action );
 int win32ui_machine_paused( void );

@@ -587,6 +587,8 @@ close_window( void )
   ayplay_set_muted( 2, 0 );
   ayplayer_set_frame_hook( NULL );
   measuring = 0;
+  /* What was open with it, for the next time */
+  win32_ayplayer_remember_companions();
   win32_ayplaylist_close();
   /* The mixer goes with the player, like the list */
   win32_aymixer_close();
@@ -1033,8 +1035,30 @@ restore_position( void )
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
 }
 
+/* Whether the playlist and the mixer were open with the player, as it
+   was closed; they open with it the next time. Before the first time:
+   the list does, the mixer does not */
+void
+win32_ayplayer_remember_companions( void )
+{
+  if( !fuse_hAYWnd ) return;
+  winstate_set( "ayplayer", "with_list", win32_ayplaylist_is_open() );
+  winstate_set( "ayplayer", "with_mixer", win32_aymixer_is_open() );
+}
+
+static int
+remembered( const char *key, int otherwise )
+{
+  long value;
+
+  return winstate_get( "ayplayer", key, &value ) ? value != 0 : otherwise;
+}
+
+/* `with_list', `with_mixer': 1 open, 0 not, -1 as they were the last time
+   the player was closed (only when the player opens; if it is already
+   open, they are left as they are) */
 static void
-open_window( int with_list, int activate )
+open_window( int with_list, int with_mixer, int activate )
 {
   if( !fuse_hAYWnd ) {
     fuse_hAYWnd = CreateDialog( fuse_hInstance, MAKEINTRESOURCE( IDD_AYPLAYER ),
@@ -1048,31 +1072,41 @@ open_window( int with_list, int activate )
     restore_position();
     /* A mixer already open goes with the player from now on */
     win32_aymixer_set_owner( fuse_hAYWnd );
+
+    if( with_list < 0 ) with_list = remembered( "with_list", 1 );
+    if( with_mixer < 0 ) with_mixer = remembered( "with_mixer", 0 );
+  } else {
+    if( with_list < 0 ) with_list = 0;
+    if( with_mixer < 0 ) with_mixer = 0;
   }
 
   ayplayer_set_frame_hook( frame_update );
   win32ui_ayplayer_timer_start();
   resume_if_paused();
   if( with_list ) win32_ayplaylist_show();
+  /* Owned by the player, as it exists by now */
+  if( with_mixer ) win32_aymixer_show();
   update_all();
   if( IsIconic( fuse_hAYWnd ) ) ShowWindow( fuse_hAYWnd, SW_RESTORE );
   ShowWindow( fuse_hAYWnd, activate ? SW_SHOW : SW_SHOWNOACTIVATE );
   if( activate ) SetForegroundWindow( fuse_hAYWnd );
 }
 
-/* The file was opened: show the window (or update it) */
+/* The file was opened, or the player from the menu: show the window (or
+   update it), with the list and the mixer if they were open with it */
 void
 win32_ayplayer_show( void )
 {
-  open_window( 1, 1 );
+  open_window( -1, -1, 1 );
 }
 
 /* Opened again as Fuse starts: with the list if it was open, standing on
-   the song it stood on, without playing */
+   the song it stood on, without playing (the mixer is opened on its own,
+   as it may have been open without the player) */
 void
 win32_ayplayer_reopen( int with_list, int song )
 {
-  open_window( with_list, 0 );
+  open_window( with_list, 0, 0 );
   win32_ayplaylist_choose( song );
   if( fuse_hAYWnd ) update_all();
 }

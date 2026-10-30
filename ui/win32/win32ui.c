@@ -1180,6 +1180,8 @@ win32ui_remember_open_windows( void )
   winstate_set( "aymixer", "open", win32_aymixer_is_open() );
   winstate_set( "keyboard", "open", win32ui_picture_is_open() );
   winstate_set( "playlist", "current", ayplaylist_current() );
+  /* The player is closed with Fuse too */
+  win32_ayplayer_remember_companions();
 }
 
 void

@@ -44,6 +44,10 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - The mixer goes with the player like the list: it is minimized, restored
   and closed with it. Without the player (*Options > AY mixer...*) it can
   still be opened by itself, e.g. for the music of a game.
+- As the player is closed, it remembers whether the playlist and the mixer
+  were open with it; the next time the same ones open with it (the list
+  used to open every time). The first time the list opens, the mixer
+  doesn't.
 - The places of the AY player, the playlist, the mixer and the keyboard
   picture (*Help > Keyboard*) are kept all the time, and which of them
   were open as Fuse exits. With *Resume last session* on, the same

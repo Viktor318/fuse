@@ -37,11 +37,12 @@
 /* Digital music (samples played by writing the volumes many times a frame,
    with tone and noise off) never repeats exactly: the samples fall on the
    frames a little differently each time. It is told by its volume writes
-   in the first seconds, and measured by how it sounds instead: the mean
+   in any DIGITAL_SEEN frames (it may start after some ordinary music),
+   and measured by how it sounds instead: the mean
    level of each channel in each frame, compared in blocks of BLOCK frames
    first, then frame by frame */
 #define DIGITAL_WRITES 16		/* volume writes in a frame, on average */
-#define DIGITAL_SEEN 100		/* frames to tell digital music */
+#define DIGITAL_SEEN 100		/* 2 seconds, to tell digital music */
 #define DIGITAL_MAX_FRAMES ( 20L * 60 * 50 )	/* 20 minutes */
 #define DIGITAL_CHECK_EVERY 1000	/* 20 seconds */
 #define BLOCK 5				/* a tenth of a second */
@@ -79,13 +80,18 @@ find( const unsigned int *hash, const unsigned char *silent, long n,
     while( start > 0 && hash[ start - 1 ] == hash[ start - 1 + period ] )
       start--;
 
+    /* What repeats now is silence: the music ended where the silence
+       began (the repetition may have started a little before it, with the
+       last writes leaving the registers as they stay) */
     all_silent = 1;
-    for( i = start; i < start + period; i++ )
+    for( i = n - need - period; i < n; i++ )
       if( !silent[i] ) { all_silent = 0; break; }
 
     if( all_silent ) {
+      long end = n;
+      while( end > 0 && silent[ end - 1 ] ) end--;
       *loop = -1;
-      return start;
+      return end;
     }
     *loop = start;
     return start + period;
@@ -164,10 +170,13 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
   unsigned char *block = malloc( DIGITAL_MAX_FRAMES / BLOCK * 3 + 3 );
   aysource_write *writes = malloc( MAX_WRITES * sizeof( *writes ) );
   long frames = 0, found = 0, volume_writes = 0;
+  /* The volume writes of the last DIGITAL_SEEN frames */
+  long recent[ DIGITAL_SEEN ];
   long block_sum[3] = { 0, 0, 0 };
   int i, digital = 0;
 
   *loop = 0;
+  memset( recent, 0, sizeof( recent ) );
   if( !source || !hash || !silent || !level || !block || !writes ) {
     aysource_free( source );
     free( hash );
@@ -193,7 +202,6 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
       h *= 16777619U;
     }
     hash[ frames ] = h;
-    silent[ frames ] = !( ( r[8] | r[9] | r[10] ) & 0x1f );
 
     /* The levels the volume writes set (an envelope counts as full) */
     for( i = 0; i < written; i++ ) {
@@ -204,6 +212,17 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
         count[ reg - 8 ]++;
       }
     }
+    /* Silent: no channel heard. A channel is heard with a volume and tone
+       or noise on, or, with both off, if its volume changes (digital
+       music); a volume that stays without them is no sound */
+    silent[ frames ] = 1;
+    for( channel = 0; channel < 3; channel++ ) {
+      int tone_and_noise_off = ( ( r[7] >> channel ) & 9 ) == 9;
+      if( ( r[ 8 + channel ] & 0x1f ) &&
+          ( !tone_and_noise_off || count[ channel ] ) )
+        silent[ frames ] = 0;
+    }
+
     if( frames < DIGITAL_MAX_FRAMES ) {
       for( channel = 0; channel < 3; channel++ ) {
         int value = r[ 8 + channel ] & 0x1f;
@@ -220,10 +239,14 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
         }
       }
     }
-    volume_writes += count[0] + count[1] + count[2];
+    volume_writes -= recent[ frames % DIGITAL_SEEN ];
+    recent[ frames % DIGITAL_SEEN ] = count[0] + count[1] + count[2];
+    volume_writes += recent[ frames % DIGITAL_SEEN ];
     frames++;
 
-    if( frames == DIGITAL_SEEN &&
+    /* The levels are kept from the start, so digital music found later
+       is measured from the start too */
+    if( !digital && frames <= DIGITAL_MAX_FRAMES &&
         volume_writes >= DIGITAL_WRITES * DIGITAL_SEEN )
       digital = 1;
 

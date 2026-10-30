@@ -59,8 +59,11 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A digitális (mintavételezett hangot játszó) AY dalok hossza is
   lemérhető: ezek sosem ismétlődnek bájtra pontosan, ezért a Fuse a
   csatornák hangerejének menetét hasonlítja össze (pl. a KDF Soft „AY
-  Megademo Digital Part 2” 1:47). A korábban le nem mérhető dalokat a
-  Fuse újra megméri.
+  Megademo Digital Part 2” 1:47). A digitális rész a dal közepén is
+  kezdődhet (X-agon of Phantasy „Digitune 1”: 1:42). A korábban le nem
+  mérhető dalokat a Fuse újra megméri.
+- A hosszmérés a hang és zaj nélkül mozdulatlanul álló hangerőt csendnek
+  veszi: az így véget érő dalok ott érnek véget, nem ismétlik a csendet.
 - A szintjelzők a digitális dalokat is mutatják (hang és zaj nélkül a
   hangerő változását).
 - A lejátszó dal-sorában és a lista sorszámánál a gondolatjel (–) és a

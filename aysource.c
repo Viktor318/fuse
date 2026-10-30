@@ -320,17 +320,21 @@ aysource_frame( aysource *s, aysource_write *writes, int max )
         uint8_t value = Z80_GET_DATA( pins );
         if( ( port & 0xc002 ) == 0xc000 ) {
           /* Register select; TurboSound: FFh the first chip, FEh the
-             second (only the first one is played) */
-          if( value >= 0xf0 ) s->chip = value == 0xff ? 0 : 1;
-          else s->selected = value & 15;
-        } else if( ( port & 0xc002 ) == 0x8000 && !s->chip ) {
+             second (only the first one is played). Any other value of 16
+             or more selects no register, as on the AY itself: digital
+             music writes its samples with OUT (FDh),A, whose port is
+             FFFDh-like for values from C0h */
+          if( value == 0xff || value == 0xfe ) s->chip = value == 0xff ? 0 : 1;
+          else s->selected = value < 16 ? value : -1;
+        } else if( ( port & 0xc002 ) == 0x8000 && !s->chip &&
+                   s->selected >= 0 ) {
           s->registers[ s->selected ] = value;
           if( s->selected < 14 )
             count = keep( writes, max, count, t, s->selected, value );
         }
       } else if( pins & Z80_RD ) {
         /* The selected register can be read back, as on the 128K */
-        if( ( port & 0xc002 ) == 0xc000 && !s->chip ) {
+        if( ( port & 0xc002 ) == 0xc000 && !s->chip && s->selected >= 0 ) {
           Z80_SET_DATA( pins, s->registers[ s->selected ] );
         } else {
           Z80_SET_DATA( pins, 0xff );

@@ -82,9 +82,11 @@ find( const unsigned int *hash, const unsigned char *silent, long n,
 
     /* What repeats now is silence: the music ended where the silence
        began (the repetition may have started a little before it, with the
-       last writes leaving the registers as they stay) */
+       last writes leaving the registers as they stay; with digital music
+       even well before it, as its registers look the same at the end of
+       each frame) */
     all_silent = 1;
-    for( i = n - need - period; i < n; i++ )
+    for( i = n - need; i < n; i++ )
       if( !silent[i] ) { all_silent = 0; break; }
 
     if( all_silent ) {
@@ -113,12 +115,13 @@ difference( const unsigned char *level, long a, long b, long count )
 /* As find(), for digital music: the smallest period P (at least
    MIN_PERIOD) with which the last max(P, WINDOW) frames sound the same as P
    frames before, then back to the first frame S that does. The song lasts
-   until S + P and goes on from S. -1: not yet */
+   until S + P and goes on from S; if what sounds the same is silence, the
+   music ended where it began (*loop = -1). -1: not yet */
 static long
 find_digital( const unsigned char *level, const unsigned char *block,
-              long n, long *loop )
+              const unsigned char *silent, long n, long *loop )
 {
-  long blocks = n / BLOCK, period, need, start, p;
+  long blocks = n / BLOCK, period, need, start, p, i;
 
   for( period = MIN_PERIOD / BLOCK; ; period++ ) {
     long found = -1, found_difference = SAME + 1;
@@ -142,6 +145,15 @@ find_digital( const unsigned char *level, const unsigned char *block,
     period = found;
     need = period > WINDOW ? period : WINDOW;
     break;
+  }
+
+  /* Silence sounds the same as silence: the music ended where it began */
+  for( i = n - need; i < n && silent[i]; i++ )
+    ;
+  if( i == n ) {
+    while( n > 0 && silent[ n - 1 ] ) n--;
+    *loop = -1;
+    return n;
   }
 
   /* Back to where the repetition starts, a second at a time */
@@ -261,9 +273,10 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
     }
 
     if( digital && frames % DIGITAL_CHECK_EVERY == 0 ) {
-      long end = find_digital( level, block, frames, loop );
+      long end = find_digital( level, block, silent, frames, loop );
       if( end >= 0 ) {
-        found = end;
+        found = end < 50 ? 0 : end;
+        if( !found ) *loop = 0;
         break;
       }
     }

@@ -69,6 +69,14 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   never greyed): measures the selected songs again, or with none
   selected the current one, also if their lengths are known. *Stop
   measuring* stops it. The smallest height of the window grew with it.
+- Digital songs that write their samples with `OUT (FDh),A` are no longer
+  muted after their first moments (X-agon of Phantasy's "Digitune 1" and
+  "Digitune 2"): a sample value of F0h or more made the player take the
+  write for the TurboSound chip select and leave the AY chip. Now only FEh
+  and FFh select a TurboSound chip; other values of 16 or more select no
+  register, as on the AY itself. "Digitune 2" now lasts 2:16.
+- The length measuring of digital songs no longer takes the silence after
+  them for a short loop.
 - The level meters show digital songs too (without tone and noise: how
   much the volume changes).
 - The dash (–) of the player's song line and the » of the playlist's

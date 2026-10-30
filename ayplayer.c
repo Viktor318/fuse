@@ -90,7 +90,7 @@ static int ay_repeat_song = 0;
    again. Lines of the versions before 4 (which did not know digital music
    or a standing volume as silence) are kept and used, but measured again
    when the song is played or the lengths of the list are measured */
-#define AY_LENGTHS_VERSION 4
+#define AY_LENGTHS_VERSION 5
 
 static int ay_length_measured = 0;
 static libspectrum_dword ay_file_checksum = 0;

@@ -71,6 +71,15 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   sosem szürke): a kijelölt dalokat, kijelölés nélkül az aktuálisat méri
   újra, a már ismert hosszukat is. A futó mérést a *Mérés leállítása*
   állítja meg. Az ablak legkisebb magassága ennyivel nőtt.
+- Az `OUT (FDh),A` utasítással mintákat író digitális dalok már nem
+  némulnak el az első pillanatok után (X-agon of Phantasy „Digitune 1” és
+  „Digitune 2”): az F0h vagy nagyobb mintaérték miatt a lejátszó a
+  TurboSound-chipválasztásnak vette az írást, és elhagyta az AY chipet.
+  Most csak az FEh és az FFh választ TurboSound-chipet, a többi 16 vagy
+  nagyobb érték egyik regisztert sem választja ki, ahogy az AY-on is. A
+  „Digitune 2” most 2:16 hosszú.
+- A digitális dalok hosszmérése a dal utáni csendet már nem veszi rövid
+  ismétlődésnek.
 - A szintjelzők a digitális dalokat is mutatják (hang és zaj nélkül a
   hangerő változását).
 - A lejátszó dal-sorában és a lista sorszámánál a gondolatjel (–) és a

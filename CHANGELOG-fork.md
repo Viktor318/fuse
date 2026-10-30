@@ -36,6 +36,12 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - *Options > Sound* keeps only the AY volume and the stereo mode of the AY
   settings; the places and the channel volumes are in the mixer.
 
+### Upstream Fuse
+
+- Fix from upstream `master`: loading a snapshot now releases the joystick
+  buttons (Kempston, Timex, Fuller), so fire or a direction no longer stays
+  stuck (this also covers the program restored when the AY player closes).
+
 ## v1.10.1-hu.1 – 2026-10-30
 
 Now based on Fuse 1.10.1 (its changes are in [ChangeLog](ChangeLog)).

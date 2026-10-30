@@ -37,6 +37,13 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A *Beállítások > Hang* lapon az AY-beállítások közül az AY hangerő és a
   sztereó mód maradt; a helyek és a csatornahangerők a keverőben vannak.
 
+### Upstream Fuse
+
+- Az upstream `master` javítása: pillanatfelvétel betöltésekor a joystick
+  gombjai (Kempston, Timex, Fuller) elengedett állapotba kerülnek, így nem
+  marad beragadva a tűzgomb vagy egy irány (ez az AY lejátszó bezárásakor
+  visszaállított programot is érinti).
+
 ## v1.10.1-hu.1 – 2026-10-30
 
 Mostantól a Fuse 1.10.1-re épül (ennek változásai a [ChangeLog](ChangeLog)

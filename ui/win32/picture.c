@@ -298,6 +298,12 @@ move_dialog( HWND dialog, HWND parent )
   }
 }
 
+int
+win32ui_picture_is_open( void )
+{
+  return hDialogPicture != NULL;
+}
+
 static HWND
 create_dialog( int width, int height )
 {

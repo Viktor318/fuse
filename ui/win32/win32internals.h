@@ -67,6 +67,9 @@ extern HWND fuse_hAYListWnd;
 extern HWND fuse_hAYMixWnd;
 void win32_aymixer_show( void );
 void win32_aymixer_close( void );
+void win32_aymixer_toggle( void );
+void win32_aymixer_set_owner( HWND owner );
+int win32_aymixer_is_open( void );
 void win32_aymixer_update( void );
 /* The AY mixer settings changed: every window shows them */
 void win32_aymix_changed( void );
@@ -83,11 +86,16 @@ void win32_ayplayer_measure_stop( void );
 int win32_ayplayer_measure_stopping( void );
 void win32_ayplaylist_show( void );
 void win32_ayplaylist_toggle( void );
+int win32_ayplaylist_is_open( void );
+void win32_ayplaylist_choose( int index );
 void win32_ayplaylist_close( void );
 void win32_ayplaylist_update( void );
 void win32_ayplaylist_update_status( void );
 int win32_ayplaylist_selected( void );
 void win32_ayplayer_show( void );
+void win32_ayplayer_reopen( int with_list, int song );
+int win32ui_picture_is_open( void );
+void menu_help_keyboard( int action );
 int win32ui_machine_paused( void );
 
 /* A Windows modal loop (menu, moving or resizing a window) starts / ends */

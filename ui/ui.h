@@ -316,4 +316,10 @@ void ui_widget_keyhandler( int native_key );
 
 void ui_pokemem_selector( const char *filename );
 
+#ifdef UI_WIN32
+/* As Fuse starts, with "resume the last session" on: those windows opened
+   again */
+void win32ui_reopen_windows( void );
+#endif			/* #ifdef UI_WIN32 */
+
 #endif			/* #ifndef FUSE_UI_H */

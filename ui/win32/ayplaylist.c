@@ -50,6 +50,10 @@ static int button_top[ BUTTONS ], buttons_width;
 static int edge_margin, buttons_gap, list_bottom_gap, status_bottom_gap;
 static POINT list_corner;
 static int number_width, author_width, length_width;
+
+/* Shown by the user: kept while the AY player is minimized (and the list
+   with it), to be remembered when Fuse exits */
+static int list_open = 0;
 static SIZE minimum_size, default_size;
 static HFONT bold_font = NULL;
 
@@ -71,7 +75,7 @@ format_length( char *text, size_t size, int index )
   long frames;
 
   if( !ayplaylist_length( index, &frames ) ) {
-    _snprintf( text, size, "%s", "\x96" );
+    _snprintf( text, size, "%s", win32text_dash() );
   } else {
     if( !frames ) frames = 5 * 60 * 50;	/* the default length */
     _snprintf( text, size, "%ld:%02ld", frames / 50 / 60,
@@ -155,9 +159,11 @@ win32_ayplaylist_update( void )
   for( i = 0; i < count; i++ ) {
     const ayplaylist_entry *e = ayplaylist_get( i );
 
-    _snprintf( text, sizeof( text ), "%s%d",
+    _snprintf( text, sizeof( text ), "%s%s%d",
                i == ayplaylist_current() && ayplayer_current_song() >= 0 ?
-                 "\xbb " : "", i + 1 );
+                 win32text_guillemet() : "",
+               i == ayplaylist_current() && ayplayer_current_song() >= 0 ?
+                 " " : "", i + 1 );
     text[ sizeof( text ) - 1 ] = '\0';
     set_cell( list, i, COLUMN_NUMBER, text );
     set_cell( list, i, COLUMN_TITLE, e->title );
@@ -706,6 +712,7 @@ playlist_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     case IDCANCEL:
       remember_place();
       ShowWindow( hWnd, SW_HIDE );
+      list_open = 0;
       return TRUE;
     }
     break;
@@ -713,6 +720,7 @@ playlist_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   case WM_CLOSE:
     remember_place();
     ShowWindow( hWnd, SW_HIDE );
+    list_open = 0;
     return TRUE;
   }
 
@@ -741,18 +749,47 @@ void
 win32_ayplaylist_show( void )
 {
   if( create() ) return;
-  ShowWindow( fuse_hAYListWnd, SW_SHOWNOACTIVATE );
+  if( IsIconic( fuse_hAYListWnd ) )
+    ShowWindow( fuse_hAYListWnd, SW_RESTORE );
+  else
+    ShowWindow( fuse_hAYListWnd, SW_SHOWNOACTIVATE );
+  list_open = 1;
   win32_ayplaylist_update();
 }
 
+/* The List button: a minimized list comes back to the front, a shown one
+   is closed, a closed one is opened */
 void
 win32_ayplaylist_toggle( void )
 {
-  if( fuse_hAYListWnd && IsWindowVisible( fuse_hAYListWnd ) ) {
+  if( fuse_hAYListWnd && IsIconic( fuse_hAYListWnd ) ) {
+    ShowWindow( fuse_hAYListWnd, SW_RESTORE );
+    SetForegroundWindow( fuse_hAYListWnd );
+    list_open = 1;
+  } else if( fuse_hAYListWnd && IsWindowVisible( fuse_hAYListWnd ) ) {
     remember_place();
     ShowWindow( fuse_hAYListWnd, SW_HIDE );
+    list_open = 0;
   } else {
     win32_ayplaylist_show();
+  }
+}
+
+int
+win32_ayplaylist_is_open( void )
+{
+  return fuse_hAYListWnd && list_open;
+}
+
+/* The song where the player stood when Fuse exited: chosen, not played */
+void
+win32_ayplaylist_choose( int index )
+{
+  if( index < 0 || index >= ayplaylist_count() ) return;
+  ayplaylist_set_current( index );
+  if( fuse_hAYListWnd ) {
+    win32_ayplaylist_update();
+    select_only( index );
   }
 }
 
@@ -760,6 +797,7 @@ void
 win32_ayplaylist_close( void )
 {
   if( !fuse_hAYListWnd ) return;
+  list_open = 0;
   remember_place();
   DestroyWindow( fuse_hAYListWnd );
   fuse_hAYListWnd = NULL;

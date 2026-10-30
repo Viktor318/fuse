@@ -479,6 +479,16 @@ static int fuse_init(int argc, char **argv)
     )
     session_restore();
 
+#ifdef UI_WIN32
+  /* The AY player, playlist, mixer and keyboard windows open at the exit */
+  if( !error && settings_current.resume_last_session
+#ifdef ENABLE_AUTOMATION
+      && !automation_active()
+#endif
+    )
+    win32ui_reopen_windows();
+#endif
+
   free_start_files( &start_files );
   if( error ) return 1;
 

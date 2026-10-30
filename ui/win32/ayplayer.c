@@ -38,6 +38,7 @@
 #include "sound.h"
 #include "sound/ay_engine.h"
 #include "win32internals.h"
+#include "win32text.h"
 #include "winstate.h"
 
 HWND fuse_hAYWnd = NULL;
@@ -452,11 +453,15 @@ update_all( void )
     set_text( IDC_AY_MISC, ayplayer_misc() );
   }
 
-  /* The song being played: its place in the list and title */
+  /* The song being played: its place in the list and title (which may be
+     in an old code page) */
   text[0] = '\0';
   if( index >= 0 ) {
-    _snprintf( text, sizeof( text ), "%d / %d \x96 %s", index + 1, count,
-               ayplaylist_get( index )->title );
+    const char *title = ayplaylist_get( index )->title;
+    char *utf8 = i18n_legacy_to_utf8( title );
+    _snprintf( text, sizeof( text ), "%d / %d %s %s", index + 1, count,
+               win32text_dash(), utf8 ? utf8 : title );
+    libspectrum_free( utf8 );
   } else if( ayplayer_current_song() >= 0 ) {
     ayplayer_song_name( ayplayer_current_song(), name, sizeof( name ) );
     _snprintf( text, sizeof( text ), "%s", name );
@@ -583,6 +588,8 @@ close_window( void )
   ayplayer_set_frame_hook( NULL );
   measuring = 0;
   win32_ayplaylist_close();
+  /* The mixer goes with the player, like the list */
+  win32_aymixer_close();
   DestroyWindow( fuse_hAYWnd );
   fuse_hAYWnd = NULL;
   if( song_font ) {
@@ -653,11 +660,8 @@ command( WORD id, WORD code )
     break;
 
   case IDC_AY_MIXER:
-    /* Opens the mixer, or closes it if it is open */
-    if( code == BN_CLICKED ) {
-      if( fuse_hAYMixWnd ) win32_aymixer_close();
-      else win32_aymixer_show();
-    }
+    /* Opens the mixer, brings it back if minimized, or closes it */
+    if( code == BN_CLICKED ) win32_aymixer_toggle();
     break;
 
   case IDC_AY_MIX_AUTO:
@@ -1029,9 +1033,8 @@ restore_position( void )
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
 }
 
-/* The file was opened: show the window (or update it) */
-void
-win32_ayplayer_show( void )
+static void
+open_window( int with_list, int activate )
 {
   if( !fuse_hAYWnd ) {
     fuse_hAYWnd = CreateDialog( fuse_hInstance, MAKEINTRESOURCE( IDD_AYPLAYER ),
@@ -1043,13 +1046,33 @@ win32_ayplayer_show( void )
     /* After the texts were translated */
     layout_play_row();
     restore_position();
+    /* A mixer already open goes with the player from now on */
+    win32_aymixer_set_owner( fuse_hAYWnd );
   }
 
   ayplayer_set_frame_hook( frame_update );
   win32ui_ayplayer_timer_start();
   resume_if_paused();
-  win32_ayplaylist_show();
+  if( with_list ) win32_ayplaylist_show();
   update_all();
-  ShowWindow( fuse_hAYWnd, SW_SHOW );
-  SetForegroundWindow( fuse_hAYWnd );
+  if( IsIconic( fuse_hAYWnd ) ) ShowWindow( fuse_hAYWnd, SW_RESTORE );
+  ShowWindow( fuse_hAYWnd, activate ? SW_SHOW : SW_SHOWNOACTIVATE );
+  if( activate ) SetForegroundWindow( fuse_hAYWnd );
+}
+
+/* The file was opened: show the window (or update it) */
+void
+win32_ayplayer_show( void )
+{
+  open_window( 1, 1 );
+}
+
+/* Opened again as Fuse starts: with the list if it was open, standing on
+   the song it stood on, without playing */
+void
+win32_ayplayer_reopen( int with_list, int song )
+{
+  open_window( with_list, 0 );
+  win32_ayplaylist_choose( song );
+  if( fuse_hAYWnd ) update_all();
 }

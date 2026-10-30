@@ -371,8 +371,12 @@ win32_aymixer_show( void )
   aymix_set_changed_hook( win32_aymix_changed );
 
   if( !fuse_hAYMixWnd ) {
+    /* Owned by the AY player if it is open, so it is minimized and closed
+       with it, like the playlist; otherwise by the main window (to mix the
+       music of a game) */
     if( !CreateDialog( fuse_hInstance, MAKEINTRESOURCE( IDD_AYMIXER ),
-                       fuse_hWnd, (DLGPROC)aymixer_proc ) ) {
+                       fuse_hAYWnd ? fuse_hAYWnd : fuse_hWnd,
+                       (DLGPROC)aymixer_proc ) ) {
       win32_verror( 1 );
       return;
     }
@@ -380,6 +384,32 @@ win32_aymixer_show( void )
   }
 
   win32_aymixer_update();
-  ShowWindow( fuse_hAYMixWnd, SW_SHOW );
+  ShowWindow( fuse_hAYMixWnd, IsIconic( fuse_hAYMixWnd ) ? SW_RESTORE :
+                                                           SW_SHOW );
   SetForegroundWindow( fuse_hAYMixWnd );
+}
+
+/* The Mixer button: a minimized mixer comes back to the front, an open
+   one is closed, a closed one is opened */
+void
+win32_aymixer_toggle( void )
+{
+  if( fuse_hAYMixWnd && !IsIconic( fuse_hAYMixWnd ) )
+    win32_aymixer_close();
+  else
+    win32_aymixer_show();
+}
+
+/* The AY player was opened: from now on the mixer goes with it */
+void
+win32_aymixer_set_owner( HWND owner )
+{
+  if( fuse_hAYMixWnd )
+    SetWindowLongPtr( fuse_hAYMixWnd, GWLP_HWNDPARENT, (LONG_PTR)owner );
+}
+
+int
+win32_aymixer_is_open( void )
+{
+  return fuse_hAYMixWnd != NULL;
 }

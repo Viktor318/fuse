@@ -235,6 +235,32 @@ win32text_listview_item( HWND list, UINT message, WPARAM wparam,
   return result;
 }
 
+static const char*
+special( WCHAR letter, char *buffer, size_t size )
+{
+  WCHAR wide[2] = { letter, 0 };
+
+  if( !buffer[0] &&
+      WideCharToMultiByte( CP_ACP, 0, wide, -1, buffer, (int)size, NULL,
+                           NULL ) <= 0 )
+    buffer[0] = '\0';
+  return buffer[0] ? buffer : "-";
+}
+
+const char*
+win32text_dash( void )
+{
+  static char dash[8];
+  return special( 0x2013, dash, sizeof( dash ) );
+}
+
+const char*
+win32text_guillemet( void )
+{
+  static char guillemet[8];
+  return special( 0x00bb, guillemet, sizeof( guillemet ) );
+}
+
 LRESULT
 win32text_statusbar_text( HWND status, WPARAM part, const char *text )
 {

@@ -36,6 +36,22 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - *Options > Sound* keeps only the AY volume and the stereo mode of the AY
   settings; the places and the channel volumes are in the mixer.
 
+### AY player windows
+
+- The *List* and *Mixer...* buttons bring a minimized window back to the
+  front (instead of closing it); a shown window is closed, a closed one
+  opened.
+- The mixer goes with the player like the list: it is minimized, restored
+  and closed with it. Without the player (*Options > AY mixer...*) it can
+  still be opened by itself, e.g. for the music of a game.
+- The places of the AY player, the playlist, the mixer and the keyboard
+  picture (*Help > Keyboard*) are kept all the time, and which of them
+  were open as Fuse exits. With *Resume last session* on, the same
+  ones open at the next start (each on its own, always in normal size);
+  the player stands on the last song, without playing.
+- The dash (–) of the player's song line and the » of the playlist's
+  number show correctly on any code page.
+
 ### Files and screenshots
 
 - *File > Screenshot > Save Screen as PNG...*: the screen can be saved as a

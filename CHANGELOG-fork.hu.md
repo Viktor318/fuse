@@ -37,6 +37,24 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A *Beállítások > Hang* lapon az AY-beállítások közül az AY hangerő és a
   sztereó mód maradt; a helyek és a csatornahangerők a keverőben vannak.
 
+### AY lejátszó ablakai
+
+- A *Lista* és a *Keverő...* gomb a kicsinyített ablakot visszahozza és
+  előtérbe teszi (nem zárja be); a látható ablakot bezárja, a zártat
+  megnyitja.
+- A Keverő ugyanúgy a Lejátszóhoz tartozik, mint a Lista: vele együtt
+  kicsinyítődik, jön vissza és zárul be. A Lejátszó nélkül (*Beállítások >
+  AY keverő...*) továbbra is magában is megnyitható, pl. egy játék
+  zenéjéhez.
+- Az AY lejátszó, a Lista, a Keverő és a Billentyűzet (*Súgó >
+  Billentyűzet*) helyét a Fuse folyamatosan megjegyzi, és kilépéskor azt
+  is, melyik volt nyitva. Ha a *Folytatás ott, ahol abbahagytam* be van
+  kapcsolva, induláskor ugyanezek nyílnak meg (egymástól függetlenül,
+  mindig normál méretben); a Lejátszó az utolsó dalon áll, lejátszás
+  nélkül.
+- A lejátszó dal-sorában és a lista sorszámánál a gondolatjel (–) és a
+  » jel minden kódlapon helyesen jelenik meg.
+
 ### Fájlok és képernyőképek
 
 - *Fájl > Képernyőkép > Képernyő mentése PNG-ként...*: a képernyőkép PNG

@@ -55,6 +55,7 @@
 #include "win32internals.h"
 #include "win32text.h"
 #include "win32joystick.h"
+#include "ayplaylist.h"
 #include "winstate.h"
 
 #define MODAL_EMULATION_TIMER 0x4f55
@@ -131,6 +132,8 @@ static int win32ui_fullscreen_fit( void );
 
 static int
 selector_dialog( win32ui_select_info *items );
+
+static void win32ui_remember_open_windows( void );
 
 static void
 handle_drop( HDROP hDrop )
@@ -896,6 +899,9 @@ menu_file_exit( int action )
 
     if( menu_check_media_changed() ) return;
 
+    /* Before the main window takes the windows it owns with it */
+    win32ui_remember_open_windows();
+
     DestroyWindow(fuse_hWnd);
   }
 }
@@ -1160,6 +1166,42 @@ ui_widgets_reset( void )
 {
   win32ui_pokefinder_clear();
   return 0;
+}
+
+/* The AY player, the playlist, the AY mixer and the keyboard picture: open
+   or not as Fuse exits, opened again at the next start if the last session
+   is resumed. Their places are kept all the time by the windows */
+static void
+win32ui_remember_open_windows( void )
+{
+  winstate_set( "ayplayer", "open", fuse_hAYWnd != NULL );
+  winstate_set( "playlist", "open",
+                fuse_hAYWnd != NULL && win32_ayplaylist_is_open() );
+  winstate_set( "aymixer", "open", win32_aymixer_is_open() );
+  winstate_set( "keyboard", "open", win32ui_picture_is_open() );
+  winstate_set( "playlist", "current", ayplaylist_current() );
+}
+
+void
+win32ui_reopen_windows( void )
+{
+  long open, list, song;
+
+  if( winstate_get( "ayplayer", "open", &open ) && open ) {
+    if( !winstate_get( "playlist", "open", &list ) ) list = 0;
+    if( !winstate_get( "playlist", "current", &song ) ) song = -1;
+    win32_ayplayer_reopen( list, song );
+  }
+
+  /* After the player, so that it goes with the player */
+  if( winstate_get( "aymixer", "open", &open ) && open )
+    win32_aymixer_show();
+
+  if( winstate_get( "keyboard", "open", &open ) && open )
+    menu_help_keyboard( 0 );
+
+  /* The keys go to the emulated machine */
+  SetForegroundWindow( fuse_hWnd );
 }
 
 void

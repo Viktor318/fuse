@@ -61,6 +61,11 @@ int win32text_listview_insert_column( HWND list, int index,
 LRESULT win32text_listview_item( HWND list, UINT message, WPARAM wparam,
                                  const LVITEMA *item );
 
+/* A dash (en dash) and a right guillemet in the process code page: in
+   UTF-8 they take more than one byte */
+const char *win32text_dash( void );
+const char *win32text_guillemet( void );
+
 /* SB_SETTEXTA */
 LRESULT win32text_statusbar_text( HWND status, WPARAM part,
                                   const char *text );

@@ -53,6 +53,11 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   and special effects of YM5/YM6 are not played (the music is). For these
   Fuse has its own LHA (-lh5-) decompressor (after the method of lhasa and
   ar002).
+- **Vortex Tracker II text modules** (`.vt2`, and `.txt` files that start
+  with `[Module]`) play in the AY player like `.pt3` modules, with their
+  title and author. Other `.txt` files are not taken for music. Of a
+  TurboSound text module (two modules) the first one is played, as with
+  `.pt3`.
 - The stereo layout stored in a VTX file (Mono, ABC, ACB, BAC, BCA, CAB,
   CBA) is shown in the *Misc* line of the player ("Stereo: ACB"). With
   *Load the mixer settings of the songs automatically* it is also used

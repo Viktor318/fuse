@@ -187,12 +187,29 @@ has_extension( const char *filename, const char *extension )
   return 1;
 }
 
-/* The files of the player: AY files, Pro Tracker 3 modules and PSG, YM
-   and VTX register dumps */
+/* A .txt file is a Vortex Tracker text module if it starts so */
+static int
+is_text_module( const char *filename )
+{
+  unsigned char start[ 16 ];
+  size_t length;
+  FILE *f = fopen( filename, "rb" );
+
+  if( !f ) return 0;
+  length = fread( start, 1, sizeof( start ), f );
+  fclose( f );
+  return pt3_check( start, length );
+}
+
+/* The files of the player: AY files, Pro Tracker 3 modules (also Vortex
+   Tracker text: .vt2, and .txt files that are such), and PSG, YM and VTX
+   register dumps */
 int
 ayplayer_is_ay_file( const char *filename )
 {
   return has_extension( filename, "ay" ) || has_extension( filename, "pt3" ) ||
+         has_extension( filename, "vt2" ) ||
+         ( has_extension( filename, "txt" ) && is_text_module( filename ) ) ||
          has_extension( filename, "psg" ) || has_extension( filename, "ym" ) ||
          has_extension( filename, "vtx" );
 }

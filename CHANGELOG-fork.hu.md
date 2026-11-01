@@ -54,6 +54,11 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   számolja át. A YM5/YM6 digitális dobjai és különleges effektjei nem
   szólnak (a zene igen). Ehhez a Fuse saját LHA (-lh5-) kicsomagolót
   kapott (a lhasa és az ar002 módszere szerint).
+- **Vortex Tracker II szöveges modulok** (`.vt2`, és a `[Module]` sorral
+  kezdődő `.txt` fájlok) lejátszása az AY lejátszóban, ugyanúgy, mint a
+  `.pt3` moduloké, címmel és szerzővel. A többi `.txt` fájlt a Fuse nem
+  veszi zenének. A TurboSound szöveges modulnak (két modul) az első
+  modulja szól, ahogy a `.pt3`-nál.
 - A VTX fájlban tárolt sztereó elrendezés (Mono, ABC, ACB, BAC, BCA, CAB,
   CBA) megjelenik a lejátszó *Egyéb* sorában („Sztereó: ACB”). Ha a
   *Keverőbeállítások automatikus betöltése a dalokhoz* be van kapcsolva, a

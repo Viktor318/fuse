@@ -29,149 +29,8 @@
 #include <string.h>
 
 #include "pt3player.h"
-
-#define PT3_NOTES 96
-#define PT3_SAMPLES 32
-#define PT3_ORNAMENTS 16
-#define PT3_PATTERNS 85
-#define PT3_MAX_POSITIONS 255
-#define PT3_MAX_PATTERN_SIZE 256
-#define PT3_MAX_COMMANDS 8
-#define PT3_HEADER_SIZE 201	/* without the positions */
-#define PT3_MIN_SIZE 200
-#define PT3_MAX_SIZE 0xc000
-#define PT3_SINGLE_AY_MODE 0x20
-
-#define PT3_DEFAULT_SAMPLE 1
-#define PT3_DEFAULT_ORNAMENT 0
-
-/* No target note of a sliding */
-#define PT3_NO_TARGET 0xffffffffu
-
+#include "pt3model.h"
 #include "pt3tables.h"
-
-/* ------------------------------------------------------------------------
-   The module
-   ------------------------------------------------------------------------ */
-
-enum pt3_command_type {
-  PT3_GLISS = 1,		/* period, delta */
-  PT3_GLISS_NOTE,		/* period, delta, target note */
-  PT3_SAMPLEOFFSET,		/* offset */
-  PT3_ORNAMENTOFFSET,		/* offset */
-  PT3_VIBRATE,			/* on time, off time */
-  PT3_SLIDEENV,			/* period, delta */
-  PT3_NOENVELOPE,
-  PT3_ENVELOPE,			/* shape (r13), period */
-  PT3_NOISEBASE,		/* base */
-};
-
-struct pt3_command {
-  int type;
-  int param1, param2, param3;
-};
-
-/* What a pattern line sets on a channel */
-struct pt3_cell {
-  int has_enabled, enabled;
-  int has_note; unsigned int note;
-  int has_sample; unsigned int sample;
-  int has_ornament; unsigned int ornament;
-  int has_volume; unsigned int volume;
-  int command_count;
-  struct pt3_command commands[ PT3_MAX_COMMANDS ];
-};
-
-struct pt3_line {
-  int present;			/* the line has data */
-  unsigned int tempo;		/* 0: no change */
-  struct pt3_cell cells[3];
-};
-
-struct pt3_pattern {
-  int size;			/* lines; 0: no such pattern */
-  struct pt3_line *lines;
-};
-
-struct pt3_sample_line {
-  unsigned int level;
-  int volume_slide;
-  int tone_mask;
-  int tone_offset;
-  int keep_tone_offset;
-  int noise_mask;
-  int envelope_mask;
-  int noise_or_envelope_offset;
-  int keep_noise_or_envelope_offset;
-};
-
-struct pt3_sample {
-  unsigned int size, loop;
-  struct pt3_sample_line *lines;
-};
-
-struct pt3_ornament {
-  unsigned int size, loop;
-  signed char *lines;
-};
-
-/* The player */
-
-struct pt3_slider {
-  unsigned int period;
-  int value;
-  unsigned int counter;
-  int delta;
-};
-
-struct pt3_channel {
-  int enabled;
-  int envelope;
-  unsigned int note;
-  unsigned int sample;
-  unsigned int position_in_sample;
-  unsigned int ornament;
-  unsigned int position_in_ornament;
-  unsigned int volume;
-  int volume_slide;
-  struct pt3_slider tone_slider;
-  unsigned int sliding_target_note;
-  int sliding_delta;
-  int tone_accumulator;
-  int envelope_sliding;
-  int noise_sliding;
-  unsigned int vibrate_counter;
-  unsigned int vibrate_on;
-  unsigned int vibrate_off;
-};
-
-struct pt3_module {
-  char title[ 72 ];
-  char author[ 40 ];
-  unsigned int version;
-  const unsigned short *note_table;
-  const unsigned char *volume_table;
-  unsigned int initial_tempo;
-
-  unsigned int position_count;
-  unsigned int loop_position;
-  unsigned char positions[ PT3_MAX_POSITIONS ];
-
-  struct pt3_pattern patterns[ PT3_PATTERNS ];
-  struct pt3_sample samples[ PT3_SAMPLES ];
-  struct pt3_ornament ornaments[ PT3_ORNAMENTS ];
-
-  /* Track cursor */
-  unsigned int position, pattern, line, quirk, tempo;
-  int loops;
-
-  /* Player state */
-  struct pt3_channel channels[3];
-  unsigned int envelope_base;
-  struct pt3_slider envelope_slider;
-  unsigned int noise_base;
-  unsigned int noise_addon;
-};
 
 /* ------------------------------------------------------------------------
    Reading the module
@@ -223,8 +82,8 @@ header_size( const unsigned char *data, size_t length )
   return 0;
 }
 
-int
-pt3_check( const unsigned char *data, size_t length )
+static int
+compiled_check( const unsigned char *data, size_t length )
 {
   size_t size = header_size( data, length );
   unsigned int patterns;
@@ -235,6 +94,12 @@ pt3_check( const unsigned char *data, size_t length )
   patterns = data[103] | data[104] << 8;
   /* The pattern table follows the positions */
   return patterns == size;
+}
+
+int
+pt3_check( const unsigned char *data, size_t length )
+{
+  return compiled_check( data, length ) || pt3text_check( data, length );
 }
 
 static void
@@ -340,8 +205,9 @@ struct pt3_channel_cursor {
   unsigned int counter;
 };
 
-static void
-add_command( struct pt3_cell *cell, int type, int p1, int p2, int p3 )
+void
+pt3_model_add_command( struct pt3_cell *cell, int type, int p1, int p2,
+                       int p3 )
 {
   struct pt3_command *c;
 
@@ -353,8 +219,8 @@ add_command( struct pt3_cell *cell, int type, int p1, int p2, int p3 )
   c->param3 = p3;
 }
 
-static struct pt3_command *
-find_command( struct pt3_cell *cell, int type )
+struct pt3_command *
+pt3_model_find_command( struct pt3_cell *cell, int type )
 {
   int i;
 
@@ -384,9 +250,9 @@ read_channel( struct pt3_reader *r, struct pt3_channel_cursor *c,
         unsigned int type = cmd - ( cmd >= 0xb2 ? 0xb1 : 0x10 );
         unsigned int tone = read_be16( r, c->offset );
         c->offset += 2;
-        add_command( cell, PT3_ENVELOPE, type, tone, 0 );
+        pt3_model_add_command( cell, PT3_ENVELOPE, type, tone, 0 );
       } else {
-        add_command( cell, PT3_NOENVELOPE, 0, 0, 0 );
+        pt3_model_add_command( cell, PT3_NOENVELOPE, 0, 0, 0 );
       }
       if( has_ornament ) {
         cell->has_ornament = 1;
@@ -399,7 +265,7 @@ read_channel( struct pt3_reader *r, struct pt3_channel_cursor *c,
         cell->sample = valid ? double_sample / 2 : 0;
       }
     } else if( cmd < 0x40 ) {
-      add_command( cell, PT3_NOISEBASE, cmd - 0x20, 0, 0 );
+      pt3_model_add_command( cell, PT3_NOISEBASE, cmd - 0x20, 0, 0 );
     } else if( cmd < 0x50 ) {
       cell->has_ornament = 1;
       cell->ornament = cmd - 0x40;
@@ -407,7 +273,7 @@ read_channel( struct pt3_reader *r, struct pt3_channel_cursor *c,
       note = cmd - 0x50;
       break;
     } else if( cmd == 0xb0 ) {
-      add_command( cell, PT3_NOENVELOPE, 0, 0, 0 );
+      pt3_model_add_command( cell, PT3_NOENVELOPE, 0, 0, 0 );
     } else if( cmd == 0xb1 ) {
       c->period = ( read_byte( r, c->offset++ ) - 1 ) & 0xff;
     } else if( cmd == 0xc0 ) {
@@ -432,7 +298,7 @@ read_channel( struct pt3_reader *r, struct pt3_channel_cursor *c,
       unsigned int period = read_byte( r, c->offset++ );
       int step = read_le16_signed( r, c->offset );
       c->offset += 2;
-      add_command( cell, PT3_GLISS, period, step, 0 );
+      pt3_model_add_command( cell, PT3_GLISS, period, step, 0 );
       break;
     }
     case 2: {			/* portamento to the note */
@@ -441,27 +307,27 @@ read_channel( struct pt3_reader *r, struct pt3_channel_cursor *c,
       c->offset += 2;		/* limit: not used */
       step = read_le16_signed( r, c->offset );
       c->offset += 2;
-      add_command( cell, PT3_GLISS_NOTE, period, step, 0 );
+      pt3_model_add_command( cell, PT3_GLISS_NOTE, period, step, 0 );
       break;
     }
     case 3:
-      add_command( cell, PT3_SAMPLEOFFSET, read_byte( r, c->offset++ ), 0, 0 );
+      pt3_model_add_command( cell, PT3_SAMPLEOFFSET, read_byte( r, c->offset++ ), 0, 0 );
       break;
     case 4:
-      add_command( cell, PT3_ORNAMENTOFFSET, read_byte( r, c->offset++ ), 0,
+      pt3_model_add_command( cell, PT3_ORNAMENTOFFSET, read_byte( r, c->offset++ ), 0,
                    0 );
       break;
     case 5: {
       unsigned int on = read_byte( r, c->offset++ );
       unsigned int off = read_byte( r, c->offset++ );
-      add_command( cell, PT3_VIBRATE, on, off, 0 );
+      pt3_model_add_command( cell, PT3_VIBRATE, on, off, 0 );
       break;
     }
     case 8: {
       unsigned int period = read_byte( r, c->offset++ );
       int step = read_le16_signed( r, c->offset );
       c->offset += 2;
-      add_command( cell, PT3_SLIDEENV, period, step, 0 );
+      pt3_model_add_command( cell, PT3_SLIDEENV, period, step, 0 );
       break;
     }
     case 9:
@@ -471,7 +337,7 @@ read_channel( struct pt3_reader *r, struct pt3_channel_cursor *c,
   }
 
   if( note >= 0 ) {
-    struct pt3_command *gliss = find_command( cell, PT3_GLISS_NOTE );
+    struct pt3_command *gliss = pt3_model_find_command( cell, PT3_GLISS_NOTE );
     cell->has_enabled = 1;
     cell->enabled = 1;
     /* With a portamento the note is where to slide to */
@@ -547,6 +413,24 @@ read_pattern( pt3_module *m, struct pt3_reader *r, unsigned int index,
                  : 1;
 }
 
+void
+pt3_model_tables( pt3_module *m, unsigned int version,
+                  unsigned int note_table )
+{
+  m->version = version;
+  m->volume_table = version <= 4 ? pt3_volume_33 : pt3_volume_35;
+  switch( note_table ) {
+  case 1: m->note_table = pt3_table_st; break;
+  case 2: m->note_table = version <= 3 ? pt3_table_asm33 : pt3_table_asm34;
+    break;
+  case 3: m->note_table = version <= 3 ? pt3_table_real33 : pt3_table_real34;
+    break;
+  case 4: m->note_table = pt3_table_natural; break;
+  default: m->note_table = version <= 3 ? pt3_table_pt33 : pt3_table_pt34;
+    break;
+  }
+}
+
 pt3_module *
 pt3_load( const unsigned char *data, size_t length )
 {
@@ -555,8 +439,11 @@ pt3_load( const unsigned char *data, size_t length )
   size_t size, table, min_offset;
   unsigned int i, max_pattern = 0, version, tone_table;
 
+  /* Vortex Tracker text */
+  if( pt3text_check( data, length ) ) return pt3text_load( data, length );
+
   if( length > PT3_MAX_SIZE ) length = PT3_MAX_SIZE;
-  if( !pt3_check( data, length ) ) return NULL;
+  if( !compiled_check( data, length ) ) return NULL;
   size = header_size( data, length );
 
   m = calloc( 1, sizeof( *m ) );
@@ -569,19 +456,8 @@ pt3_load( const unsigned char *data, size_t length )
   read_texts( m, data );
 
   version = isdigit( data[13] ) ? (unsigned int)( data[13] - '0' ) : 6;
-  m->version = version;
-  m->volume_table = version <= 4 ? pt3_volume_33 : pt3_volume_35;
   tone_table = data[99];
-  switch( tone_table ) {
-  case 1: m->note_table = pt3_table_st; break;
-  case 2: m->note_table = version <= 3 ? pt3_table_asm33 : pt3_table_asm34;
-    break;
-  case 3: m->note_table = version <= 3 ? pt3_table_real33 : pt3_table_real34;
-    break;
-  case 4: m->note_table = pt3_table_natural; break;
-  default: m->note_table = version <= 3 ? pt3_table_pt33 : pt3_table_pt34;
-    break;
-  }
+  pt3_model_tables( m, version, tone_table );
   m->initial_tempo = data[100];
   m->loop_position = data[102];
 

@@ -29,8 +29,9 @@
 
 #include <stddef.h>
 
-/* Plays a Pro Tracker 3 (.pt3, also Vortex Tracker II) module: works out
-   the AY registers of every frame, as the player of the tracker does.
+/* Plays a Pro Tracker 3 (.pt3, also Vortex Tracker II, and its text
+   modules: .vt2, .txt) module: works out the AY registers of every frame,
+   as the player of the tracker does.
    Only the first AY of TurboSound modules is played for now. */
 
 typedef struct pt3_module pt3_module;

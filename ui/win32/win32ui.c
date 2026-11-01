@@ -891,6 +891,15 @@ win32ui_gain_focus( HWND hWnd, WPARAM wParam, LPARAM lParam )
 }
 
 /* Called by the menu when File/Exit selected */
+/* Hide a window of Fuse (but the main one) */
+static BOOL CALLBACK
+hide_window( HWND window, LPARAM main_window )
+{
+  if( window != (HWND)main_window && IsWindowVisible( window ) )
+    ShowWindow( window, SW_HIDE );
+  return TRUE;
+}
+
 void
 menu_file_exit( int action )
 {
@@ -901,6 +910,13 @@ menu_file_exit( int action )
 
     /* Before the main window takes the windows it owns with it */
     win32ui_remember_open_windows();
+
+    /* All the other windows (AY player, playlist, mixer, keyboard...) go
+       at once: whichever of them is not taken with the main window would
+       otherwise stay until Fuse has shut down its sound and saved its
+       settings */
+    EnumThreadWindows( GetCurrentThreadId(), hide_window,
+                       (LPARAM)fuse_hWnd );
 
     DestroyWindow(fuse_hWnd);
   }

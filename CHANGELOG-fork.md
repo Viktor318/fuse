@@ -82,6 +82,9 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
 ### AY player windows
 
+- When Fuse exits, all its windows (AY player, playlist, mixer, keyboard)
+  disappear at once. The mixer could stay on the screen for a moment
+  sometimes, until Fuse had closed its sound and saved its settings.
 - The *List* and *Mixer...* buttons bring a minimized window back to the
   front (instead of closing it); a shown window is closed, a closed one
   opened.

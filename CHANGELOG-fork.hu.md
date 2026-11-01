@@ -83,6 +83,10 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 
 ### AY lejátszó ablakai
 
+- Kilépéskor a Fuse összes ablaka (AY lejátszó, lista, keverő,
+  billentyűzet) egyszerre tűnik el. A keverő néha még egy pillanatig a
+  képernyőn maradt, amíg a Fuse lezárta a hangot és elmentette a
+  beállításokat.
 - A *Lista* és a *Keverő...* gomb a kicsinyített ablakot visszahozza és
   előtérbe teszi (nem zárja be); a látható ablakot bezárja, a zártat
   megnyitja.

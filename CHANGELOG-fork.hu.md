@@ -37,6 +37,15 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A *Beállítások > Hang* lapon az AY-beállítások közül az AY hangerő és a
   sztereó mód maradt; a helyek és a csatornahangerők a keverőben vannak.
 
+### AY zeneformátumok
+
+- **PSG fájlok** (`.psg`, emulátorok AY-regiszter felvételei) lejátszása az
+  AY lejátszóban: a hosszuk pontosan ismert, a dal ott véget ér.
+  Ugyanúgy megnyithatók, mint a többi zenefájl, felvehetők a lejátszási
+  listára (mappával is), és szerepelnek a fájlszűrőkben (*AY zenefájlok
+  (\*.ay;\*.pt3;\*.psg)*). A PSG fájlban nincs cím és szerző: a fájl neve
+  látszik.
+
 ### AY lejátszó ablakai
 
 - A *Lista* és a *Keverő...* gomb a kicsinyített ablakot visszahozza és

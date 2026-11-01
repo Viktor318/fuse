@@ -36,6 +36,15 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - *Options > Sound* keeps only the AY volume and the stereo mode of the AY
   settings; the places and the channel volumes are in the mixer.
 
+### AY music formats
+
+- **PSG files** (`.psg`, AY register recordings of emulators) play in the
+  AY player: their length is known exactly, the song ends there. They can
+  be opened like the other music files, added to the playlist (also with
+  a folder), and are in the file filters (*AY Music Files
+  (\*.ay;\*.pt3;\*.psg)*). A PSG file has no title or author: the file
+  name is shown.
+
 ### AY player windows
 
 - The *List* and *Mixer...* buttons bring a minimized window back to the

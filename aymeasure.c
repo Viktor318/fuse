@@ -189,14 +189,22 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
 
   *loop = 0;
   memset( recent, 0, sizeof( recent ) );
-  if( !source || !hash || !silent || !level || !block || !writes ) {
+
+  /* A register dump tells its length: it ends there */
+  if( source && aysource_exact_length( source ) > 0 ) {
+    found = aysource_exact_length( source );
+    *loop = -1;
+  }
+
+  if( found || !source || !hash || !silent || !level || !block ||
+      !writes ) {
     aysource_free( source );
     free( hash );
     free( silent );
     free( level );
     free( block );
     free( writes );
-    return 0;
+    return found;
   }
 
   while( frames < ( digital ? DIGITAL_MAX_FRAMES : MAX_FRAMES ) ) {

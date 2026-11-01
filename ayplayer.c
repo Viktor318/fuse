@@ -39,6 +39,7 @@
 #include "aymeasure.h"
 #include "aymix.h"
 #include "fuse.h"
+#include "psgplayer.h"
 #include "pt3player.h"
 #include "compat.h"
 #include "sound.h"
@@ -56,6 +57,8 @@ static char ay_misc[ 256 ];
 /* A Pro Tracker 3 module instead of an AY file (only for its texts here:
    aysource.c plays it) */
 static pt3_module *ay_pt3 = NULL;
+/* .psg: its length in frames (0: not a PSG file) */
+static long ay_psg_frames = 0;
 
 static int ay_songs = 0;		/* number of songs */
 static int ay_first_song = 0;		/* 0 based */
@@ -177,11 +180,13 @@ has_extension( const char *filename, const char *extension )
   return 1;
 }
 
-/* The files of the player: AY files and Pro Tracker 3 modules */
+/* The files of the player: AY files, Pro Tracker 3 modules and PSG
+   register dumps */
 int
 ayplayer_is_ay_file( const char *filename )
 {
-  return has_extension( filename, "ay" ) || has_extension( filename, "pt3" );
+  return has_extension( filename, "ay" ) || has_extension( filename, "pt3" ) ||
+         has_extension( filename, "psg" );
 }
 
 static int
@@ -202,6 +207,7 @@ free_file( void )
   ay_length = 0;
   if( ay_pt3 ) pt3_free( ay_pt3 );
   ay_pt3 = NULL;
+  ay_psg_frames = 0;
   ay_songs = 0;
   ay_current = -1;
 }
@@ -449,6 +455,7 @@ read_ay_file( const char *filename, libspectrum_byte **data, size_t *length )
   if( utils_read_file( filename, &file ) ) return 1;
 
   if( !is_ay_data( file.buffer, file.length ) &&
+      !psg_check( file.buffer, file.length ) &&
       !pt3_check( file.buffer, file.length ) ) {
     ui_error( UI_ERROR_ERROR, "'%s' is not an AY music file", filename );
     utils_close_file( &file );
@@ -478,7 +485,17 @@ ayplayer_load( const char *filename )
   ay_length = length;
   ay_file_checksum = checksum( ay_data, ay_length );
 
-  if( !is_ay_data( ay_data, ay_length ) ) {
+  if( psg_check( ay_data, ay_length ) ) {
+    psg_module *psg = psg_load( ay_data, ay_length );
+    if( !psg ) {
+      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PSG music file",
+                filename );
+      free_file();
+      return 1;
+    }
+    ay_psg_frames = psg_frames( psg );
+    psg_free( psg );
+  } else if( !is_ay_data( ay_data, ay_length ) ) {
     ay_pt3 = pt3_load( ay_data, ay_length );
     if( !ay_pt3 ) {
       ui_error( UI_ERROR_ERROR, "'%s' is not a valid PT3 music file",
@@ -497,6 +514,15 @@ ayplayer_load( const char *filename )
   for( p = filename; *p; p++ )
     if( *p == '/' || *p == '\\' ) name = p + 1;
   snprintf( ay_filename, sizeof( ay_filename ), "%s", name );
+
+  /* No title or author in a PSG file: the file name is shown */
+  if( ay_psg_frames ) {
+    ay_author[0] = '\0';
+    ay_misc[0] = '\0';
+    ay_songs = 1;
+    ay_first_song = 0;
+    return 0;
+  }
 
   if( ay_pt3 ) {
     snprintf( ay_author, sizeof( ay_author ), "%s", pt3_author( ay_pt3 ) );
@@ -533,6 +559,23 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
 
   memset( info, 0, sizeof( *info ) );
   if( read_ay_file( filename, &data, &length ) ) return 1;
+
+  if( psg_check( data, length ) ) {
+    psg_module *psg = psg_load( data, length );
+
+    if( !psg ) {
+      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PSG music file",
+                filename );
+      error = 1;
+    } else {
+      info->checksum = checksum( data, length );
+      info->songs = 1;
+      info->names = libspectrum_new0( ayplayer_song_title, 1 );
+      psg_free( psg );
+    }
+    libspectrum_free( data );
+    return error;
+  }
 
   if( !is_ay_data( data, length ) ) {
     pt3_module *module = pt3_load( data, length );
@@ -716,7 +759,9 @@ ayplayer_play( int song )
   if( !ay_data || song < 0 || song >= ay_songs ) return 1;
 
   /* The length from the file (0: not known), or the measured one */
-  if( !ay_pt3 ) {
+  if( ay_psg_frames ) {
+    length = (int)ay_psg_frames;
+  } else if( !ay_pt3 ) {
     long data = song_data( song );
     if( data < 0 ) return 1;
     length = word_at( data + 4 );
@@ -857,6 +902,7 @@ ayplayer_song_name( int song, char *text, size_t length )
   long songs;
 
   text[0] = '\0';
+  if( ay_psg_frames ) return;
   if( ay_pt3 ) {
     if( song == 0 ) snprintf( text, length, "%s", pt3_title( ay_pt3 ) );
     return;

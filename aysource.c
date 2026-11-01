@@ -53,6 +53,7 @@
 #include "sound/chips_z80.h"
 
 #include "aysource.h"
+#include "psgplayer.h"
 #include "pt3player.h"
 
 /* The interrupt is held this long at the start of the frame (128K) */
@@ -66,6 +67,8 @@ struct aysource {
   int selected, chip;
   /* .pt3: the module */
   pt3_module *pt3;
+  /* .psg: the register writes */
+  psg_module *psg;
   unsigned char registers[ 16 ];
 };
 
@@ -238,7 +241,18 @@ aysource_new( const unsigned char *data, size_t length, int song )
     return s;
   }
 
-  if( song != 0 || !( s->pt3 = pt3_load( data, length ) ) ) {
+  if( song != 0 ) {
+    free( s );
+    return NULL;
+  }
+  if( psg_check( data, length ) ) {
+    if( !( s->psg = psg_load( data, length ) ) ) {
+      free( s );
+      return NULL;
+    }
+    return s;
+  }
+  if( !( s->pt3 = pt3_load( data, length ) ) ) {
     free( s );
     return NULL;
   }
@@ -251,6 +265,7 @@ aysource_free( aysource *source )
 {
   if( !source ) return;
   if( source->pt3 ) pt3_free( source->pt3 );
+  if( source->psg ) psg_free( source->psg );
   free( source );
 }
 
@@ -258,6 +273,12 @@ const unsigned char *
 aysource_registers( const aysource *source )
 {
   return source->registers;
+}
+
+long
+aysource_exact_length( const aysource *source )
+{
+  return source->psg ? psg_frames( source->psg ) : 0;
 }
 
 static int
@@ -287,6 +308,23 @@ frame_pt3( aysource *s, aysource_write *writes, int max )
   return count;
 }
 
+static int
+frame_psg( aysource *s, aysource_write *writes, int max )
+{
+  unsigned char registers[ PSG_REGISTERS ];
+  unsigned int mask;
+  int reg, count = 0;
+
+  memcpy( registers, s->registers, PSG_REGISTERS );
+  psg_frame( s->psg, registers, &mask );
+  for( reg = 0; reg < PSG_REGISTERS; reg++ ) {
+    if( !( mask & ( 1u << reg ) ) ) continue;
+    s->registers[ reg ] = registers[ reg ];
+    count = keep( writes, max, count, 0, reg, registers[ reg ] );
+  }
+  return count;
+}
+
 int
 aysource_frame( aysource *s, aysource_write *writes, int max )
 {
@@ -297,6 +335,7 @@ aysource_frame( aysource *s, aysource_write *writes, int max )
   unsigned int t;
 
   if( s->pt3 ) return frame_pt3( s, writes, max );
+  if( s->psg ) return frame_psg( s, writes, max );
 
   for( t = 0; t < AYSOURCE_FRAME_TSTATES; t++ ) {
     if( t < INT_TSTATES ) pins |= Z80_INT;

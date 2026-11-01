@@ -34,7 +34,7 @@
 #define SKIP 0xfe		/* 4 * n frames */
 #define END 0xfd		/* the end of the music */
 
-struct psg_module {
+struct psgplayer_module {
   unsigned char *data;
   size_t length;
   size_t start;			/* the first byte after the header */
@@ -47,7 +47,7 @@ struct psg_module {
 };
 
 int
-psg_check( const unsigned char *data, size_t length )
+psgplayer_check( const unsigned char *data, size_t length )
 {
   return length > HEADER_LENGTH && !memcmp( data, "PSG\x1a", 4 );
 }
@@ -100,14 +100,14 @@ count_frames( const unsigned char *data, size_t length, size_t start )
   return frames;
 }
 
-psg_module *
-psg_load( const unsigned char *data, size_t length )
+psgplayer_module *
+psgplayer_load( const unsigned char *data, size_t length )
 {
-  psg_module *module;
+  psgplayer_module *module;
   size_t start;
   long frames;
 
-  if( !psg_check( data, length ) ) return NULL;
+  if( !psgplayer_check( data, length ) ) return NULL;
   start = data_start( data );
   frames = count_frames( data, length, start );
   if( frames <= 0 ) return NULL;
@@ -123,12 +123,12 @@ psg_load( const unsigned char *data, size_t length )
   module->length = length;
   module->start = start;
   module->frames = frames;
-  psg_reset( module );
+  psgplayer_reset( module );
   return module;
 }
 
 void
-psg_free( psg_module *module )
+psgplayer_free( psgplayer_module *module )
 {
   if( !module ) return;
   free( module->data );
@@ -136,13 +136,13 @@ psg_free( psg_module *module )
 }
 
 long
-psg_frames( const psg_module *module )
+psgplayer_frames( const psgplayer_module *module )
 {
   return module->frames;
 }
 
 void
-psg_reset( psg_module *module )
+psgplayer_reset( psgplayer_module *module )
 {
   module->position = module->start;
   module->empty = 0;
@@ -154,14 +154,15 @@ psg_reset( psg_module *module )
 
 /* The register writes of a frame, up to the next mark */
 static void
-read_writes( psg_module *m, unsigned char *registers, unsigned int *mask )
+read_writes( psgplayer_module *m, unsigned char *registers,
+             unsigned int *mask )
 {
   while( m->position < m->length ) {
     unsigned char reg = m->data[ m->position ];
 
     if( reg == FRAME || reg == SKIP ) return;
     if( reg > 15 || m->position + 1 >= m->length ) break;
-    if( reg < PSG_REGISTERS ) {
+    if( reg < PSGPLAYER_REGISTERS ) {
       registers[ reg ] = m->data[ m->position + 1 ];
       *mask |= 1u << reg;
     }
@@ -172,8 +173,9 @@ read_writes( psg_module *m, unsigned char *registers, unsigned int *mask )
 }
 
 void
-psg_frame( psg_module *m, unsigned char registers[ PSG_REGISTERS ],
-           unsigned int *mask )
+psgplayer_frame( psgplayer_module *m,
+                 unsigned char registers[ PSGPLAYER_REGISTERS ],
+                 unsigned int *mask )
 {
   *mask = 0;
 

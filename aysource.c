@@ -68,7 +68,7 @@ struct aysource {
   /* .pt3: the module */
   pt3_module *pt3;
   /* .psg: the register writes */
-  psg_module *psg;
+  psgplayer_module *psg;
   unsigned char registers[ 16 ];
 };
 
@@ -245,8 +245,8 @@ aysource_new( const unsigned char *data, size_t length, int song )
     free( s );
     return NULL;
   }
-  if( psg_check( data, length ) ) {
-    if( !( s->psg = psg_load( data, length ) ) ) {
+  if( psgplayer_check( data, length ) ) {
+    if( !( s->psg = psgplayer_load( data, length ) ) ) {
       free( s );
       return NULL;
     }
@@ -265,7 +265,7 @@ aysource_free( aysource *source )
 {
   if( !source ) return;
   if( source->pt3 ) pt3_free( source->pt3 );
-  if( source->psg ) psg_free( source->psg );
+  if( source->psg ) psgplayer_free( source->psg );
   free( source );
 }
 
@@ -278,7 +278,7 @@ aysource_registers( const aysource *source )
 long
 aysource_exact_length( const aysource *source )
 {
-  return source->psg ? psg_frames( source->psg ) : 0;
+  return source->psg ? psgplayer_frames( source->psg ) : 0;
 }
 
 static int
@@ -311,13 +311,13 @@ frame_pt3( aysource *s, aysource_write *writes, int max )
 static int
 frame_psg( aysource *s, aysource_write *writes, int max )
 {
-  unsigned char registers[ PSG_REGISTERS ];
+  unsigned char registers[ PSGPLAYER_REGISTERS ];
   unsigned int mask;
   int reg, count = 0;
 
-  memcpy( registers, s->registers, PSG_REGISTERS );
-  psg_frame( s->psg, registers, &mask );
-  for( reg = 0; reg < PSG_REGISTERS; reg++ ) {
+  memcpy( registers, s->registers, PSGPLAYER_REGISTERS );
+  psgplayer_frame( s->psg, registers, &mask );
+  for( reg = 0; reg < PSGPLAYER_REGISTERS; reg++ ) {
     if( !( mask & ( 1u << reg ) ) ) continue;
     s->registers[ reg ] = registers[ reg ];
     count = keep( writes, max, count, 0, reg, registers[ reg ] );

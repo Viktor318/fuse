@@ -30,27 +30,28 @@
    FEh n (4 * n frames), FDh (the end), or a register (0-15) and its
    value. It has no title or author, and its length is known exactly. */
 
-typedef struct psg_module psg_module;
+typedef struct psgplayer_module psgplayer_module;
 
-#define PSG_REGISTERS 14
+#define PSGPLAYER_REGISTERS 14
 
 /* Whether the data looks like a PSG file */
-int psg_check( const unsigned char *data, size_t length );
+int psgplayer_check( const unsigned char *data, size_t length );
 
 /* NULL if the data is not a PSG file with any frames. The data is copied */
-psg_module *psg_load( const unsigned char *data, size_t length );
-void psg_free( psg_module *module );
+psgplayer_module *psgplayer_load( const unsigned char *data, size_t length );
+void psgplayer_free( psgplayer_module *module );
 
 /* The number of frames */
-long psg_frames( const psg_module *module );
+long psgplayer_frames( const psgplayer_module *module );
 
 /* Back to the start */
-void psg_reset( psg_module *module );
+void psgplayer_reset( psgplayer_module *module );
 
 /* The registers of the next frame; *mask tells which ones were written
    (register 13 only when the file writes it, as writing it starts the
    envelope again). After the last frame nothing is written */
-void psg_frame( psg_module *module, unsigned char registers[ PSG_REGISTERS ],
-                unsigned int *mask );
+void psgplayer_frame( psgplayer_module *module,
+                      unsigned char registers[ PSGPLAYER_REGISTERS ],
+                      unsigned int *mask );
 
 #endif			/* #ifndef FUSE_PSGPLAYER_H */

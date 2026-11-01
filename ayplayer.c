@@ -455,7 +455,7 @@ read_ay_file( const char *filename, libspectrum_byte **data, size_t *length )
   if( utils_read_file( filename, &file ) ) return 1;
 
   if( !is_ay_data( file.buffer, file.length ) &&
-      !psg_check( file.buffer, file.length ) &&
+      !psgplayer_check( file.buffer, file.length ) &&
       !pt3_check( file.buffer, file.length ) ) {
     ui_error( UI_ERROR_ERROR, "'%s' is not an AY music file", filename );
     utils_close_file( &file );
@@ -485,16 +485,16 @@ ayplayer_load( const char *filename )
   ay_length = length;
   ay_file_checksum = checksum( ay_data, ay_length );
 
-  if( psg_check( ay_data, ay_length ) ) {
-    psg_module *psg = psg_load( ay_data, ay_length );
+  if( psgplayer_check( ay_data, ay_length ) ) {
+    psgplayer_module *psg = psgplayer_load( ay_data, ay_length );
     if( !psg ) {
       ui_error( UI_ERROR_ERROR, "'%s' is not a valid PSG music file",
                 filename );
       free_file();
       return 1;
     }
-    ay_psg_frames = psg_frames( psg );
-    psg_free( psg );
+    ay_psg_frames = psgplayer_frames( psg );
+    psgplayer_free( psg );
   } else if( !is_ay_data( ay_data, ay_length ) ) {
     ay_pt3 = pt3_load( ay_data, ay_length );
     if( !ay_pt3 ) {
@@ -560,8 +560,8 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
   memset( info, 0, sizeof( *info ) );
   if( read_ay_file( filename, &data, &length ) ) return 1;
 
-  if( psg_check( data, length ) ) {
-    psg_module *psg = psg_load( data, length );
+  if( psgplayer_check( data, length ) ) {
+    psgplayer_module *psg = psgplayer_load( data, length );
 
     if( !psg ) {
       ui_error( UI_ERROR_ERROR, "'%s' is not a valid PSG music file",
@@ -571,7 +571,7 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
       info->checksum = checksum( data, length );
       info->songs = 1;
       info->names = libspectrum_new0( ayplayer_song_title, 1 );
-      psg_free( psg );
+      psgplayer_free( psg );
     }
     libspectrum_free( data );
     return error;

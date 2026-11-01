@@ -59,6 +59,21 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   `.pt3` moduloké, címmel és szerzővel. A többi `.txt` fájlt a Fuse nem
   veszi zenének. A TurboSound szöveges modulnak (két modul) az első
   modulja szól, ahogy a `.pt3`-nál.
+- További három tracker moduljai szólnak az AY lejátszóban: **Sound
+  Tracker** (`.stc`), **Pro Tracker 2** (`.pt2`) és **ASC Sound Master**
+  (`.asc`, és első változata, `.as0`), címmel (és szerzővel, ahol a
+  formátumban van). A lejátszók a ZXTune lejátszóinak átiratai; a ZXTune
+  mintamoduljain minden képkocka minden AY-regisztere egyezik egy
+  ZXTune-buildével, és ugyanígy a hosszak és az ismétlési pontok is.
+- A trackermodulok (a `.pt3` és a Vortex szöveges modulok is) hosszát a
+  Fuse mostantól a modulból veszi, ahogy a ZXTune: az utolsó pozíció
+  végéig tart, és az ismétlési pozíciótól megy tovább. Eddig a hangból
+  mérte, ami korábban is megtalálhatta az ismétlődést (pl. a „Speccy 2”
+  7 másodperccel rövidebbnek látszott). A korábban mért hosszakat a dal
+  lejátszásakor, illetve a *Hosszak mérése* gombra újraméri.
+- Az AY lejátszó formátumai a Fuse-on belül közös felületet kaptak, így
+  az újabbak egyenként hozzáadhatók. A fájlablakok *AY zenefájlok
+  (\*.ay;\*.pt3;\*.stc;\*.ym;...)* néven sorolják fel őket.
 - A VTX fájlban tárolt sztereó elrendezés (Mono, ABC, ACB, BAC, BCA, CAB,
   CBA) megjelenik a lejátszó *Egyéb* sorában („Sztereó: ACB”). Ha a
   *Keverőbeállítások automatikus betöltése a dalokhoz* be van kapcsolva, a

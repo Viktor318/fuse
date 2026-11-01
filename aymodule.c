@@ -20,7 +20,9 @@
 
 #include <stdlib.h>
 
+#include "ascplayer.h"
 #include "aymodule.h"
+#include "pt2player.h"
 #include "psgplayer.h"
 #include "pt3player.h"
 #include "stcplayer.h"
@@ -102,6 +104,24 @@ static const aymodule_format pt3_format = {
   pt3_length_module, NULL
 };
 
+/* Pro Tracker 2 */
+
+static void *pt2_load_module( const unsigned char *d, size_t l )
+{ return pt2_load( d, l ); }
+static void pt2_free_module( void *m ) { pt2_free( m ); }
+static void pt2_reset_module( void *m ) { pt2_reset( m ); }
+static void pt2_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ pt2_frame( m, r, mask ); }
+static const char *pt2_title_module( const void *m )
+{ return pt2_title( m ); }
+static long pt2_length_module( const void *m, long *loop )
+{ return pt2_length( (pt2_module *)m, loop ); }
+
+static const aymodule_format pt2_format = {
+  "PT2", pt2_check, pt2_load_module, pt2_free_module, pt2_reset_module,
+  pt2_frame_module, pt2_title_module, NULL, NULL, pt2_length_module, NULL
+};
+
 /* Sound Tracker */
 
 static void *stc_load_module( const unsigned char *d, size_t l )
@@ -120,13 +140,45 @@ static const aymodule_format stc_format = {
   stc_frame_module, stc_title_module, NULL, NULL, stc_length_module, NULL
 };
 
+/* ASC Sound Master (version 0: .as0, version 1: .asc) */
+
+static void *asc_load_module( const unsigned char *d, size_t l )
+{ return asc_load( d, l ); }
+static void *asc0_load_module( const unsigned char *d, size_t l )
+{ return asc0_load( d, l ); }
+static void asc_free_module( void *m ) { asc_free( m ); }
+static void asc_reset_module( void *m ) { asc_reset( m ); }
+static void asc_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ asc_frame( m, r, mask ); }
+static const char *asc_title_module( const void *m )
+{ return asc_title( m ); }
+static const char *asc_author_module( const void *m )
+{ return asc_author( m ); }
+static long asc_length_module( const void *m, long *loop )
+{ return asc_length( (asc_module *)m, loop ); }
+
+static const aymodule_format as0_format = {
+  "AS0", asc0_check, asc0_load_module, asc_free_module, asc_reset_module,
+  asc_frame_module, asc_title_module, asc_author_module, NULL,
+  asc_length_module, NULL
+};
+
+static const aymodule_format asc_format = {
+  "ASC", asc_check, asc_load_module, asc_free_module, asc_reset_module,
+  asc_frame_module, asc_title_module, asc_author_module, NULL,
+  asc_length_module, NULL
+};
+
 /* The formats in the order they are tried: those with a signature first,
-   then those told by their structure only */
+   then those told by their structure only, in ZXTune's order */
 static const aymodule_format * const formats[] = {
   &psg_format,
   &ym_format,
   &pt3_format,
+  &pt2_format,
   &stc_format,
+  &as0_format,
+  &asc_format,
   NULL
 };
 

@@ -58,6 +58,21 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   title and author. Other `.txt` files are not taken for music. Of a
   TurboSound text module (two modules) the first one is played, as with
   `.pt3`.
+- **Tracker modules** of three more trackers play in the AY player:
+  **Sound Tracker** (`.stc`), **Pro Tracker 2** (`.pt2`) and **ASC Sound
+  Master** (`.asc`, and its first version `.as0`), with their titles (and
+  authors, where the format has them). The players are ports of ZXTune's;
+  on ZXTune's sample modules every AY register of every frame matches a
+  ZXTune build, and so do the lengths and loop points.
+- The length of tracker modules (also `.pt3` and Vortex text modules) is
+  now taken from the module, as ZXTune does: up to the end of its last
+  position, going on from its loop position. It was measured from the
+  sound before, which could find the repetition earlier (e.g. "Speccy 2"
+  seemed 7 seconds shorter). Lengths measured before are measured again
+  when the song is played or with *Measure lengths*.
+- The formats of the AY player share one interface inside Fuse, so new
+  ones can be added one by one. The file dialogs list them as *AY Music
+  Files (\*.ay;\*.pt3;\*.stc;\*.ym;...)*.
 - The stereo layout stored in a VTX file (Mono, ABC, ACB, BAC, BCA, CAB,
   CBA) is shown in the *Misc* line of the player ("Stereo: ACB"). With
   *Load the mixer settings of the songs automatically* it is also used

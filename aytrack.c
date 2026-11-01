@@ -237,6 +237,8 @@ aytrack_length( aytrack *t, long *loop )
     aytrack_next_frame( t );
     frames++;
   }
+  /* A loop position past the last one: as ZXTune, the loop is the end */
+  if( t->loop_position >= t->position_count ) *loop = frames;
   aytrack_reset( t );
   return frames;
 }

@@ -1,0 +1,220 @@
+/* aymodule.c: The music formats played by register (trackers and register
+   dumps), behind one interface
+   Copyright (c) 2026 Viktor (GitHub: Viktor318)
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+*/
+
+#include <stdlib.h>
+
+#include "aymodule.h"
+#include "psgplayer.h"
+#include "pt3player.h"
+#include "ymplayer.h"
+
+struct aymodule {
+  const aymodule_format *format;
+  void *data;
+};
+
+/* ------------------------------------------------------------------------
+   The formats
+   ------------------------------------------------------------------------ */
+
+/* PSG register dumps */
+
+static void *psg_load( const unsigned char *d, size_t l )
+{ return psgplayer_load( d, l ); }
+static void psg_free( void *m ) { psgplayer_free( m ); }
+static void psg_reset( void *m ) { psgplayer_reset( m ); }
+static void psg_frame( void *m, unsigned char *r, unsigned int *mask )
+{ psgplayer_frame( m, r, mask ); }
+static long
+psg_length( const void *m, long *loop )
+{
+  *loop = -1;
+  return psgplayer_frames( m );
+}
+
+static const aymodule_format psg_format = {
+  "PSG", psgplayer_check, psg_load, psg_free, psg_reset, psg_frame,
+  NULL, NULL, NULL, psg_length, NULL
+};
+
+/* YM and VTX register dumps */
+
+static void *ym_load( const unsigned char *d, size_t l )
+{ return ymplayer_load( d, l ); }
+static void ym_free( void *m ) { ymplayer_free( m ); }
+static void ym_reset( void *m ) { ymplayer_reset( m ); }
+static void ym_frame( void *m, unsigned char *r, unsigned int *mask )
+{ ymplayer_frame( m, r, mask ); }
+static const char *ym_title( const void *m ) { return ymplayer_title( m ); }
+static const char *ym_author( const void *m ) { return ymplayer_author( m ); }
+static const char *ym_comment( const void *m )
+{ return ymplayer_comment( m ); }
+static const char *ym_stereo( const void *m ) { return ymplayer_stereo( m ); }
+static long
+ym_length( const void *m, long *loop )
+{
+  *loop = ymplayer_loop( m );
+  return ymplayer_frames( m );
+}
+
+static const aymodule_format ym_format = {
+  "YM/VTX", ymplayer_check, ym_load, ym_free, ym_reset, ym_frame,
+  ym_title, ym_author, ym_comment, ym_length, ym_stereo
+};
+
+/* Pro Tracker 3 (also Vortex Tracker II, and its text modules) */
+
+static void *pt3_load_module( const unsigned char *d, size_t l )
+{ return pt3_load( d, l ); }
+static void pt3_free_module( void *m ) { pt3_free( m ); }
+static void pt3_reset_module( void *m ) { pt3_reset( m ); }
+static void pt3_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ pt3_frame( m, r, mask ); }
+static const char *pt3_title_module( const void *m )
+{ return pt3_title( m ); }
+static const char *pt3_author_module( const void *m )
+{ return pt3_author( m ); }
+
+static const aymodule_format pt3_format = {
+  "PT3", pt3_check, pt3_load_module, pt3_free_module, pt3_reset_module,
+  pt3_frame_module, pt3_title_module, pt3_author_module, NULL, NULL, NULL
+};
+
+/* The formats in the order they are tried: those with a signature first,
+   then those told by their structure only */
+static const aymodule_format * const formats[] = {
+  &psg_format,
+  &ym_format,
+  &pt3_format,
+  NULL
+};
+
+/* ------------------------------------------------------------------------
+   The interface
+   ------------------------------------------------------------------------ */
+
+const aymodule_format *
+aymodule_identify( const unsigned char *data, size_t length )
+{
+  int i;
+
+  for( i = 0; formats[i]; i++ )
+    if( formats[i]->check( data, length ) ) return formats[i];
+  return NULL;
+}
+
+aymodule *
+aymodule_load( const unsigned char *data, size_t length )
+{
+  aymodule *m;
+  int i;
+
+  /* The first format that loads it: a weak check may match more than one */
+  for( i = 0; formats[i]; i++ ) {
+    void *loaded;
+
+    if( !formats[i]->check( data, length ) ) continue;
+    loaded = formats[i]->load( data, length );
+    if( !loaded ) continue;
+    m = malloc( sizeof( *m ) );
+    if( !m ) {
+      formats[i]->free( loaded );
+      return NULL;
+    }
+    m->format = formats[i];
+    m->data = loaded;
+    return m;
+  }
+  return NULL;
+}
+
+void
+aymodule_free( aymodule *module )
+{
+  if( !module ) return;
+  module->format->free( module->data );
+  free( module );
+}
+
+const aymodule_format *
+aymodule_format_of( const aymodule *module )
+{
+  return module->format;
+}
+
+void
+aymodule_reset( aymodule *module )
+{
+  module->format->reset( module->data );
+}
+
+void
+aymodule_frame( aymodule *module,
+                unsigned char registers[ AYMODULE_REGISTERS ],
+                unsigned int *mask )
+{
+  module->format->frame( module->data, registers, mask );
+}
+
+static const char *
+text( const char *( *get )( const void *module ), const aymodule *module )
+{
+  const char *value = get ? get( module->data ) : NULL;
+  return value ? value : "";
+}
+
+const char *
+aymodule_title( const aymodule *module )
+{
+  return text( module->format->title, module );
+}
+
+const char *
+aymodule_author( const aymodule *module )
+{
+  return text( module->format->author, module );
+}
+
+const char *
+aymodule_comment( const aymodule *module )
+{
+  return text( module->format->comment, module );
+}
+
+const char *
+aymodule_stereo( const aymodule *module )
+{
+  return text( module->format->stereo, module );
+}
+
+long
+aymodule_exact_length( const aymodule *module, long *loop )
+{
+  long frames;
+
+  *loop = -1;
+  if( !module->format->exact_length ) return 0;
+  frames = module->format->exact_length( module->data, loop );
+  if( frames <= 0 ) {
+    *loop = -1;
+    return 0;
+  }
+  return frames;
+}

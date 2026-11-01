@@ -39,9 +39,7 @@
 #include "aymeasure.h"
 #include "aymix.h"
 #include "fuse.h"
-#include "psgplayer.h"
-#include "pt3player.h"
-#include "ymplayer.h"
+#include "aymodule.h"
 #include "compat.h"
 #include "sound.h"
 #include "ui/ui.h"
@@ -55,17 +53,16 @@ static char ay_filename[ 256 ];
 static char ay_author[ 256 ];
 static char ay_misc[ 256 ];
 
-/* A Pro Tracker 3 module instead of an AY file (only for its texts here:
-   aysource.c plays it) */
-static pt3_module *ay_pt3 = NULL;
-/* Register dumps (.psg, .ym, .vtx): what the file tells of its song */
-typedef struct dump_info {
-  long frames, loop;		/* loop -1: the music ends */
+/* A tracker module or register dump instead of an AY file (aymodule.c;
+   aysource.c plays it): what the file tells of its one song */
+typedef struct module_info {
+  long frames, loop;		/* exact length (0: to be measured); loop
+				   -1: the music ends */
   char title[ 256 ], author[ 256 ], misc[ 256 ];
   char stereo[ 8 ];		/* stored in the file ("": none) */
-} dump_info;
-static int ay_is_dump = 0;
-static dump_info ay_dump;
+} module_info;
+static int ay_is_module = 0;
+static module_info ay_module;
 
 static int ay_songs = 0;		/* number of songs */
 static int ay_first_song = 0;		/* 0 based */
@@ -198,7 +195,7 @@ is_text_module( const char *filename )
   if( !f ) return 0;
   length = fread( start, 1, sizeof( start ), f );
   fclose( f );
-  return pt3_check( start, length );
+  return aymodule_identify( start, length ) != NULL;
 }
 
 /* The files of the player: AY files, Pro Tracker 3 modules (also Vortex
@@ -230,9 +227,7 @@ free_file( void )
   libspectrum_free( ay_data );
   ay_data = NULL;
   ay_length = 0;
-  if( ay_pt3 ) pt3_free( ay_pt3 );
-  ay_pt3 = NULL;
-  ay_is_dump = 0;
+  ay_is_module = 0;
   ay_songs = 0;
   ay_current = -1;
 }
@@ -480,9 +475,7 @@ read_ay_file( const char *filename, libspectrum_byte **data, size_t *length )
   if( utils_read_file( filename, &file ) ) return 1;
 
   if( !is_ay_data( file.buffer, file.length ) &&
-      !psgplayer_check( file.buffer, file.length ) &&
-      !ymplayer_check( file.buffer, file.length ) &&
-      !pt3_check( file.buffer, file.length ) ) {
+      !aymodule_identify( file.buffer, file.length ) ) {
     ui_error( UI_ERROR_ERROR, "'%s' is not an AY music file", filename );
     utils_close_file( &file );
     return 1;
@@ -495,48 +488,35 @@ read_ay_file( const char *filename, libspectrum_byte **data, size_t *length )
   return 0;
 }
 
-/* A register dump: 1 with what it tells, 0 if the data is not one, -1 if
-   it is damaged (with an error shown) */
+/* A tracker module or register dump: 1 with what it tells, 0 if the
+   data is not one, -1 if it is damaged (with an error shown) */
 static int
-read_dump( const libspectrum_byte *data, size_t length, const char *filename,
-           dump_info *info )
+read_module( const libspectrum_byte *data, size_t length,
+             const char *filename, module_info *info )
 {
+  const aymodule_format *format = aymodule_identify( data, length );
+  aymodule *module;
+
   memset( info, 0, sizeof( *info ) );
+  if( !format ) return 0;
 
-  if( psgplayer_check( data, length ) ) {
-    psgplayer_module *psg = psgplayer_load( data, length );
-    if( !psg ) {
-      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PSG music file",
-                filename );
-      return -1;
-    }
-    info->frames = psgplayer_frames( psg );
-    info->loop = -1;
-    psgplayer_free( psg );
-    return 1;
+  module = aymodule_load( data, length );
+  if( !module ) {
+    ui_error( UI_ERROR_ERROR, "'%s' is not a valid %s music file", filename,
+              format->name );
+    return -1;
   }
-
-  if( ymplayer_check( data, length ) ) {
-    ymplayer_module *ym = ymplayer_load( data, length );
-    if( !ym ) {
-      ui_error( UI_ERROR_ERROR, "'%s' is not a valid YM or VTX music file",
-                filename );
-      return -1;
-    }
-    info->frames = ymplayer_frames( ym );
-    info->loop = ymplayer_loop( ym );
-    snprintf( info->title, sizeof( info->title ), "%s", ymplayer_title( ym ) );
-    snprintf( info->author, sizeof( info->author ), "%s",
-              ymplayer_author( ym ) );
-    snprintf( info->misc, sizeof( info->misc ), "%s",
-              ymplayer_comment( ym ) );
-    snprintf( info->stereo, sizeof( info->stereo ), "%s",
-              ymplayer_stereo( ym ) );
-    ymplayer_free( ym );
-    return 1;
-  }
-
-  return 0;
+  info->frames = aymodule_exact_length( module, &info->loop );
+  snprintf( info->title, sizeof( info->title ), "%s",
+            aymodule_title( module ) );
+  snprintf( info->author, sizeof( info->author ), "%s",
+            aymodule_author( module ) );
+  snprintf( info->misc, sizeof( info->misc ), "%s",
+            aymodule_comment( module ) );
+  snprintf( info->stereo, sizeof( info->stereo ), "%s",
+            aymodule_stereo( module ) );
+  aymodule_free( module );
+  return 1;
 }
 
 int
@@ -555,23 +535,16 @@ ayplayer_load( const char *filename )
   ay_length = length;
   ay_file_checksum = checksum( ay_data, ay_length );
 
-  ay_is_dump = read_dump( ay_data, ay_length, filename, &ay_dump );
-  if( ay_is_dump < 0 ) {
-    ay_is_dump = 0;
-    free_file();
-    return 1;
-  } else if( ay_is_dump ) {
-    /* Nothing more to check */
-  } else if( !is_ay_data( ay_data, ay_length ) ) {
-    ay_pt3 = pt3_load( ay_data, ay_length );
-    if( !ay_pt3 ) {
-      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PT3 music file",
+  if( is_ay_data( ay_data, ay_length ) ) {
+    if( song_data( 0 ) < 0 ) {
+      ui_error( UI_ERROR_ERROR, "'%s' is not a valid AY music file",
                 filename );
       free_file();
       return 1;
     }
-  } else if( song_data( 0 ) < 0 ) {
-    ui_error( UI_ERROR_ERROR, "'%s' is not a valid AY music file", filename );
+  } else if( read_module( ay_data, ay_length, filename, &ay_module ) == 1 ) {
+    ay_is_module = 1;
+  } else {
     free_file();
     return 1;
   }
@@ -582,19 +555,11 @@ ayplayer_load( const char *filename )
     if( *p == '/' || *p == '\\' ) name = p + 1;
   snprintf( ay_filename, sizeof( ay_filename ), "%s", name );
 
-  /* Register dumps: their title, author and comment (none in a PSG
-     file: the file name is shown) */
-  if( ay_is_dump ) {
-    snprintf( ay_author, sizeof( ay_author ), "%s", ay_dump.author );
-    snprintf( ay_misc, sizeof( ay_misc ), "%s", ay_dump.misc );
-    ay_songs = 1;
-    ay_first_song = 0;
-    return 0;
-  }
-
-  if( ay_pt3 ) {
-    snprintf( ay_author, sizeof( ay_author ), "%s", pt3_author( ay_pt3 ) );
-    ay_misc[0] = '\0';
+  /* A module: its author and comment (a PSG file has none: the file name
+     is shown) */
+  if( ay_is_module ) {
+    snprintf( ay_author, sizeof( ay_author ), "%s", ay_module.author );
+    snprintf( ay_misc, sizeof( ay_misc ), "%s", ay_module.misc );
     ay_songs = 1;
     ay_first_song = 0;
     return 0;
@@ -628,42 +593,18 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
   memset( info, 0, sizeof( *info ) );
   if( read_ay_file( filename, &data, &length ) ) return 1;
 
-  {
-    dump_info dump;
-    int is_dump = read_dump( data, length, filename, &dump );
-
-    if( is_dump ) {
-      if( is_dump < 0 ) {
-        error = 1;
-      } else {
-        info->checksum = checksum( data, length );
-        snprintf( info->author, sizeof( info->author ), "%s", dump.author );
-        info->songs = 1;
-        info->names = libspectrum_new0( ayplayer_song_title, 1 );
-        snprintf( info->names[0], sizeof( info->names[0] ), "%s",
-                  dump.title );
-      }
-      libspectrum_free( data );
-      return error;
-    }
-  }
-
   if( !is_ay_data( data, length ) ) {
-    pt3_module *module = pt3_load( data, length );
+    module_info module;
 
-    if( !module ) {
-      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PT3 music file",
-                filename );
-      error = 1;
-    } else {
+    if( read_module( data, length, filename, &module ) == 1 ) {
       info->checksum = checksum( data, length );
-      snprintf( info->author, sizeof( info->author ), "%s",
-                pt3_author( module ) );
+      snprintf( info->author, sizeof( info->author ), "%s", module.author );
       info->songs = 1;
-      info->names = libspectrum_new( ayplayer_song_title, 1 );
+      info->names = libspectrum_new0( ayplayer_song_title, 1 );
       snprintf( info->names[0], sizeof( info->names[0] ), "%s",
-                pt3_title( module ) );
-      pt3_free( module );
+                module.title );
+    } else {
+      error = 1;
     }
     libspectrum_free( data );
     return error;
@@ -830,9 +771,9 @@ ayplayer_play( int song )
   if( !ay_data || song < 0 || song >= ay_songs ) return 1;
 
   /* The length from the file (0: not known), or the measured one */
-  if( ay_is_dump ) {
-    length = (int)ay_dump.frames;
-  } else if( !ay_pt3 ) {
+  if( ay_is_module ) {
+    length = (int)ay_module.frames;
+  } else {
     long data = song_data( song );
     if( data < 0 ) return 1;
     length = word_at( data + 4 );
@@ -843,7 +784,7 @@ ayplayer_play( int song )
   ay_song_frames = length > 0 ? length : AY_DEFAULT_LENGTH;
   ay_song_loop = length > 0 ? -1 : 0;
   /* A register dump tells where its music goes on from */
-  if( ay_is_dump ) ay_song_loop = ay_dump.loop;
+  if( ay_is_module && length > 0 ) ay_song_loop = ay_module.loop;
 
   if( lengths_lookup( ay_file_checksum, song, &measured, &loop ) ) {
     ay_length_measured = measured > 0;
@@ -973,7 +914,7 @@ const char *ayplayer_misc( void ) { return ay_misc; }
 const char *
 ayplayer_file_stereo( void )
 {
-  return ay_data && ay_is_dump ? ay_dump.stereo : "";
+  return ay_data && ay_is_module ? ay_module.stereo : "";
 }
 
 void
@@ -982,12 +923,8 @@ ayplayer_song_name( int song, char *text, size_t length )
   long songs;
 
   text[0] = '\0';
-  if( ay_is_dump ) {
-    if( song == 0 ) snprintf( text, length, "%s", ay_dump.title );
-    return;
-  }
-  if( ay_pt3 ) {
-    if( song == 0 ) snprintf( text, length, "%s", pt3_title( ay_pt3 ) );
+  if( ay_is_module ) {
+    if( song == 0 ) snprintf( text, length, "%s", ay_module.title );
     return;
   }
   songs = pointer_at( 18 );

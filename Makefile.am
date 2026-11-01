@@ -53,6 +53,7 @@ fuse_SOURCES = display.c \
 	ayplay.c \
 	aymeasure.c \
 	aymix.c \
+	aymodule.c \
 	aysource.c \
 	lh5decode.c \
 	psgplayer.c \
@@ -170,6 +171,7 @@ noinst_HEADERS = bitmap.h \
 	ayplay.h \
 	aymeasure.h \
 	aymix.h \
+	aymodule.h \
 	aysource.h \
 	lh5decode.h \
 	psgplayer.h \

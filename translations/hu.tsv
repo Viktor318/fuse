@@ -544,9 +544,7 @@ extra	AY player	'%s' is not an AY music file	A(z) '%s' nem AY zenefájl
 extra	AY player	AY Music Files (*.ay;*.pt3;*.vt2;*.psg;*.ym;*.vtx;*.txt)	AY zenefájlok (*.ay;*.pt3;*.vt2;*.psg;*.ym;*.vtx;*.txt)
 extra	AY player	R&eset	&Alaphelyzet
 extra	AY player	Channel %c volume: %d%%	%c csatorna hangereje: %d%%
-extra	AY player	'%s' is not a valid PT3 music file	A(z) '%s' nem érvényes PT3 zenefájl
-extra	AY player	'%s' is not a valid PSG music file	A(z) '%s' nem érvényes PSG zenefájl
-extra	AY player	'%s' is not a valid YM or VTX music file	A(z) '%s' nem érvényes YM vagy VTX zenefájl
+extra	AY player	'%s' is not a valid %s music file	A(z) '%s' nem érvényes %s zenefájl
 extra	AY player	Stereo: %s	Sztereó: %s
 extra	AY player	Author:	Szerző:
 extra	AY player	Elapsed: %d:%02d	Eltelt: %d:%02d

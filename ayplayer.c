@@ -62,6 +62,7 @@ static pt3_module *ay_pt3 = NULL;
 typedef struct dump_info {
   long frames, loop;		/* loop -1: the music ends */
   char title[ 256 ], author[ 256 ], misc[ 256 ];
+  char stereo[ 8 ];		/* stored in the file ("": none) */
 } dump_info;
 static int ay_is_dump = 0;
 static dump_info ay_dump;
@@ -512,6 +513,8 @@ read_dump( const libspectrum_byte *data, size_t length, const char *filename,
               ymplayer_author( ym ) );
     snprintf( info->misc, sizeof( info->misc ), "%s",
               ymplayer_comment( ym ) );
+    snprintf( info->stereo, sizeof( info->stereo ), "%s",
+              ymplayer_stereo( ym ) );
     ymplayer_free( ym );
     return 1;
   }
@@ -835,7 +838,8 @@ ayplayer_play( int song )
 
   /* The .mix file of the song, if it is to be loaded */
   aymix_song_started( ay_path, song, ay_songs,
-                      settings_current.ayplayer_mix_auto );
+                      settings_current.ayplayer_mix_auto,
+                      ayplayer_file_stereo() );
 
   if( ayplay_start( ay_data, ay_length, song, ay_song_frames, ay_song_loop,
                     ay_length_default ) ) {
@@ -948,6 +952,12 @@ ayplayer_set_repeat_song( int repeat )
 const char *ayplayer_filename( void ) { return ay_filename; }
 const char *ayplayer_author( void ) { return ay_author; }
 const char *ayplayer_misc( void ) { return ay_misc; }
+
+const char *
+ayplayer_file_stereo( void )
+{
+  return ay_data && ay_is_dump ? ay_dump.stereo : "";
+}
 
 void
 ayplayer_song_name( int song, char *text, size_t length )

@@ -49,6 +49,7 @@ struct ymplayer_module {
   long rows_count, loop_row;
   unsigned long clock;
   unsigned int rate;		/* frames a second */
+  int layout;			/* VTX: the stereo layout, 0-6; YM: -1 */
   char title[ STRING_LENGTH + 1 ], author[ STRING_LENGTH + 1 ];
   char comment[ STRING_LENGTH + 1 ];
 
@@ -108,6 +109,7 @@ new_module( long rows )
   m->rows_count = rows;
   m->clock = ATARI_CLOCK;
   m->rate = FRAME_RATE;
+  m->layout = -1;
   return m;
 }
 
@@ -311,6 +313,7 @@ load_vtx( const unsigned char *data, size_t length )
   m = new_module( unpacked_length / COLUMNS );
   if( !m ) return NULL;
   m->loop_row = little_endian( data + 3, 2 );
+  m->layout = data[2] & 7;
   m->clock = little_endian( data + 5, 4 );
   m->rate = data[9];
 
@@ -392,6 +395,15 @@ ymplayer_loop( const ymplayer_module *module )
 const char *ymplayer_title( const ymplayer_module *m ) { return m->title; }
 const char *ymplayer_author( const ymplayer_module *m ) { return m->author; }
 const char *ymplayer_comment( const ymplayer_module *m ) { return m->comment; }
+
+const char *
+ymplayer_stereo( const ymplayer_module *module )
+{
+  static const char * const names[] =
+    { "Mono", "ABC", "ACB", "BAC", "BCA", "CAB", "CBA" };
+  return module->layout >= 0 && module->layout <= 6 ?
+         names[ module->layout ] : "";
+}
 
 void
 ymplayer_reset( ymplayer_module *module )

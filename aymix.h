@@ -43,10 +43,12 @@ void aymix_reset( void );
 void aymix_set_changed_hook( void ( *hook )( void ) );
 void aymix_changed( void );
 
-/* A song started: its .mix file is loaded if `automatic', otherwise (or
-   without one) the settings of the user come back */
+/* A song started: its .mix file is loaded if `automatic'; without one, the
+   stereo mode stored in the music file (`file_stereo', a stereo setting
+   value; "" or NULL: none) is used the same way; otherwise the settings of
+   the user come back */
 void aymix_song_started( const char *path, int song, int songs,
-                         int automatic );
+                         int automatic, const char *file_stereo );
 /* The settings of the user again (the player is closed, or automatic
    loading is turned off) */
 void aymix_restore_user( void );

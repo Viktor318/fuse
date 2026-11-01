@@ -377,8 +377,30 @@ aymix_restore_user( void )
   use( &user );
 }
 
+/* The stereo mode the file of the song asks for, with the user's volumes;
+   used as a .mix file would be. The mixer shows the file name with it */
+static void
+use_file_stereo( const char *path, const char *stereo )
+{
+  const char *name = path, *p;
+  int channel;
+  mix m;
+
+  if( !temporary ) current( &user );
+  m = user;
+  snprintf( m.stereo, sizeof( m.stereo ), "%s", stereo );
+  for( channel = 0; channel < CHANNELS; channel++ )
+    m.pan[ channel ] = SOUND_AY_PAN_MODE;
+  temporary = 1;
+  for( p = path; *p; p++ )
+    if( *p == '/' || *p == '\\' ) name = p + 1;
+  snprintf( loaded_name, sizeof( loaded_name ), "%s (%s)", name, stereo );
+  use( &m );
+}
+
 void
-aymix_song_started( const char *path, int song, int songs, int automatic )
+aymix_song_started( const char *path, int song, int songs, int automatic,
+                    const char *file_stereo )
 {
   char filename[ 1100 ];
   const char *name, *p;
@@ -386,7 +408,11 @@ aymix_song_started( const char *path, int song, int songs, int automatic )
 
   if( !automatic || !path || !*path ||
       !find( path, song, songs, filename, sizeof( filename ) ) ) {
-    aymix_restore_user();
+    /* No .mix file: the stereo mode of the music file, if it has one */
+    if( automatic && path && *path && file_stereo && *file_stereo )
+      use_file_stereo( path, file_stereo );
+    else
+      aymix_restore_user();
     return;
   }
 

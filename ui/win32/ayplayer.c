@@ -100,6 +100,32 @@ set_text( int id, const char *text )
   libspectrum_free( utf8 );
 }
 
+/* The comment of the file, and the stereo mode stored in it (VTX) */
+static void
+set_misc_text( void )
+{
+  const char *stereo = ayplayer_file_stereo();
+  char *misc = i18n_legacy_to_utf8( ayplayer_misc() );
+  const char *comment = misc ? misc : ayplayer_misc();
+  char text[ 512 ], mode[ 64 ];
+
+  if( !*stereo ) {
+    SetDlgItemTextA( fuse_hAYWnd, IDC_AY_MISC, comment );
+    libspectrum_free( misc );
+    return;
+  }
+  _snprintf( mode, sizeof( mode ), i18n( "Stereo: %s" ), stereo );
+  mode[ sizeof( mode ) - 1 ] = '\0';
+  if( *comment )
+    _snprintf( text, sizeof( text ), "%s %s %s", comment, win32text_dash(),
+               mode );
+  else
+    _snprintf( text, sizeof( text ), "%s", mode );
+  text[ sizeof( text ) - 1 ] = '\0';
+  SetDlgItemTextA( fuse_hAYWnd, IDC_AY_MISC, text );
+  libspectrum_free( misc );
+}
+
 static void
 format_time( char *text, size_t length, const char *label, long frames )
 {
@@ -451,7 +477,7 @@ update_all( void )
   } else {
     set_text( IDC_AY_FILE, ayplayer_filename() );
     set_text( IDC_AY_AUTHOR, ayplayer_author() );
-    set_text( IDC_AY_MISC, ayplayer_misc() );
+    set_misc_text();
   }
 
   /* The song being played: its place in the list and title (which may be
@@ -723,7 +749,8 @@ command( WORD id, WORD code )
       if( ayplayer_current_song() >= 0 )
         aymix_song_started( ayplayer_path(), ayplayer_current_song(),
                             ayplayer_song_count(),
-                            settings_current.ayplayer_mix_auto );
+                            settings_current.ayplayer_mix_auto,
+                            ayplayer_file_stereo() );
       else if( !settings_current.ayplayer_mix_auto )
         aymix_restore_user();
     }

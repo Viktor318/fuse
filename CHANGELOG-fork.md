@@ -50,10 +50,15 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   and comment, exact length and loop. Their frames are played at 50 Hz
   and the periods are converted from the clock of their chip (Atari ST:
   2 MHz, Amstrad CPC: 1 MHz...) to the Spectrum's AY. The digital drums
-  and special effects of YM5/YM6 are not played (the music is), and the
-  stereo layout stored in VTX files is not used: the player's stereo mode
-  is. For these Fuse has its own LHA (-lh5-) decompressor (after the
-  method of lhasa and ar002).
+  and special effects of YM5/YM6 are not played (the music is). For these
+  Fuse has its own LHA (-lh5-) decompressor (after the method of lhasa and
+  ar002).
+- The stereo layout stored in a VTX file (Mono, ABC, ACB, BAC, BCA, CAB,
+  CBA) is shown in the *Misc* line of the player ("Stereo: ACB"). With
+  *Load the mixer settings of the songs automatically* it is also used
+  while the song plays, as a `.mix` file would be (with the user's
+  volumes; the mixer title shows the file and the mode); a `.mix` file of
+  the song comes first. The saved settings do not change.
 
 ### AY player windows
 

@@ -104,6 +104,9 @@ void ayplayer_set_repeat_song( int repeat );
 const char *ayplayer_filename( void );
 const char *ayplayer_author( void );
 const char *ayplayer_misc( void );
+/* The stereo mode stored in the file (VTX), as a stereo setting value; ""
+   if none */
+const char *ayplayer_file_stereo( void );
 void ayplayer_song_name( int song, char *text, size_t length );
 
 #endif

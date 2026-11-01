@@ -51,6 +51,11 @@ const char *ymplayer_title( const ymplayer_module *module );
 const char *ymplayer_author( const ymplayer_module *module );
 const char *ymplayer_comment( const ymplayer_module *module );
 
+/* The stereo layout stored in a VTX file, as the names of the AY stereo
+   modes of Fuse ("Mono", "ABC", "ACB", "BAC", "BCA", "CAB", "CBA"); "" for
+   YM files */
+const char *ymplayer_stereo( const ymplayer_module *module );
+
 /* Back to the start */
 void ymplayer_reset( ymplayer_module *module );
 

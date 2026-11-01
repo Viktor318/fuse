@@ -887,6 +887,8 @@ const i18n_entry i18n_hu_table[] = {
     "Szte&reó:" },
   { "Stealt&h Multiface One",
     "Rejtett Multiface &One" },
+  { "Stereo: %s",
+    "Sztereó: %s" },
   { "Stopping competition mode RZX recording",
     "A verseny módú RZX felvétel leáll" },
   { "Supported Files",

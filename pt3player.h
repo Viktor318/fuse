@@ -58,6 +58,11 @@ void pt3_reset( pt3_module *module );
 void pt3_frame( pt3_module *module, unsigned char registers[ PT3_REGISTERS ],
                 unsigned int *mask );
 
+/* The length in frames, up to the end of the last position, and the frame
+   of the loop position (*loop), as ZXTune tells them; the module is left at
+   its start */
+long pt3_length( pt3_module *module, long *loop );
+
 /* How many times the music has gone back to its loop position */
 int pt3_loops( const pt3_module *module );
 

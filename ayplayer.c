@@ -97,7 +97,7 @@ static int ay_repeat_song = 0;
    again. Lines of the versions before 4 (which did not know digital music
    or a standing volume as silence) are kept and used, but measured again
    when the song is played or the lengths of the list are measured */
-#define AY_LENGTHS_VERSION 5
+#define AY_LENGTHS_VERSION 6
 
 static int ay_length_measured = 0;
 static libspectrum_dword ay_file_checksum = 0;
@@ -198,17 +198,21 @@ is_text_module( const char *filename )
   return aymodule_identify( start, length ) != NULL;
 }
 
-/* The files of the player: AY files, Pro Tracker 3 modules (also Vortex
-   Tracker text: .vt2, and .txt files that are such), and PSG, YM and VTX
+/* The extensions of the files of the player: AY files, tracker modules
+   (Vortex Tracker text: also .txt files that are such, see below) and
    register dumps */
+static const char * const extensions[] = {
+  "ay", "pt3", "vt2", "stc", "psg", "ym", "vtx", NULL
+};
+
 int
 ayplayer_is_ay_file( const char *filename )
 {
-  return has_extension( filename, "ay" ) || has_extension( filename, "pt3" ) ||
-         has_extension( filename, "vt2" ) ||
-         ( has_extension( filename, "txt" ) && is_text_module( filename ) ) ||
-         has_extension( filename, "psg" ) || has_extension( filename, "ym" ) ||
-         has_extension( filename, "vtx" );
+  int i;
+
+  for( i = 0; extensions[i]; i++ )
+    if( has_extension( filename, extensions[i] ) ) return 1;
+  return has_extension( filename, "txt" ) && is_text_module( filename );
 }
 
 static int

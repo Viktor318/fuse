@@ -604,6 +604,28 @@ next_frame( pt3_module *m )
   m->loops++;
 }
 
+/* Two hours at most */
+#define PT3_MAX_LENGTH ( 2L * 60 * 60 * 50 )
+
+long
+pt3_length( pt3_module *m, long *loop )
+{
+  long frames = 0;
+
+  *loop = 0;
+  cursor_reset( m );
+  m->loops = 0;
+  while( m->loops == 0 && frames < PT3_MAX_LENGTH ) {
+    if( m->position == m->loop_position && m->line == 0 && m->quirk == 0 &&
+        !*loop )
+      *loop = frames;
+    next_frame( m );
+    frames++;
+  }
+  pt3_reset( m );
+  return frames;
+}
+
 /* ------------------------------------------------------------------------
    The player
    ------------------------------------------------------------------------ */

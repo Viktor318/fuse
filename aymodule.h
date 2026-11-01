@@ -51,9 +51,10 @@ typedef struct aymodule_format {
   const char *( *author )( const void *module );
   const char *( *comment )( const void *module );
 
-  /* The length in frames if the file tells it exactly (register dumps),
-     with the frame the music goes on from (-1: it ends); NULL or 0: to be
-     measured */
+  /* The length in frames if the file tells it exactly (register dumps;
+     trackers: up to the end of the last position), with the frame the
+     music goes on from (-1: it ends); NULL or 0: to be measured. It may
+     move a tracker's cursor back to the start */
   long ( *exact_length )( const void *module, long *loop );
 
   /* A stereo mode stored in the file ("ABC"...); NULL or "": none */

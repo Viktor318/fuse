@@ -541,7 +541,7 @@ extra	AY player	&Resume	&Folytatás
 extra	AY player	&Song:	&Dal:
 extra	AY player	'%s' is not a valid AY music file	A(z) '%s' nem érvényes AY zenefájl
 extra	AY player	'%s' is not an AY music file	A(z) '%s' nem AY zenefájl
-extra	AY player	AY Music Files (*.ay;*.pt3;*.vt2;*.psg;*.ym;*.vtx;*.txt)	AY zenefájlok (*.ay;*.pt3;*.vt2;*.psg;*.ym;*.vtx;*.txt)
+extra	AY player	AY Music Files (*.ay;*.pt3;*.stc;*.ym;...)	AY zenefájlok (*.ay;*.pt3;*.stc;*.ym;...)
 extra	AY player	R&eset	&Alaphelyzet
 extra	AY player	Channel %c volume: %d%%	%c csatorna hangereje: %d%%
 extra	AY player	'%s' is not a valid %s music file	A(z) '%s' nem érvényes %s zenefájl

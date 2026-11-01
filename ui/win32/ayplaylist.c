@@ -235,10 +235,10 @@ add_files( void )
   ofn.lStructSize = sizeof( ofn );
   ofn.hwndOwner = fuse_hAYListWnd;
   {
-    static char filter[ 256 ];
-    const char *music = i18n( "AY Music Files (*.ay;*.pt3;*.vt2;*.psg;*.ym;*.vtx;*.txt)" );
+    static char filter[ 512 ];
+    const char *music = i18n( "AY Music Files (*.ay;*.pt3;*.stc;*.ym;...)" );
     const char *all = i18n( "All Files (*.*)" );
-    const char *music_types = "*.ay;*.AY;*.pt3;*.PT3;*.vt2;*.VT2;*.psg;*.PSG;*.ym;*.YM;*.vtx;*.VTX;*.txt;*.TXT", *all_types = "*.*";
+    const char *music_types = AY_MUSIC_TYPES ";*.txt", *all_types = "*.*";
     size_t used = 0;
 
     /* name, types, name, types, each ending in \0, then one more \0 */

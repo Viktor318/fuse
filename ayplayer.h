@@ -25,6 +25,10 @@
 /* Is this the name of an .ay file? */
 int ayplayer_is_ay_file( const char *filename );
 
+/* The file types of the player, for file dialogs (.txt files are music
+   only if they are Vortex Tracker modules) */
+#define AY_MUSIC_TYPES "*.ay;*.pt3;*.vt2;*.stc;*.psg;*.ym;*.vtx"
+
 #include <libspectrum.h>
 
 /* Load a file for playing (does not play anything) */

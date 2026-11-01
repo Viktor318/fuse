@@ -27,6 +27,7 @@
 #include <string.h>
 #include <windows.h>
 
+#include "../../ayplayer.h"
 #include "i18n.h"
 #include "ui/ui.h"
 #include "utils.h"
@@ -49,7 +50,7 @@ static LPCTSTR file_filter = TEXT(
 ";"
 "*.d40;*.d80;*.dsk;*.fdi;*.img;*.mgt;*.opd;*.opu;*.sad;*.scl;*.td0;*.trd;*.udi;"
 "*.dck;*.rom;*.hdf;*.mdr;*.fmf;*.rzx;"
-"*.bin;*.log;*.mlt;*.png;*.pok;*.scr;*.svg;*.ay;*.pt3;*.vt2;*.psg;*.ym;*.vtx"
+"*.bin;*.log;*.mlt;*.png;*.pok;*.scr;*.svg;" AY_MUSIC_TYPES
 #ifdef LIBSPECTRUM_SUPPORTS_ZLIB_COMPRESSION
 ";*.gz;*.zip"
 #endif
@@ -63,8 +64,8 @@ static LPCTSTR file_filter = TEXT(
 "*.bas;*.txt\0"
 "Auxiliary Files (*.scr;*.mlt;*.pok;*.png;*.svg;...)\0"
 "*.bin;*.log;*.mlt;*.png;*.pok;*.scr;*.svg\0"
-"AY Music Files (*.ay;*.pt3;*.vt2;*.psg;*.ym;*.vtx;*.txt)\0"
-"*.ay;*.pt3;*.vt2;*.psg;*.ym;*.vtx;*.txt\0"
+"AY Music Files (*.ay;*.pt3;*.stc;*.ym;...)\0"
+AY_MUSIC_TYPES ";*.txt\0"
 #ifdef LIBSPECTRUM_SUPPORTS_ZLIB_COMPRESSION
 "Compressed files (*.gz;*.zip;...)\0"
 "*.gz;*.zip"

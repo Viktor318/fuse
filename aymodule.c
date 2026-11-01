@@ -23,6 +23,7 @@
 #include "aymodule.h"
 #include "psgplayer.h"
 #include "pt3player.h"
+#include "stcplayer.h"
 #include "ymplayer.h"
 
 struct aymodule {
@@ -91,10 +92,32 @@ static const char *pt3_title_module( const void *m )
 { return pt3_title( m ); }
 static const char *pt3_author_module( const void *m )
 { return pt3_author( m ); }
+/* The module is played from the start after it */
+static long pt3_length_module( const void *m, long *loop )
+{ return pt3_length( (pt3_module *)m, loop ); }
 
 static const aymodule_format pt3_format = {
   "PT3", pt3_check, pt3_load_module, pt3_free_module, pt3_reset_module,
-  pt3_frame_module, pt3_title_module, pt3_author_module, NULL, NULL, NULL
+  pt3_frame_module, pt3_title_module, pt3_author_module, NULL,
+  pt3_length_module, NULL
+};
+
+/* Sound Tracker */
+
+static void *stc_load_module( const unsigned char *d, size_t l )
+{ return stc_load( d, l ); }
+static void stc_free_module( void *m ) { stc_free( m ); }
+static void stc_reset_module( void *m ) { stc_reset( m ); }
+static void stc_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ stc_frame( m, r, mask ); }
+static const char *stc_title_module( const void *m )
+{ return stc_title( m ); }
+static long stc_length_module( const void *m, long *loop )
+{ return stc_length( (stc_module *)m, loop ); }
+
+static const aymodule_format stc_format = {
+  "STC", stc_check, stc_load_module, stc_free_module, stc_reset_module,
+  stc_frame_module, stc_title_module, NULL, NULL, stc_length_module, NULL
 };
 
 /* The formats in the order they are tried: those with a signature first,
@@ -103,6 +126,7 @@ static const aymodule_format * const formats[] = {
   &psg_format,
   &ym_format,
   &pt3_format,
+  &stc_format,
   NULL
 };
 

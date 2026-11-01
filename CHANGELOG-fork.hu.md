@@ -55,9 +55,9 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   szólnak (a zene igen). Ehhez a Fuse saját LHA (-lh5-) kicsomagolót
   kapott (a lhasa és az ar002 módszere szerint).
 - A VTX fájlban tárolt sztereó elrendezés (Mono, ABC, ACB, BAC, BCA, CAB,
-  CBA) megjelenik a lejátszó *Egyéb* sorában („Sztereó: ACB”). Ha a *Keverőbeállítások
-  automatikus betöltése a dalokhoz* be van kapcsolva, a dal
-  idejére be is állítja, ahogy egy `.mix` fájl tenné (a hangerők a
+  CBA) megjelenik a lejátszó *Egyéb* sorában („Sztereó: ACB”). Ha a
+  *Keverőbeállítások automatikus betöltése a dalokhoz* be van kapcsolva, a
+  dal idejére be is állítja, ahogy egy `.mix` fájl tenné (a hangerők a
   felhasználóéi maradnak; a keverő címsora mutatja a fájlt és a módot); a
   dal saját `.mix` fájlja erősebb. A mentett beállítások nem változnak.
 

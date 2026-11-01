@@ -137,6 +137,12 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   gombjai (Kempston, Timex, Fuller) elengedett állapotba kerülnek, így nem
   marad beragadva a tűzgomb vagy egy irány (ez az AY lejátszó bezárásakor
   visszaállított programot is érinti).
+- Az upstream `master` javítása: az FDI lemezképek olvasása biztonságosabb.
+  Az adat nélkülinek jelölt szektorokat (UnrealSpeccy-bővítés) a hibás
+  adat-CRC-jű szektoroktól megkülönbözteti, sérült fejléc esetén nem olvas
+  a fájl végén túl, és ha egyes szektorok adata túlnyúlik a fájl végén, a
+  lemezkép akkor is betöltődik, egy (magyarra fordított) figyelmeztetéssel
+  az adat nélkül maradt szektorokról.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

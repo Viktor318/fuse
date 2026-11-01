@@ -509,6 +509,8 @@ const i18n_entry i18n_hu_table[] = {
     "&Képfrissítés (1:n)" },
   { "F&ull screen",
     "Teljes &képernyő" },
+  { "FDI image '%s': %d sector payload(s) extend beyond the end of the file. Loaded with these sectors' data missing; disk reads may fail.",
+    "FDI lemezkép („%s”): %d szektor adata túlnyúlik a fájl végén. A lemezkép ezeknek az adatai nélkül töltődött be, a lemez olvasása hibás lehet." },
   { "Failed to create disk image: %s",
     "A lemezkép létrehozása nem sikerült: %s" },
   { "Failed to open cartridge image",

@@ -460,6 +460,7 @@ group	context	english	hungarian
 4 Üzenetek	hibaüzenet	This machine does not support the dock	Ez a gép nem támogatja a Timex Dockot
 4 Üzenetek	kérdés (Igen/Nem)	Try to merge 'B' side of this disk?	Összevonjam a lemez „B” oldalát?
 4 Üzenetek	figyelmeztetés	This %d track disk image is incompatible with the configured %d track drive. Use disk options to select a compatible drive.	Ez a %d sávos lemezkép nem illik a beállított %d sávos meghajtóhoz. A Lemezbeállításokban válassz megfelelő meghajtót.
+4 Üzenetek	figyelmeztetés	FDI image '%s': %d sector payload(s) extend beyond the end of the file. Loaded with these sectors' data missing; disk reads may fail.	FDI lemezkép („%s”): %d szektor adata túlnyúlik a fájl végén. A lemezkép ezeknek az adatai nélkül töltődött be, a lemez olvasása hibás lehet.
 4 Üzenetek	hibaüzenet	Cannot insert cartridge '%s', all Microdrives in use	A(z) „%s” Microdrive-kazetta nem helyezhető be, minden Microdrive foglalt
 4 Üzenetek	hibaüzenet	Failed to open cartridge image	A Microdrive-kazetta megnyitása nem sikerült
 4 Üzenetek	kérdés (Igen/Nem)	Cartridge in Microdrive %i has been modified.\nDo you want to save it?	A(z) %i. Microdrive kazettája módosult.\nMented?

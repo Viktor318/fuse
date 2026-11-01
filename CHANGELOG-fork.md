@@ -132,6 +132,12 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - Fix from upstream `master`: loading a snapshot now releases the joystick
   buttons (Kempston, Timex, Fuller), so fire or a direction no longer stays
   stuck (this also covers the program restored when the AY player closes).
+- Fix from upstream `master`: FDI disk images are read more safely. Sectors
+  marked as having no data (the UnrealSpeccy extension) and sectors with a
+  bad data CRC are told apart, damaged headers no longer read past the end
+  of the file, and an image whose sector data runs past the end of the file
+  is still loaded, with a warning (translated) about the sectors left
+  without data.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

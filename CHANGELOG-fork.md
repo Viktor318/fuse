@@ -44,6 +44,16 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   a folder), and are in the file filters (*AY Music Files
   (\*.ay;\*.pt3;\*.psg)*). A PSG file has no title or author: the file
   name is shown.
+- **YM files** (`.ym`: YM2!, YM3!, YM3b, YM5!, YM6!, the ST-Sound format
+  of the Atari ST, usually packed into an LHA archive) and **VTX files**
+  (`.vtx`, Vortex) play in the AY player too, with their title, author
+  and comment, exact length and loop. Their frames are played at 50 Hz
+  and the periods are converted from the clock of their chip (Atari ST:
+  2 MHz, Amstrad CPC: 1 MHz...) to the Spectrum's AY. The digital drums
+  and special effects of YM5/YM6 are not played (the music is), and the
+  stereo layout stored in VTX files is not used: the player's stereo mode
+  is. For these Fuse has its own LHA (-lh5-) decompressor (after the
+  method of lhasa and ar002).
 
 ### AY player windows
 

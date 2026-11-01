@@ -54,8 +54,10 @@ fuse_SOURCES = display.c \
 	aymeasure.c \
 	aymix.c \
 	aysource.c \
+	lh5decode.c \
 	psgplayer.c \
 	pt3player.c \
+	ymplayer.c \
 	ayplaylist.c \
 	basic_text.c \
 	phantom_typist.c \
@@ -168,8 +170,10 @@ noinst_HEADERS = bitmap.h \
 	aymeasure.h \
 	aymix.h \
 	aysource.h \
+	lh5decode.h \
 	psgplayer.h \
 	pt3player.h \
+	ymplayer.h \
 	ayplaylist.h \
 	basic_text.h \
 	phantom_typist.h \

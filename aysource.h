@@ -24,8 +24,8 @@
 #include <stddef.h>
 
 /* A song of an .ay file runs on a Z80 of its own (only memory and the AY
-   ports, no screen, no contention); a Pro Tracker 3 module and a PSG
-   register dump give the registers themselves. The frame is that of a Spectrum 128K */
+   ports, no screen, no contention); a Pro Tracker 3 module and the PSG,
+   YM and VTX register dumps give the registers themselves. The frame is that of a Spectrum 128K */
 #define AYSOURCE_FRAME_TSTATES 70908
 #define AYSOURCE_CLOCK 3546900		/* processor clock; the AY: half */
 
@@ -51,8 +51,9 @@ int aysource_frame( aysource *source, aysource_write *writes, int max );
 /* The registers (0-13) as the song left them */
 const unsigned char *aysource_registers( const aysource *source );
 
-/* The length of the song in frames if the file tells it exactly (a PSG
-   register dump), else 0 */
-long aysource_exact_length( const aysource *source );
+/* The length of the song in frames if the file tells it exactly (a
+   register dump), else 0; *loop: the frame the music goes on from (-1: it
+   ends) */
+long aysource_exact_length( const aysource *source, long *loop );
 
 #endif			/* #ifndef FUSE_AYSOURCE_H */

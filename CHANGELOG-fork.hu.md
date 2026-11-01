@@ -45,6 +45,16 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   listára (mappával is), és szerepelnek a fájlszűrőkben (*AY zenefájlok
   (\*.ay;\*.pt3;\*.psg)*). A PSG fájlban nincs cím és szerző: a fájl neve
   látszik.
+- **YM fájlok** (`.ym`: YM2!, YM3!, YM3b, YM5!, YM6!, az Atari ST
+  ST-Sound formátuma, többnyire LHA archívumba csomagolva) és **VTX
+  fájlok** (`.vtx`, Vortex) lejátszása is az AY lejátszóban, címmel,
+  szerzővel és megjegyzéssel, pontos hosszal és ismétlési ponttal. A
+  képkockák 50 Hz-en szólnak, a periódusokat a Fuse a fájl chipjének
+  órajeléről (Atari ST: 2 MHz, Amstrad CPC: 1 MHz...) a Spectrum AY-ára
+  számolja át. A YM5/YM6 digitális dobjai és különleges effektjei nem
+  szólnak (a zene igen), és a VTX fájlban tárolt sztereó elrendezést sem
+  használja: a lejátszó sztereó módja érvényes. Ehhez a Fuse saját LHA
+  (-lh5-) kicsomagolót kapott (a lhasa és az ar002 módszere szerint).
 
 ### AY lejátszó ablakai
 

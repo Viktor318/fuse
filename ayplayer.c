@@ -41,6 +41,7 @@
 #include "fuse.h"
 #include "psgplayer.h"
 #include "pt3player.h"
+#include "ymplayer.h"
 #include "compat.h"
 #include "sound.h"
 #include "ui/ui.h"
@@ -57,8 +58,13 @@ static char ay_misc[ 256 ];
 /* A Pro Tracker 3 module instead of an AY file (only for its texts here:
    aysource.c plays it) */
 static pt3_module *ay_pt3 = NULL;
-/* .psg: its length in frames (0: not a PSG file) */
-static long ay_psg_frames = 0;
+/* Register dumps (.psg, .ym, .vtx): what the file tells of its song */
+typedef struct dump_info {
+  long frames, loop;		/* loop -1: the music ends */
+  char title[ 256 ], author[ 256 ], misc[ 256 ];
+} dump_info;
+static int ay_is_dump = 0;
+static dump_info ay_dump;
 
 static int ay_songs = 0;		/* number of songs */
 static int ay_first_song = 0;		/* 0 based */
@@ -180,13 +186,14 @@ has_extension( const char *filename, const char *extension )
   return 1;
 }
 
-/* The files of the player: AY files, Pro Tracker 3 modules and PSG
-   register dumps */
+/* The files of the player: AY files, Pro Tracker 3 modules and PSG, YM
+   and VTX register dumps */
 int
 ayplayer_is_ay_file( const char *filename )
 {
   return has_extension( filename, "ay" ) || has_extension( filename, "pt3" ) ||
-         has_extension( filename, "psg" );
+         has_extension( filename, "psg" ) || has_extension( filename, "ym" ) ||
+         has_extension( filename, "vtx" );
 }
 
 static int
@@ -207,7 +214,7 @@ free_file( void )
   ay_length = 0;
   if( ay_pt3 ) pt3_free( ay_pt3 );
   ay_pt3 = NULL;
-  ay_psg_frames = 0;
+  ay_is_dump = 0;
   ay_songs = 0;
   ay_current = -1;
 }
@@ -456,6 +463,7 @@ read_ay_file( const char *filename, libspectrum_byte **data, size_t *length )
 
   if( !is_ay_data( file.buffer, file.length ) &&
       !psgplayer_check( file.buffer, file.length ) &&
+      !ymplayer_check( file.buffer, file.length ) &&
       !pt3_check( file.buffer, file.length ) ) {
     ui_error( UI_ERROR_ERROR, "'%s' is not an AY music file", filename );
     utils_close_file( &file );
@@ -466,6 +474,48 @@ read_ay_file( const char *filename, libspectrum_byte **data, size_t *length )
   memcpy( *data, file.buffer, file.length );
   *length = file.length;
   utils_close_file( &file );
+  return 0;
+}
+
+/* A register dump: 1 with what it tells, 0 if the data is not one, -1 if
+   it is damaged (with an error shown) */
+static int
+read_dump( const libspectrum_byte *data, size_t length, const char *filename,
+           dump_info *info )
+{
+  memset( info, 0, sizeof( *info ) );
+
+  if( psgplayer_check( data, length ) ) {
+    psgplayer_module *psg = psgplayer_load( data, length );
+    if( !psg ) {
+      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PSG music file",
+                filename );
+      return -1;
+    }
+    info->frames = psgplayer_frames( psg );
+    info->loop = -1;
+    psgplayer_free( psg );
+    return 1;
+  }
+
+  if( ymplayer_check( data, length ) ) {
+    ymplayer_module *ym = ymplayer_load( data, length );
+    if( !ym ) {
+      ui_error( UI_ERROR_ERROR, "'%s' is not a valid YM or VTX music file",
+                filename );
+      return -1;
+    }
+    info->frames = ymplayer_frames( ym );
+    info->loop = ymplayer_loop( ym );
+    snprintf( info->title, sizeof( info->title ), "%s", ymplayer_title( ym ) );
+    snprintf( info->author, sizeof( info->author ), "%s",
+              ymplayer_author( ym ) );
+    snprintf( info->misc, sizeof( info->misc ), "%s",
+              ymplayer_comment( ym ) );
+    ymplayer_free( ym );
+    return 1;
+  }
+
   return 0;
 }
 
@@ -485,16 +535,13 @@ ayplayer_load( const char *filename )
   ay_length = length;
   ay_file_checksum = checksum( ay_data, ay_length );
 
-  if( psgplayer_check( ay_data, ay_length ) ) {
-    psgplayer_module *psg = psgplayer_load( ay_data, ay_length );
-    if( !psg ) {
-      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PSG music file",
-                filename );
-      free_file();
-      return 1;
-    }
-    ay_psg_frames = psgplayer_frames( psg );
-    psgplayer_free( psg );
+  ay_is_dump = read_dump( ay_data, ay_length, filename, &ay_dump );
+  if( ay_is_dump < 0 ) {
+    ay_is_dump = 0;
+    free_file();
+    return 1;
+  } else if( ay_is_dump ) {
+    /* Nothing more to check */
   } else if( !is_ay_data( ay_data, ay_length ) ) {
     ay_pt3 = pt3_load( ay_data, ay_length );
     if( !ay_pt3 ) {
@@ -515,10 +562,11 @@ ayplayer_load( const char *filename )
     if( *p == '/' || *p == '\\' ) name = p + 1;
   snprintf( ay_filename, sizeof( ay_filename ), "%s", name );
 
-  /* No title or author in a PSG file: the file name is shown */
-  if( ay_psg_frames ) {
-    ay_author[0] = '\0';
-    ay_misc[0] = '\0';
+  /* Register dumps: their title, author and comment (none in a PSG
+     file: the file name is shown) */
+  if( ay_is_dump ) {
+    snprintf( ay_author, sizeof( ay_author ), "%s", ay_dump.author );
+    snprintf( ay_misc, sizeof( ay_misc ), "%s", ay_dump.misc );
     ay_songs = 1;
     ay_first_song = 0;
     return 0;
@@ -560,21 +608,24 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
   memset( info, 0, sizeof( *info ) );
   if( read_ay_file( filename, &data, &length ) ) return 1;
 
-  if( psgplayer_check( data, length ) ) {
-    psgplayer_module *psg = psgplayer_load( data, length );
+  {
+    dump_info dump;
+    int is_dump = read_dump( data, length, filename, &dump );
 
-    if( !psg ) {
-      ui_error( UI_ERROR_ERROR, "'%s' is not a valid PSG music file",
-                filename );
-      error = 1;
-    } else {
-      info->checksum = checksum( data, length );
-      info->songs = 1;
-      info->names = libspectrum_new0( ayplayer_song_title, 1 );
-      psgplayer_free( psg );
+    if( is_dump ) {
+      if( is_dump < 0 ) {
+        error = 1;
+      } else {
+        info->checksum = checksum( data, length );
+        snprintf( info->author, sizeof( info->author ), "%s", dump.author );
+        info->songs = 1;
+        info->names = libspectrum_new0( ayplayer_song_title, 1 );
+        snprintf( info->names[0], sizeof( info->names[0] ), "%s",
+                  dump.title );
+      }
+      libspectrum_free( data );
+      return error;
     }
-    libspectrum_free( data );
-    return error;
   }
 
   if( !is_ay_data( data, length ) ) {
@@ -759,8 +810,8 @@ ayplayer_play( int song )
   if( !ay_data || song < 0 || song >= ay_songs ) return 1;
 
   /* The length from the file (0: not known), or the measured one */
-  if( ay_psg_frames ) {
-    length = (int)ay_psg_frames;
+  if( ay_is_dump ) {
+    length = (int)ay_dump.frames;
   } else if( !ay_pt3 ) {
     long data = song_data( song );
     if( data < 0 ) return 1;
@@ -771,6 +822,8 @@ ayplayer_play( int song )
   ay_length_measured = 0;
   ay_song_frames = length > 0 ? length : AY_DEFAULT_LENGTH;
   ay_song_loop = length > 0 ? -1 : 0;
+  /* A register dump tells where its music goes on from */
+  if( ay_is_dump ) ay_song_loop = ay_dump.loop;
 
   if( lengths_lookup( ay_file_checksum, song, &measured, &loop ) ) {
     ay_length_measured = measured > 0;
@@ -902,7 +955,10 @@ ayplayer_song_name( int song, char *text, size_t length )
   long songs;
 
   text[0] = '\0';
-  if( ay_psg_frames ) return;
+  if( ay_is_dump ) {
+    if( song == 0 ) snprintf( text, length, "%s", ay_dump.title );
+    return;
+  }
   if( ay_pt3 ) {
     if( song == 0 ) snprintf( text, length, "%s", pt3_title( ay_pt3 ) );
     return;

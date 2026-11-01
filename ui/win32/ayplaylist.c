@@ -236,9 +236,9 @@ add_files( void )
   ofn.hwndOwner = fuse_hAYListWnd;
   {
     static char filter[ 256 ];
-    const char *music = i18n( "AY Music Files (*.ay;*.pt3;*.psg)" );
+    const char *music = i18n( "AY Music Files (*.ay;*.pt3;*.psg;*.ym;*.vtx)" );
     const char *all = i18n( "All Files (*.*)" );
-    const char *music_types = "*.ay;*.AY;*.pt3;*.PT3;*.psg;*.PSG", *all_types = "*.*";
+    const char *music_types = "*.ay;*.AY;*.pt3;*.PT3;*.psg;*.PSG;*.ym;*.YM;*.vtx;*.VTX", *all_types = "*.*";
     size_t used = 0;
 
     /* name, types, name, types, each ending in \0, then one more \0 */

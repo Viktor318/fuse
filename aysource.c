@@ -55,6 +55,7 @@
 #include "aysource.h"
 #include "psgplayer.h"
 #include "pt3player.h"
+#include "ymplayer.h"
 
 /* The interrupt is held this long at the start of the frame (128K) */
 #define INT_TSTATES 36
@@ -69,6 +70,8 @@ struct aysource {
   pt3_module *pt3;
   /* .psg: the register writes */
   psgplayer_module *psg;
+  /* .ym, .vtx: the registers of each frame */
+  ymplayer_module *ym;
   unsigned char registers[ 16 ];
 };
 
@@ -245,6 +248,13 @@ aysource_new( const unsigned char *data, size_t length, int song )
     free( s );
     return NULL;
   }
+  if( ymplayer_check( data, length ) ) {
+    if( !( s->ym = ymplayer_load( data, length ) ) ) {
+      free( s );
+      return NULL;
+    }
+    return s;
+  }
   if( psgplayer_check( data, length ) ) {
     if( !( s->psg = psgplayer_load( data, length ) ) ) {
       free( s );
@@ -266,6 +276,7 @@ aysource_free( aysource *source )
   if( !source ) return;
   if( source->pt3 ) pt3_free( source->pt3 );
   if( source->psg ) psgplayer_free( source->psg );
+  if( source->ym ) ymplayer_free( source->ym );
   free( source );
 }
 
@@ -276,8 +287,13 @@ aysource_registers( const aysource *source )
 }
 
 long
-aysource_exact_length( const aysource *source )
+aysource_exact_length( const aysource *source, long *loop )
 {
+  if( source->ym ) {
+    *loop = ymplayer_loop( source->ym );
+    return ymplayer_frames( source->ym );
+  }
+  *loop = -1;
   return source->psg ? psgplayer_frames( source->psg ) : 0;
 }
 
@@ -325,6 +341,23 @@ frame_psg( aysource *s, aysource_write *writes, int max )
   return count;
 }
 
+static int
+frame_ym( aysource *s, aysource_write *writes, int max )
+{
+  unsigned char registers[ YMPLAYER_REGISTERS ];
+  unsigned int mask;
+  int reg, count = 0;
+
+  memcpy( registers, s->registers, YMPLAYER_REGISTERS );
+  ymplayer_frame( s->ym, registers, &mask );
+  for( reg = 0; reg < YMPLAYER_REGISTERS; reg++ ) {
+    if( !( mask & ( 1u << reg ) ) ) continue;
+    s->registers[ reg ] = registers[ reg ];
+    count = keep( writes, max, count, 0, reg, registers[ reg ] );
+  }
+  return count;
+}
+
 int
 aysource_frame( aysource *s, aysource_write *writes, int max )
 {
@@ -336,6 +369,7 @@ aysource_frame( aysource *s, aysource_write *writes, int max )
 
   if( s->pt3 ) return frame_pt3( s, writes, max );
   if( s->psg ) return frame_psg( s, writes, max );
+  if( s->ym ) return frame_ym( s, writes, max );
 
   for( t = 0; t < AYSOURCE_FRAME_TSTATES; t++ ) {
     if( t < INT_TSTATES ) pins |= Z80_INT;

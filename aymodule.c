@@ -24,6 +24,8 @@
 #include "aymodule.h"
 #include "pscplayer.h"
 #include "psmplayer.h"
+#include "gtrplayer.h"
+#include "ftcplayer.h"
 #include "pt1player.h"
 #include "pt2player.h"
 #include "psgplayer.h"
@@ -228,6 +230,42 @@ static const aymodule_format psm_format = {
   psm_frame_module, psm_title_module, NULL, NULL, psm_length_module, NULL
 };
 
+/* Global Tracker */
+
+static void *gtr_load_module( const unsigned char *d, size_t l )
+{ return gtr_load( d, l ); }
+static void gtr_free_module( void *m ) { gtr_free( m ); }
+static void gtr_reset_module( void *m ) { gtr_reset( m ); }
+static void gtr_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ gtr_frame( m, r, mask ); }
+static const char *gtr_title_module( const void *m )
+{ return gtr_title( m ); }
+static long gtr_length_module( const void *m, long *loop )
+{ return gtr_length( (gtr_module *)m, loop ); }
+
+static const aymodule_format gtr_format = {
+  "GTR", gtr_check, gtr_load_module, gtr_free_module, gtr_reset_module,
+  gtr_frame_module, gtr_title_module, NULL, NULL, gtr_length_module, NULL
+};
+
+/* Fast Tracker */
+
+static void *ftc_load_module( const unsigned char *d, size_t l )
+{ return ftc_load( d, l ); }
+static void ftc_free_module( void *m ) { ftc_free( m ); }
+static void ftc_reset_module( void *m ) { ftc_reset( m ); }
+static void ftc_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ ftc_frame( m, r, mask ); }
+static const char *ftc_title_module( const void *m )
+{ return ftc_title( m ); }
+static long ftc_length_module( const void *m, long *loop )
+{ return ftc_length( (ftc_module *)m, loop ); }
+
+static const aymodule_format ftc_format = {
+  "FTC", ftc_check, ftc_load_module, ftc_free_module, ftc_reset_module,
+  ftc_frame_module, ftc_title_module, NULL, NULL, ftc_length_module, NULL
+};
+
 /* Pro Tracker 1 */
 
 static void *pt1_load_module( const unsigned char *d, size_t l )
@@ -299,9 +337,11 @@ static const aymodule_format * const formats[] = {
   &asc_format,
   &stp_format,
   &psm_format,
+  &gtr_format,
   &pt1_format,
   &sqt_format,
   &psc_format,
+  &ftc_format,
   NULL
 };
 

@@ -59,12 +59,13 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   `.pt3` moduloké, címmel és szerzővel. A többi `.txt` fájlt a Fuse nem
   veszi zenének. A TurboSound szöveges modulnak (két modul) az első
   modulja szól, ahogy a `.pt3`-nál.
-- További tíz tracker moduljai szólnak az AY lejátszóban: **Sound
+- További tizenkét tracker moduljai szólnak az AY lejátszóban: **Sound
   Tracker** (`.stc`), **Sound Tracker Pro** (`.stp`), **Pro Tracker 1**
   (`.pt1`) és **2** (`.pt2`), **ASC Sound Master** (`.asc`, és első
   változata, `.as0`), **SQ-Tracker** (`.sqt`), **Pro Sound Creator**
-  (`.psc`), **Pro Sound Maker** (`.psm`), valamint a **Sound Tracker 1**
-  és **3** (`.st1`, `.st3`), címmel (és szerzővel, ahol a formátumban van). A lejátszók a ZXTune lejátszóinak átiratai; a ZXTune
+  (`.psc`), **Pro Sound Maker** (`.psm`), **Sound Tracker 1** és **3**
+  (`.st1`, `.st3`), **Global Tracker** (`.gtr`) és **Fast Tracker**
+  (`.ftc`), címmel (és szerzővel, ahol a formátumban van). A lejátszók a ZXTune lejátszóinak átiratai; a ZXTune
   mintamoduljain minden képkocka minden AY-regisztere egyezik egy
   ZXTune-buildével, és ugyanígy a hosszak és az ismétlési pontok is.
 - A trackermodulok (a `.pt3` és a Vortex szöveges modulok is) hosszát a

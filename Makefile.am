@@ -58,6 +58,8 @@ fuse_SOURCES = display.c \
 	aytables.c \
 	aytrack.c \
 	aysource.c \
+	ftcplayer.c \
+	gtrplayer.c \
 	lh5decode.c \
 	psgplayer.c \
 	pscplayer.c \
@@ -186,6 +188,8 @@ noinst_HEADERS = bitmap.h \
 	aytables.h \
 	aytrack.h \
 	aysource.h \
+	ftcplayer.h \
+	gtrplayer.h \
 	lh5decode.h \
 	psgplayer.h \
 	pt3model.h \

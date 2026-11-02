@@ -60,10 +60,14 @@ fuse_SOURCES = display.c \
 	aysource.c \
 	lh5decode.c \
 	psgplayer.c \
+	pscplayer.c \
+	pt1player.c \
 	pt2player.c \
 	pt3player.c \
 	pt3text.c \
+	sqtplayer.c \
 	stcplayer.c \
+	stpplayer.c \
 	ymplayer.c \
 	ayplaylist.c \
 	basic_text.c \
@@ -184,9 +188,13 @@ noinst_HEADERS = bitmap.h \
 	lh5decode.h \
 	psgplayer.h \
 	pt3model.h \
+	pscplayer.h \
+	pt1player.h \
 	pt2player.h \
 	pt3player.h \
+	sqtplayer.h \
 	stcplayer.h \
+	stpplayer.h \
 	ymplayer.h \
 	ayplaylist.h \
 	basic_text.h \

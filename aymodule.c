@@ -22,10 +22,14 @@
 
 #include "ascplayer.h"
 #include "aymodule.h"
+#include "pscplayer.h"
+#include "pt1player.h"
 #include "pt2player.h"
 #include "psgplayer.h"
 #include "pt3player.h"
+#include "sqtplayer.h"
 #include "stcplayer.h"
+#include "stpplayer.h"
 #include "ymplayer.h"
 
 struct aymodule {
@@ -169,6 +173,81 @@ static const aymodule_format asc_format = {
   asc_length_module, NULL
 };
 
+/* Sound Tracker Pro (compiled) */
+
+static void *stp_load_module( const unsigned char *d, size_t l )
+{ return stp_load( d, l ); }
+static void stp_free_module( void *m ) { stp_free( m ); }
+static void stp_reset_module( void *m ) { stp_reset( m ); }
+static void stp_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ stp_frame( m, r, mask ); }
+static const char *stp_title_module( const void *m )
+{ return stp_title( m ); }
+static long stp_length_module( const void *m, long *loop )
+{ return stp_length( (stp_module *)m, loop ); }
+
+static const aymodule_format stp_format = {
+  "STP", stp_check, stp_load_module, stp_free_module, stp_reset_module,
+  stp_frame_module, stp_title_module, NULL, NULL, stp_length_module, NULL
+};
+
+/* Pro Tracker 1 */
+
+static void *pt1_load_module( const unsigned char *d, size_t l )
+{ return pt1_load( d, l ); }
+static void pt1_free_module( void *m ) { pt1_free( m ); }
+static void pt1_reset_module( void *m ) { pt1_reset( m ); }
+static void pt1_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ pt1_frame( m, r, mask ); }
+static const char *pt1_title_module( const void *m )
+{ return pt1_title( m ); }
+static long pt1_length_module( const void *m, long *loop )
+{ return pt1_length( (pt1_module *)m, loop ); }
+
+static const aymodule_format pt1_format = {
+  "PT1", pt1_check, pt1_load_module, pt1_free_module, pt1_reset_module,
+  pt1_frame_module, pt1_title_module, NULL, NULL, pt1_length_module, NULL
+};
+
+/* SQ-Tracker (compiled) */
+
+static void *sqt_load_module( const unsigned char *d, size_t l )
+{ return sqt_load( d, l ); }
+static void sqt_free_module( void *m ) { sqt_free( m ); }
+static void sqt_reset_module( void *m ) { sqt_reset( m ); }
+static void sqt_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ sqt_frame( m, r, mask ); }
+static const char *sqt_title_module( const void *m )
+{ return sqt_title( m ); }
+static long sqt_length_module( const void *m, long *loop )
+{ return sqt_length( (sqt_module *)m, loop ); }
+
+static const aymodule_format sqt_format = {
+  "SQT", sqt_check, sqt_load_module, sqt_free_module, sqt_reset_module,
+  sqt_frame_module, sqt_title_module, NULL, NULL, sqt_length_module, NULL
+};
+
+/* Pro Sound Creator */
+
+static void *psc_load_module( const unsigned char *d, size_t l )
+{ return psc_load( d, l ); }
+static void psc_free_module( void *m ) { psc_free( m ); }
+static void psc_reset_module( void *m ) { psc_reset( m ); }
+static void psc_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ psc_frame( m, r, mask ); }
+static const char *psc_title_module( const void *m )
+{ return psc_title( m ); }
+static const char *psc_author_module( const void *m )
+{ return psc_author( m ); }
+static long psc_length_module( const void *m, long *loop )
+{ return psc_length( (psc_module *)m, loop ); }
+
+static const aymodule_format psc_format = {
+  "PSC", psc_check, psc_load_module, psc_free_module, psc_reset_module,
+  psc_frame_module, psc_title_module, psc_author_module, NULL,
+  psc_length_module, NULL
+};
+
 /* The formats in the order they are tried: those with a signature first,
    then those told by their structure only, in ZXTune's order */
 static const aymodule_format * const formats[] = {
@@ -179,6 +258,10 @@ static const aymodule_format * const formats[] = {
   &stc_format,
   &as0_format,
   &asc_format,
+  &stp_format,
+  &pt1_format,
+  &sqt_format,
+  &psc_format,
   NULL
 };
 

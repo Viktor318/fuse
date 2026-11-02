@@ -202,7 +202,7 @@ is_text_module( const char *filename )
    (Vortex Tracker text: also .txt files that are such, see below) and
    register dumps */
 static const char * const extensions[] = {
-  "ay", "pt3", "vt2", "pt2", "pt1", "stc", "stp", "asc", "as0", "sqt", "psc", "psm",
+  "ay", "pt3", "vt2", "pt2", "pt1", "stc", "st1", "st3", "stp", "asc", "as0", "sqt", "psc", "psm",
   "psg", "ym", "vtx", NULL
 };
 

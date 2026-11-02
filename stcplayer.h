@@ -1,4 +1,5 @@
-/* stcplayer.h: Sound Tracker (compiled, .stc) module player
+/* stcplayer.h: Sound Tracker module player (compiled .stc, uncompiled
+   Sound Tracker 1 and Sound Tracker 3 modules)
    Copyright (c) 2026 Viktor (GitHub: Viktor318)
 
    Based on ZXTune (https://zxtune.bitbucket.io/), Copyright (c)
@@ -33,6 +34,16 @@ int stc_check( const unsigned char *data, size_t length );
 
 /* NULL if the data is not a module that can be played */
 stc_module *stc_load( const unsigned char *data, size_t length );
+
+/* The same for an uncompiled Sound Tracker 1 module (as saved by the
+   editor: no signature, a fixed layout) and a Sound Tracker 3 module
+   (no signature either). The modules are played, told and freed by the
+   stc_ functions below */
+int st1_check( const unsigned char *data, size_t length );
+stc_module *st1_load( const unsigned char *data, size_t length );
+int st3_check( const unsigned char *data, size_t length );
+stc_module *st3_load( const unsigned char *data, size_t length );
+
 void stc_free( stc_module *module );
 
 const char *stc_title( const stc_module *module );

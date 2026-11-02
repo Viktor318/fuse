@@ -192,6 +192,24 @@ static const aymodule_format stp_format = {
   stp_frame_module, stp_title_module, NULL, NULL, stp_length_module, NULL
 };
 
+/* Sound Tracker 1 (uncompiled) and Sound Tracker 3: the same player */
+
+static void *st1_load_module( const unsigned char *d, size_t l )
+{ return st1_load( d, l ); }
+
+static const aymodule_format st1_format = {
+  "ST1", st1_check, st1_load_module, stc_free_module, stc_reset_module,
+  stc_frame_module, stc_title_module, NULL, NULL, stc_length_module, NULL
+};
+
+static void *st3_load_module( const unsigned char *d, size_t l )
+{ return st3_load( d, l ); }
+
+static const aymodule_format st3_format = {
+  "ST3", st3_check, st3_load_module, stc_free_module, stc_reset_module,
+  stc_frame_module, stc_title_module, NULL, NULL, stc_length_module, NULL
+};
+
 /* Pro Sound Maker (compiled) */
 
 static void *psm_load_module( const unsigned char *d, size_t l )
@@ -275,6 +293,8 @@ static const aymodule_format * const formats[] = {
   &pt3_format,
   &pt2_format,
   &stc_format,
+  &st1_format,
+  &st3_format,
   &as0_format,
   &asc_format,
   &stp_format,

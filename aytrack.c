@@ -53,16 +53,30 @@ aytrack_free( aytrack *t )
   t->patterns = NULL;
 }
 
-aytrack_line *
+/* Room for `count' lines in a pattern (new ones empty) */
+static int
+grow( aytrack_pattern *p, int count )
+{
+  aytrack_line *lines;
+  int allocated = p->allocated ? p->allocated : 16;
+
+  if( count <= p->allocated && p->lines ) return 1;
+  while( allocated < count ) allocated *= 2;
+  if( allocated > AYTRACK_MAX_LINES ) allocated = AYTRACK_MAX_LINES;
+  lines = realloc( p->lines, allocated * sizeof( *lines ) );
+  if( !lines ) return 0;
+  memset( lines + p->allocated, 0,
+          ( allocated - p->allocated ) * sizeof( *lines ) );
+  p->lines = lines;
+  p->allocated = allocated;
+  return 1;
+}
+
+int
 aytrack_pattern_lines( aytrack *t, int pattern )
 {
-  aytrack_pattern *p;
-
-  if( pattern < 0 || pattern >= t->pattern_count ) return NULL;
-  p = &t->patterns[ pattern ];
-  if( !p->lines )
-    p->lines = calloc( AYTRACK_MAX_LINES, sizeof( *p->lines ) );
-  return p->lines;
+  if( pattern < 0 || pattern >= t->pattern_count ) return 0;
+  return grow( &t->patterns[ pattern ], 1 );
 }
 
 void
@@ -77,13 +91,16 @@ aytrack_pattern_size( aytrack *t, int pattern, int size )
 aytrack_line *
 aytrack_start_line( aytrack *t, int pattern, int line )
 {
-  aytrack_line *lines = aytrack_pattern_lines( t, pattern );
+  aytrack_pattern *p;
 
-  if( !lines || line < 0 || line >= AYTRACK_MAX_LINES ) return NULL;
-  lines[ line ].present = 1;
-  if( line + 1 > t->patterns[ pattern ].size )
-    t->patterns[ pattern ].size = line + 1;
-  return &lines[ line ];
+  if( pattern < 0 || pattern >= t->pattern_count || line < 0 ||
+      line >= AYTRACK_MAX_LINES )
+    return NULL;
+  p = &t->patterns[ pattern ];
+  if( !grow( p, line + 1 ) ) return NULL;
+  p->lines[ line ].present = 1;
+  if( line + 1 > p->size ) p->size = line + 1;
+  return &p->lines[ line ];
 }
 
 void
@@ -133,7 +150,8 @@ current_line( const aytrack *t )
 
   if( t->pattern < 0 || t->pattern >= t->pattern_count ) return NULL;
   p = &t->patterns[ t->pattern ];
-  if( !p->lines || t->line >= p->size ) return NULL;
+  if( !p->lines || t->line >= p->size || t->line >= p->allocated )
+    return NULL;
   return p->lines[ t->line ].present ? &p->lines[ t->line ] : NULL;
 }
 

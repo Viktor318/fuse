@@ -64,6 +64,7 @@ typedef struct aytrack_line {
 typedef struct aytrack_pattern {
   int size;			/* lines; no lines: no such pattern */
   aytrack_line *lines;
+  int allocated;		/* lines kept (those after are empty) */
 } aytrack_pattern;
 
 typedef struct aytrack_position {
@@ -87,12 +88,13 @@ typedef struct aytrack {
 int aytrack_init( aytrack *t, int pattern_count );
 void aytrack_free( aytrack *t );
 
-/* The lines of a pattern, made for `lines' lines (the size is the last
-   line used + 1 until set with aytrack_pattern_size); NULL if it cannot be */
-aytrack_line *aytrack_pattern_lines( aytrack *t, int pattern );
+/* Make a pattern (empty); the size is the last line used + 1 until set
+   with aytrack_pattern_size. 0 if it cannot be */
+int aytrack_pattern_lines( aytrack *t, int pattern );
 void aytrack_pattern_size( aytrack *t, int pattern, int size );
 /* Line `line' of a pattern, marked present (the size grows to it); NULL if
-   out of range */
+   out of range. The lines grow as needed: the pointer is valid until the
+   next call */
 aytrack_line *aytrack_start_line( aytrack *t, int pattern, int line );
 
 void aytrack_add_command( aytrack_cell *cell, int type, int p1, int p2,

@@ -28,7 +28,7 @@ int ayplayer_is_ay_file( const char *filename );
 /* The file types of the player, for file dialogs (.txt files are music
    only if they are Vortex Tracker modules) */
 #define AY_MUSIC_TYPES \
-  "*.ay;*.pt3;*.vt2;*.pt2;*.pt1;*.stc;*.stp;*.asc;*.as0;*.sqt;*.psc;" \
+  "*.ay;*.pt3;*.vt2;*.pt2;*.pt1;*.stc;*.stp;*.asc;*.as0;*.sqt;*.psc;*.psm;" \
   "*.psg;*.ym;*.vtx"
 
 #include <libspectrum.h>

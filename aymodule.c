@@ -23,6 +23,7 @@
 #include "ascplayer.h"
 #include "aymodule.h"
 #include "pscplayer.h"
+#include "psmplayer.h"
 #include "pt1player.h"
 #include "pt2player.h"
 #include "psgplayer.h"
@@ -191,6 +192,24 @@ static const aymodule_format stp_format = {
   stp_frame_module, stp_title_module, NULL, NULL, stp_length_module, NULL
 };
 
+/* Pro Sound Maker (compiled) */
+
+static void *psm_load_module( const unsigned char *d, size_t l )
+{ return psm_load( d, l ); }
+static void psm_free_module( void *m ) { psm_free( m ); }
+static void psm_reset_module( void *m ) { psm_reset( m ); }
+static void psm_frame_module( void *m, unsigned char *r, unsigned int *mask )
+{ psm_frame( m, r, mask ); }
+static const char *psm_title_module( const void *m )
+{ return psm_title( m ); }
+static long psm_length_module( const void *m, long *loop )
+{ return psm_length( (psm_module *)m, loop ); }
+
+static const aymodule_format psm_format = {
+  "PSM", psm_check, psm_load_module, psm_free_module, psm_reset_module,
+  psm_frame_module, psm_title_module, NULL, NULL, psm_length_module, NULL
+};
+
 /* Pro Tracker 1 */
 
 static void *pt1_load_module( const unsigned char *d, size_t l )
@@ -259,6 +278,7 @@ static const aymodule_format * const formats[] = {
   &as0_format,
   &asc_format,
   &stp_format,
+  &psm_format,
   &pt1_format,
   &sqt_format,
   &psc_format,

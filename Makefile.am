@@ -61,6 +61,7 @@ fuse_SOURCES = display.c \
 	lh5decode.c \
 	psgplayer.c \
 	pscplayer.c \
+	psmplayer.c \
 	pt1player.c \
 	pt2player.c \
 	pt3player.c \
@@ -189,6 +190,7 @@ noinst_HEADERS = bitmap.h \
 	psgplayer.h \
 	pt3model.h \
 	pscplayer.h \
+	psmplayer.h \
 	pt1player.h \
 	pt2player.h \
 	pt3player.h \

@@ -58,11 +58,11 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   title and author. Other `.txt` files are not taken for music. Of a
   TurboSound text module (two modules) the first one is played, as with
   `.pt3`.
-- **Tracker modules** of seven more trackers play in the AY player:
+- **Tracker modules** of eight more trackers play in the AY player:
   **Sound Tracker** (`.stc`), **Sound Tracker Pro** (`.stp`), **Pro
   Tracker 1** (`.pt1`) and **2** (`.pt2`), **ASC Sound Master** (`.asc`,
-  and its first version `.as0`), **SQ-Tracker** (`.sqt`) and **Pro Sound
-  Creator** (`.psc`), with their titles (and authors, where the format has
+  and its first version `.as0`), **SQ-Tracker** (`.sqt`), **Pro Sound
+  Creator** (`.psc`) and **Pro Sound Maker** (`.psm`), with their titles (and authors, where the format has
   them). The players are ports of ZXTune's;
   on ZXTune's sample modules every AY register of every frame matches a
   ZXTune build, and so do the lengths and loop points.

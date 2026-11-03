@@ -109,6 +109,9 @@ EXTRA_fuse_SOURCES =
 
 BUILT_SOURCES = options.h settings.c settings.h
 
+# Rebuild even sources without config.h when the assertion policy changes.
+$(fuse_OBJECTS): config.h
+
 settings.c: settings.pl settings.dat
 	$(AM_V_GEN)$(PERL) -I$(srcdir)/perl $(srcdir)/settings.pl $(srcdir)/settings.dat > $@.tmp && mv $@.tmp $@
 

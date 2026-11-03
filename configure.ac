@@ -1064,6 +1064,19 @@ if test "$smallmem" = no; then
 fi
 AC_MSG_RESULT($smallmem)
 
+dnl Runtime assertions are for development, not normal optimized builds.
+AC_MSG_CHECKING([whether runtime assertions are enabled])
+AC_ARG_ENABLE([assertions],
+  [AS_HELP_STRING([--enable-assertions],
+    [enable runtime assertion checks (default: no)])],
+  [], [enable_assertions=no])
+AS_CASE([$enable_assertions],
+  [yes], [CPPFLAGS="$CPPFLAGS -UNDEBUG"],
+  [no], [CPPFLAGS="$CPPFLAGS -DNDEBUG"
+         AC_DEFINE([NDEBUG], [1], [Define to disable runtime assertion checks])],
+  [AC_MSG_ERROR([--enable-assertions accepts only yes or no])])
+AC_MSG_RESULT([$enable_assertions])
+
 dnl Do we want lots of warning messages?
 AC_MSG_CHECKING(whether lots of warnings requested)
 AC_ARG_ENABLE(warnings,

@@ -1,4 +1,6 @@
 /* Regression tests for balanced exact-zero PCM filler. */
+/* Test checks must execute even when the emulator is built with NDEBUG. */
+#undef NDEBUG
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

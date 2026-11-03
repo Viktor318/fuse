@@ -1,6 +1,8 @@
 /* Cooperative wait regression: compile with emcc -sASYNCIFY and run in Node.
    Copyright (c) 2026 Fredrick Meunier
    SPDX-License-Identifier: GPL-2.0-or-later */
+/* Test checks must execute even when the emulator is built with NDEBUG. */
+#undef NDEBUG
 #include <assert.h>
 #include <errno.h>
 #include <stdatomic.h>

@@ -189,6 +189,11 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   of the file, and an image whose sector data runs past the end of the file
   is still loaded, with a warning (translated) about the sectors left
   without data.
+- From upstream `master`: the **floating bus of the +2A/+3** is emulated
+  (bug #360), so games that read it (e.g. for synchronising with the
+  screen) run on these machines too.
+- From upstream `master`: **EmuZWin snapshots** (`.ezx`) can be opened
+  (read only), and are in the file selector filters.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

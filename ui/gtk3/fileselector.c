@@ -311,6 +311,7 @@ add_filter_recording_files( GtkFileFilter *filter )
 static void
 add_filter_snapshot_files( GtkFileFilter *filter )
 {
+  gtk_file_filter_add_pattern( filter, "*.ezx" );
   gtk_file_filter_add_pattern( filter, "*.mgtsnp" );
   gtk_file_filter_add_pattern( filter, "*.slt" );
   gtk_file_filter_add_pattern( filter, "*.sna" );
@@ -322,6 +323,7 @@ add_filter_snapshot_files( GtkFileFilter *filter )
   gtk_file_filter_add_pattern( filter, "*.zx-state" );
   gtk_file_filter_add_pattern( filter, "*.s" );
 
+  gtk_file_filter_add_pattern( filter, "*.EZX" );
   gtk_file_filter_add_pattern( filter, "*.MGTSNP" );
   gtk_file_filter_add_pattern( filter, "*.SLT" );
   gtk_file_filter_add_pattern( filter, "*.SNA" );

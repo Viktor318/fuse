@@ -56,6 +56,7 @@
 
 #include "machine.h"
 #include "memory_pages.h"
+#include "machines/specplus3.h"
 
  */
 
@@ -588,7 +589,9 @@ events_click( LPNMITEMACTIVATE lpnmitem )
     return;
   }
 
+  specplus3_bus_invalidate();
   tstates = _ttoi( buffer );
+  specplus3_bus_rebase();
   error = debugger_breakpoint_add_time(
     DEBUGGER_BREAKPOINT_TYPE_TIME, tstates, 0,
     DEBUGGER_BREAKPOINT_LIFE_ONESHOT, NULL

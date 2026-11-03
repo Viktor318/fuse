@@ -130,6 +130,7 @@ static int machine_add_machine( int (*init_function)( fuse_machine_info *machine
   machine_types[ machine_count - 1 ] = libspectrum_new( fuse_machine_info, 1 );
   machine = machine_types[ machine_count - 1 ];
 
+  machine->unattached_port_for_port = NULL;
   error = init_function( machine ); if( error ) return error;
 
   machine_set_const_timings( machine );
@@ -227,6 +228,7 @@ machine_select_machine( fuse_machine_info *machine, libspectrum_snap *snap )
      events and replacing the machine. tape_play() rescales it on resume. */
   if( tape_recording && tape_record_stop() ) return 1;
   if( machine_current ) tape_stop();
+  specplus3_bus_invalidate();
   machine_current = machine;
 
   settings_set_string( &settings_current.start_machine, machine->id );
@@ -519,6 +521,7 @@ machine_reset_from_snapshot( int hard_reset, libspectrum_snap *snap )
   int error;
 
   if( tape_recording && tape_record_stop() ) return 1;
+  specplus3_bus_invalidate();
   if( hard_reset ) machine_clear_snapshot_rom_banks();
 
   /* Clear poke list (undoes effects of active pokes on Spectrum memory) */
@@ -558,6 +561,7 @@ machine_reset_from_snapshot( int hard_reset, libspectrum_snap *snap )
   /* clear out old display image ready for new one */
   display_refresh_all();
 
+  specplus3_bus_rebase();
   return 0;
 }
 

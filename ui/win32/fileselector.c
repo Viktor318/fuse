@@ -42,7 +42,7 @@ static char *current_folder;
    between UIs */
 static LPCTSTR file_filter = TEXT(
 "Supported Files\0"
-"*.mgtsnp;*.slt;*.sna;*.snapshot;*.snp;*.sp;*.szx;*.z80;*.zx-state;*.s;"
+"*.ezx;*.mgtsnp;*.slt;*.sna;*.snapshot;*.snp;*.sp;*.szx;*.z80;*.zx-state;*.s;"
 "*.csw;*.ltp;*.pzx;*.raw;*.spc;*.sta;*.tzx;*.tap"
 #ifdef LIBSPECTRUM_SUPPORTS_WAV
 ";*.wav"
@@ -87,7 +87,7 @@ AY_MUSIC_TYPES ";*.txt\0"
 "Recording Files (*.rzx)\0"
 "*.rzx\0"
 "Snapshot Files (*.szx;*.z80;*.sna;...)\0"
-"*.mgtsnp;*.slt;*.sna;*.snapshot;*.snp;*.sp;*.szx;*.z80;*.zx-state;*.s\0"
+"*.ezx;*.mgtsnp;*.slt;*.sna;*.snapshot;*.snp;*.sp;*.szx;*.z80;*.zx-state;*.s\0"
 "Tape Files (*.tap;*.tzx;*.pzx"
 #ifdef LIBSPECTRUM_SUPPORTS_WAV
 ";*.wav"

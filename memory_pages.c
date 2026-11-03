@@ -431,6 +431,9 @@ readbyte( libspectrum_word address )
   if( mapping->contended ) tstates += ula_contention[ tstates ];
   tstates += 3;
 
+  if( specplus3_bus_active )
+    specplus3_bus_memory_read( mapping, address, tstates );
+
   if( address < 0x4000 ) {
     if( opus_active && address >= 0x2800 && address < 0x3800 )
       return opus_read( address );
@@ -478,6 +481,8 @@ writebyte( libspectrum_word address, libspectrum_byte b )
 
   tstates += 3;
 
+  if( specplus3_bus_active )
+    specplus3_bus_memory_write( mapping, tstates, b );
   writebyte_internal( address, b );
 }
 

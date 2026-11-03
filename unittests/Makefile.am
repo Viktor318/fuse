@@ -20,8 +20,10 @@
 ##
 ## E-mail: philip-fuse@shadowmagic.org.uk
 
-fuse_SOURCES += unittests/helpers.c
+fuse_SOURCES += unittests/helpers.c unittests/floatingbus.c
 noinst_HEADERS += unittests/helpers.h
+EXTRA_DIST += unittests/fixtures/floatingbus/README.md \
+	unittests/fixtures/floatingbus/.gitignore
 
 # SDK-specific cooperative wait test; see hacking/emscripten.md for Node usage.
 EXTRA_DIST += unittests/emscriptenwaittest.c

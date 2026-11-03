@@ -50,6 +50,7 @@ specplus3e_init( fuse_machine_info *machine )
   machine->ram.valid_pages	     = 8;
 
   machine->unattached_port = spectrum_unattached_port_none;
+  machine->unattached_port_for_port = specplus3_unattached_port;
 
   machine->shutdown = specplus3_shutdown;
 

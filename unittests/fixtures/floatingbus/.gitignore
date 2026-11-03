@@ -1,0 +1,2 @@
+# Original third-party test programs are optional local fixtures.
+*.tap

@@ -30,6 +30,7 @@
 #include "keyboard.h"
 #include "machine.h"
 #include "memory_pages.h"
+#include "machines/specplus3.h"
 #include "module.h"
 #include "settings.h"
 #include "snapshot.h"
@@ -167,6 +168,7 @@ snapshot_copy_from( libspectrum_snap *snap )
 
   /* Restored source state/time is not a continuation of consumed audio. */
   sound_suspend_subframe();
+  specplus3_bus_invalidate();
   periph_disable_optional();
   module_snapshot_enabled( snap );
 
@@ -184,6 +186,7 @@ snapshot_copy_from( libspectrum_snap *snap )
       ui_error( UI_ERROR_ERROR,
 		"Loading a %s snapshot, but that's not available",
 		libspectrum_machine_name( machine ) );
+      return error;
     }
   } else {
     error = machine_reset_from_snapshot( 0, snap );
@@ -193,11 +196,13 @@ snapshot_copy_from( libspectrum_snap *snap )
 
   keyboard_release_all();
 
+  specplus3_bus_invalidate();
   module_snapshot_from( snap );
 
   /* Need to reset memory_map_[read|write] after all modules have had a turn
      initialising from the snapshot */
   machine_current->memory_map();
+  specplus3_bus_rebase();
 
   return 0;
 }

@@ -194,6 +194,11 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   a fájl végén túl, és ha egyes szektorok adata túlnyúlik a fájl végén, a
   lemezkép akkor is betöltődik, egy (magyarra fordított) figyelmeztetéssel
   az adat nélkül maradt szektorokról.
+- Az upstream `master`-ből: a **+2A/+3 lebegő busza** emulálva van (#360-as
+  hiba), így az azt olvasó játékok (például a képernyővel szinkronizálók)
+  ezeken a gépeken is futnak.
+- Az upstream `master`-ből: az **EmuZWin pillanatfelvételek** (`.ezx`)
+  megnyithatók (csak olvasásra), és ott vannak a fájlválasztó szűrőiben.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

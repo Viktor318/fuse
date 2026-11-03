@@ -86,6 +86,12 @@ Building Fuse
 
 See the file `INSTALL' for more detailed information.
 
+Runtime assertions are disabled by default (`NDEBUG') so normal builds do not
+pay their execution cost. For development, configure with `--enable-assertions'
+to enable these checks. Changing this option rebuilds the emulator objects.
+Assertion-based unit tests keep their checks enabled in either configuration;
+compile-time static assertions are unaffected.
+
 Closing comments
 ----------------
 

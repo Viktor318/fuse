@@ -102,6 +102,7 @@ tags
 /unittests/blippreviewtest
 /unittests/coreaudiofilltest
 /unittests/displaytest
+/unittests/floatingbus-output/
 /unittests/pcm_fifotest
 /unittests/sfifotest
 /unittests/silencenoisetest

@@ -25,5 +25,9 @@
 #define FUSE_UNITTESTS_H
 
 int unittests_run( void );
+int floatingbus_differential_unittest( void );
+int floatingbus_original_unittest( void );
+int floatingbus_visual_unittest( void );
+int floatingbus_performance_fixtures( void );
 
 #endif				/* #ifndef FUSE_UNITTESTS_H */

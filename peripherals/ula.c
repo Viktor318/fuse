@@ -119,7 +119,9 @@ set_tstates( libspectrum_dword value )
 {
   /* Debugger clock assignment may jump behind audio already consumed. */
   sound_suspend_subframe();
+  specplus3_bus_invalidate();
   tstates = value;
+  specplus3_bus_rebase();
 }
 
 static libspectrum_dword

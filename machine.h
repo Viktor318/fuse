@@ -72,6 +72,7 @@ typedef struct fuse_machine_info {
   spectrum_raminfo ram; /* How do we access memory, and what's currently
 			   paged in */
 
+  libspectrum_byte (*unattached_port_for_port)( libspectrum_word port );
   spectrum_unattached_port_fn unattached_port; /* What to return if we read
 						  from a port which isn't
 						  attached to anything */

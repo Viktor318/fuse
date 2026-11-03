@@ -110,9 +110,15 @@
 
 #ifndef CORETEST
 
+#include "machines/specplus3.h"
+
 #define contend_read(address,time) \
   if( memory_map_read[ (address) >> MEMORY_PAGE_SIZE_LOGARITHM ].contended ) \
     tstates += ula_contention[ tstates ]; \
+  if( specplus3_bus_active ) \
+    specplus3_bus_memory_read( \
+      &memory_map_read[ (address) >> MEMORY_PAGE_SIZE_LOGARITHM ], \
+      (address), tstates + 3 ); \
   tstates += (time);
 
 #define contend_read_no_mreq(address,time) \

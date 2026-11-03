@@ -25,6 +25,7 @@
 #include "config.h"
 
 #include <stdio.h>
+#include <assert.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -35,6 +36,8 @@
 #include "libspectrum.h"
 
 #include "compat.h"
+#include "display.h"
+#include "rzx.h"
 #include "fuse.h"
 #include "machine.h"
 #include "machines_periph.h"
@@ -54,6 +57,139 @@
 #include "ui/uimedia.h"
 #include "utils.h"
 #include "options.h"	/* needed for get combo options */
+
+/* Retained ASIC transfer, not the conventional 128K floating bus.
+   Fetch phase and same-slot page switching are provisional.
+   No per-cycle events are needed. Host RAM edits are not observed. */
+int specplus3_bus_active;
+static libspectrum_byte bus_value;
+static long bus_synced_through;
+/* Lower bound on the next unconsumed fetch: exact after calculation/rebase;
+   conservative after a CPU transfer supersedes intervening video bytes. */
+static long bus_next_fetch;
+static long bus_first_fetch, bus_frame_length, bus_line_length;
+static int bus_screen_page;
+
+static void
+specplus3_bus_sync( long time )
+{
+  long local, line, slot, fetch;
+  int column, offset;
+
+  if( !specplus3_bus_active ) return;
+  assert( time >= bus_synced_through );
+  if( time < bus_next_fetch ) {
+    bus_synced_through = time;
+    return;
+  }
+  local = time % bus_frame_length;
+  fetch = time - local;
+  if( local < bus_first_fetch ) {
+    /* Before this frame's first fetch, the last fetch is in the last
+       displayed line of the previous frame. */
+    fetch -= bus_frame_length;
+    line = DISPLAY_HEIGHT - 1;
+    slot = 123;
+  } else {
+    line = ( local - bus_first_fetch ) / bus_line_length;
+    slot = ( local - bus_first_fetch ) % bus_line_length;
+    if( line >= DISPLAY_HEIGHT ) {
+      line = DISPLAY_HEIGHT - 1;
+      slot = 123;
+    } else if( slot > 123 ) {
+      slot = 123;
+    } else if( ( slot & 7 ) > 3 ) {
+      slot = ( slot & ~7 ) + 3;
+    }
+  }
+  fetch += bus_first_fetch + line * bus_line_length + slot;
+  if( fetch > bus_synced_through ) {
+    column = 2 * ( slot / 8 ) + ( slot & 3 ) / 2;
+    offset = ( slot & 1 ) ? display_attr_start[ line ] :
+                           display_line_start[ line ];
+    bus_value = RAM[ bus_screen_page ][ offset + column ];
+  }
+  /* First legal slot strictly after time, from the latest legal slot.
+     Idle group slots, horizontal border and vertical blank remain distinct. */
+  if( ( slot & 7 ) < 3 )
+    bus_next_fetch = fetch + 1;
+  else if( slot < 123 )
+    bus_next_fetch = fetch + 5;
+  else if( line < DISPLAY_HEIGHT - 1 )
+    bus_next_fetch = fetch + bus_line_length - 123;
+  else
+    bus_next_fetch = fetch + bus_frame_length -
+                     ( DISPLAY_HEIGHT - 1 ) * bus_line_length - 123;
+  assert( bus_next_fetch > time );
+  bus_synced_through = time;
+}
+
+void
+specplus3_bus_invalidate( void )
+{
+  specplus3_bus_active = 0;
+}
+
+void
+specplus3_bus_rebase( void )
+{
+  specplus3_bus_active = machine_current && !rzx_playback &&
+    machine_current->unattached_port_for_port == specplus3_unattached_port;
+  bus_value = 0xff; /* Emulator reset/restore policy, not a power-on claim. */
+  bus_synced_through = tstates;
+  bus_screen_page = memory_current_screen;
+  if( specplus3_bus_active ) {
+    bus_first_fetch = machine_current->line_times[ DISPLAY_BORDER_HEIGHT ] +
+                      DISPLAY_BORDER_WIDTH_COLS * 4 + 2;
+    bus_frame_length = machine_current->timings.tstates_per_frame;
+    bus_line_length = machine_current->timings.tstates_per_line;
+    /* Initialize the next slot without replaying RAM at/before this clock:
+       the cursor already equals time, so sync cannot latch an old fetch. */
+    bus_next_fetch = tstates;
+    specplus3_bus_sync( tstates );
+  }
+}
+
+void
+specplus3_bus_frame( libspectrum_dword length, libspectrum_dword now )
+{
+  if( !specplus3_bus_active ) return;
+  specplus3_bus_sync( now );
+  bus_synced_through -= length;
+  bus_next_fetch -= length;
+}
+
+static void
+specplus3_bus_screen_change( int page, libspectrum_dword time )
+{
+  if( !specplus3_bus_active ) return;
+  /* Old source strictly before S; the new source owns an unconsumed S. */
+  if( (long)time > bus_synced_through ) specplus3_bus_sync( (long)time - 1 );
+  bus_screen_page = page;
+}
+
+void
+specplus3_bus_transfer( libspectrum_dword time, libspectrum_byte value )
+{
+  /* Every video transfer through this sample is superseded by the CPU
+     byte, so consuming that history needs no RAM peek or fetch arithmetic.
+     If the exact next slot is no longer known, time + 1 is a conservative
+     bound: a later sync recomputes rather than skipping a possible fetch.
+     In particular, M1 refresh time is NOT consumed by this notification. */
+  assert( (long)time >= bus_synced_through );
+  bus_synced_through = time;
+  if( (long)time >= bus_next_fetch ) bus_next_fetch = (long)time + 1;
+  bus_value = value;
+}
+
+libspectrum_byte
+specplus3_unattached_port( libspectrum_word port )
+{
+  if( !specplus3_bus_active || ( port & 0xf003 ) != 1 ||
+      machine_current->ram.locked ) return 0xff;
+  specplus3_bus_sync( tstates );
+  return bus_value | 1;
+}
 
 static int normal_memory_map( int rom, int page );
 static void special_memory_map( int which );
@@ -122,6 +258,7 @@ int specplus3_init( fuse_machine_info *machine )
   machine->ram.valid_pages	     = 8;
 
   machine->unattached_port = spectrum_unattached_port_none;
+  machine->unattached_port_for_port = specplus3_unattached_port;
 
   specplus3_765_init();
   specplus3_menu_items();
@@ -335,6 +472,7 @@ specplus3_memory_map( void )
   if( memory_current_screen != screen ) {
     display_update_critical( 0, 0 );
     display_refresh_main_screen();
+    specplus3_bus_screen_change( screen, tstates );
     memory_current_screen = screen;
   }
 

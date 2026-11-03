@@ -25,6 +25,8 @@
 
 #include "config.h"
 
+#include "machines/specplus3.h"
+
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -397,6 +399,7 @@ start_playback( libspectrum_rzx *from_rzx )
   event_add( RZX_SENTINEL_TIME, sentinel_event );
 
   sentinel_warning = 0;
+  specplus3_bus_invalidate();
   tstates = libspectrum_rzx_tstates( from_rzx );
   rzx_instruction_count = libspectrum_rzx_instructions( from_rzx );
   rzx_playback = 1;
@@ -471,6 +474,7 @@ int rzx_stop_playback( int add_interrupt )
 
   }
 
+  specplus3_bus_rebase();
   libspec_error = libspectrum_rzx_free( rzx );
   if( libspec_error != LIBSPECTRUM_ERROR_NONE ) return libspec_error;
 

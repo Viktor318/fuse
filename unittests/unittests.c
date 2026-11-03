@@ -29,12 +29,14 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "libspectrum.h"
 
 #include "debugger/debugger.h"
+#include "debugger/debugger_internals.h"
 #include "display.h"
 #include "fuse.h"
 #include "input.h"
@@ -85,6 +87,7 @@
 #include "event.h"
 #include "rzx.h"
 #include "spectrum.h"
+#include "machines/specplus3.h"
 #include "screenshot.h"
 #include "ui/scaler/scaler.h"
 #include "helpers.h"
@@ -906,6 +909,359 @@ ay_tail_write_survives_frame_boundary_test( void )
   if( machine_select( old_machine ) ) r++;
 
   if( r ) printf( "ay_tail_write_survives_frame_boundary_test failed\n" );
+  return r;
+}
+
+/* Bounded observer-cost comparison, not an end-to-end FPS benchmark. The
+   disabled leg still includes the new cheap guards, so does not measure their
+   cost against the historical binary. Both legs execute identical memory
+   cycles in the border with identical wait states. */
+static int
+retained_bus_benchmark( void )
+{
+  libspectrum_machine saved = machine_current->machine;
+  clock_t begin;
+  double seconds[2];
+  int enabled, batch, i;
+  if( !getenv( "FUSE_TEST_FLOATING_BENCH" ) ) return 0;
+  if( machine_select( LIBSPECTRUM_MACHINE_PLUS3 ) ) return 1;
+  for( enabled = 0; enabled < 2; enabled++ ) {
+    begin = clock();
+    for( batch = 0; batch < 1000; batch++ ) {
+      specplus3_bus_invalidate(); tstates = 0; specplus3_bus_rebase();
+      if( !enabled ) specplus3_bus_invalidate();
+      for( i = 0; i < 2000; i++ ) {
+        readbyte( 0x4100 );
+        writebyte( 0x4100, i );
+      }
+    }
+    seconds[enabled] = (double)( clock() - begin ) / CLOCKS_PER_SEC;
+  }
+  printf( "Retained bus: 2000000 read/write pairs: disabled %.6fs, "
+          "enabled %.6fs (CPU time)\n", seconds[0], seconds[1] );
+  return machine_select( saved );
+}
+
+/* Independent published fetch vectors; these are provisional software
+   timing expectations, not newly captured physical measurements. */
+static int
+retained_bus_test( void )
+{
+  static const libspectrum_machine models[] = {
+    LIBSPECTRUM_MACHINE_PLUS2A, LIBSPECTRUM_MACHINE_PLUS3,
+    LIBSPECTRUM_MACHINE_PLUS3E
+  };
+  static const libspectrum_word ports[] = {
+    0x0001, 0x0005, 0x0ffd, 0x0003, 0x0fff, 0x1001,
+    0x1ffd, 0x7ffd, 0xfffd
+  };
+  static const libspectrum_byte vector[] = { 3, 0x45, 5, 0x47,
+                                             0x47, 0x47, 0x47, 0x47 };
+  static const struct {
+    libspectrum_byte code[4];
+    libspectrum_byte result;
+    int cycles;
+  } instructions[] = {
+    { { 0xcb, 0x00, 0, 0 }, 0x01, 8 }, /* RLC B */
+    { { 0xed, 0x44, 0, 0 }, 0x45, 8 }, /* NEG */
+    { { 0xdd, 0x00, 0, 0 }, 0x01, 8 }, /* DD NOP */
+    { { 0xfd, 0x00, 0, 0 }, 0x01, 8 }, /* FD NOP */
+    { { 0xdd, 0xcb, 1, 0x46 }, 0x47, 20 }, /* BIT 0,(IX+1), fast data */
+    { { 0xfd, 0xcb, 1, 0x46 }, 0x47, 20 }, /* BIT 0,(IY+1), fast data */
+    { { 0x20, 0x12, 0, 0 }, 0x13, 7 }, /* JR NZ, not taken */
+    { { 0x10, 0x14, 0, 0 }, 0x15, 8 }, /* DJNZ, terminating */
+    { { 0x76, 0, 0, 0 }, 0x77, 4 } /* HALT */
+  };
+  libspectrum_machine saved = machine_current->machine;
+  int late = settings_current.late_timings;
+  int r = 0, m, i, page, phase, y, mode;
+  libspectrum_snap *snap;
+  libspectrum_dword first, start, expected, length;
+  libspectrum_byte value;
+  memory_page mapping;
+
+#define BUS_CHECK(test) do { if( !(test) ) { \
+  printf( "retained_bus_test line %d model %d time %u\n", \
+          __LINE__, models[m], tstates ); r++; } } while(0)
+
+  for( m = 0; m < 3; m++ ) {
+    for( mode = 0; mode < 2; mode++ ) {
+      settings_current.late_timings = mode;
+      if( machine_select( models[m] ) ) { r++; continue; }
+      BUS_CHECK( machine_current->unattached_port_for_port ==
+                 specplus3_unattached_port );
+      first = machine_current->line_times[ DISPLAY_BORDER_HEIGHT ] +
+              DISPLAY_BORDER_WIDTH_COLS * 4 + 2;
+      BUS_CHECK( first == 14367 + mode );
+      length = machine_current->timings.tstates_per_frame;
+      for( page = 5; page <= 7; page += 2 ) {
+        specplus3_bus_invalidate();
+        tstates = 0;
+        memset( RAM[page], 0, 0x4000 );
+        RAM[page][0] = 2; RAM[page][1] = 4;
+        RAM[page][0x1800] = 0x44; RAM[page][0x1801] = 0x46;
+        RAM[page][0x1802] = 0x22;
+        writeport_internal( 0x7ffd, page == 7 ? 8 : 0 );
+        specplus3_bus_rebase();
+        for( i = 0; i < 8; i++ ) {
+          tstates = first + i;
+          BUS_CHECK( specplus3_unattached_port( 1 ) == vector[i] );
+          BUS_CHECK( specplus3_unattached_port( 1 ) == vector[i] );
+        }
+        /* A rebase exactly on a fetch slot must seed FF, not replay that
+           slot. The next slot must still be observed (cached or not). */
+        specplus3_bus_invalidate(); tstates = first; specplus3_bus_rebase();
+        BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+        tstates++;
+        BUS_CHECK( specplus3_unattached_port( 1 ) == 0x45 );
+        /* A CPU override consumes prior video without latching a discarded
+           byte. Exercise a conservative cache bound with incremental queries
+           and a direct jump to a later attribute fetch. */
+        for( phase = 0; phase < 2; phase++ ) {
+          specplus3_bus_invalidate(); tstates = first - 1;
+          specplus3_bus_rebase();
+          tstates = first + 4;
+          specplus3_bus_memory_write( &memory_map_write[
+            0x4100 >> MEMORY_PAGE_SIZE_LOGARITHM ], tstates, 0x24 );
+          BUS_CHECK( specplus3_unattached_port( 1 ) == 0x25 );
+          if( !phase ) {
+            tstates = first + 5;
+            BUS_CHECK( specplus3_unattached_port( 1 ) == 0x25 );
+            tstates = first + 8;
+            BUS_CHECK( specplus3_unattached_port( 1 ) == 1 );
+          } else {
+            tstates = first + 9;
+            BUS_CHECK( specplus3_unattached_port( 1 ) == 0x23 );
+          }
+        }
+        /* Host-edit history is outside the bus contract: make no observation
+           spanning the edit. A subsequent real transfer restores a defined
+           result, without a synthetic transfer or host-write notification. */
+        specplus3_bus_invalidate(); tstates = 0; specplus3_bus_rebase();
+        tstates = first + 5;
+        RAM[page][0x1801] = 0x22;
+        writebyte( 0x7a00, 0x34 );
+        BUS_CHECK( specplus3_unattached_port( 1 ) == 0x35 );
+        tstates = first + 128;
+        BUS_CHECK( specplus3_unattached_port( 1 ) == 1 );
+      }
+
+      /* Full display schedule with an independent per-slot expectation,
+         including idle slots and both horizontal/vertical borders. */
+      specplus3_bus_invalidate(); tstates = 0;
+      writeport_internal( 0x7ffd, 0 );
+      for( y = 0; y < DISPLAY_HEIGHT; y++ ) {
+        for( i = 0; i < 32; i++ ) {
+          RAM[5][display_line_start[y] + i] = 2 * i;
+          RAM[5][display_attr_start[y] + i] = 0x80 + 2 * i;
+        }
+      }
+      specplus3_bus_rebase();
+      value = 0xff;
+      for( y = 0; y < DISPLAY_HEIGHT; y++ ) {
+        for( phase = 0; phase < machine_current->timings.tstates_per_line;
+             phase++ ) {
+          tstates = first + y * machine_current->timings.tstates_per_line + phase;
+          if( phase < 128 && ( phase & 7 ) < 4 ) {
+            i = 2 * ( phase / 8 ) + ( phase & 3 ) / 2;
+            value = ( ( phase & 1 ) ? 0x80 : 0 ) + 2 * i + 1;
+          }
+          BUS_CHECK( specplus3_unattached_port( 1 ) == value );
+        }
+      }
+      tstates = length - 1;
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xbf );
+      /* Jumping directly to the border must equal incremental replay. */
+      specplus3_bus_invalidate(); tstates = 0; specplus3_bus_rebase();
+      tstates = length - 1;
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xbf );
+      tstates = length + first;
+      specplus3_bus_frame( length, tstates ); tstates -= length;
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 1 );
+
+      /* Source switching itself is not a transfer. At the next fetch the
+         new source wins, including a switch exactly on that slot. */
+      specplus3_bus_invalidate(); tstates = 0; specplus3_bus_rebase();
+      RAM[7][0x1800] = 0x62;
+      tstates = first;
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 1 );
+      tstates = first + 1;
+      writeport_internal( 0x7ffd, 8 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x63 );
+      tstates = first + 4;
+      writebyte( 0x4100, 0x34 );
+      writeport_internal( 0x7ffd, 0 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x35 );
+
+      /* Border CPU writes, physical mapping qualification and port decode. */
+      specplus3_bus_invalidate(); tstates = 0; specplus3_bus_rebase();
+      writebyte( 0x4100, 0x54 );
+      for( i = 0; i < 9; i++ )
+        BUS_CHECK( specplus3_unattached_port( ports[i] ) ==
+                   ( i < 3 ? 0x55 : 0xff ) );
+      value = readbyte_internal( 0x4000 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x55 );
+      (void)value;
+      writebyte_internal( 0x4100, 0x22 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x55 );
+      writebyte( 0x4100, 0x22 ); /* Unchanged storage still drives the bus. */
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x23 );
+      mapping = memory_map_read[ 0x4100 >> MEMORY_PAGE_SIZE_LOGARITHM ];
+      mapping.source = memory_source_dock;
+      specplus3_bus_memory_write( &mapping, tstates, 0xaa );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x23 );
+      readbyte( 0x4100 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x23 );
+      writebyte( 0x8000, 0xaa );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x23 );
+      writebyte( 0x4100, 0 );
+      BUS_CHECK( readport_internal( 1 ) == 1 );
+      writeport_internal( 0x7ffd, 0x20 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+      writeport_internal( 0x7ffd, 0 );
+      BUS_CHECK( machine_current->ram.locked );
+      machine_reset( 0 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+
+      /* Real INC (HL): published 55h -> retained write 56h -> output 57h.
+         Execute just one instruction from uncontended RAM. */
+      specplus3_bus_invalidate(); tstates = 0; specplus3_bus_rebase();
+      writebyte_internal( 0x9000, 0x34 );
+      writebyte_internal( 0x4100, 0x55 );
+      PC = 0x9000; HL = 0x4100; z80.halted = IFF1 = IFF2 = 0;
+      event_next_event = 1;
+      z80_do_opcodes();
+      BUS_CHECK( PC == 0x9001 && tstates == 11 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x57 );
+      /* M1 C9h from slow RAM, return stack on fast RAM. */
+      writebyte_internal( 0x4100, 0xc9 );
+      SP = 0xa000; writebyte_internal( SP, 0 );
+      writebyte_internal( SP + 1, 0x90 ); PC = 0x4100;
+      event_next_event = tstates + 1;
+      z80_do_opcodes();
+      BUS_CHECK( PC == 0x9000 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xc9 );
+
+      for( i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++ ) {
+        specplus3_bus_invalidate(); tstates = 0; specplus3_bus_rebase();
+        for( phase = 0; phase < 4; phase++ )
+          writebyte_internal( 0x4200 + phase, instructions[i].code[phase] );
+        PC = 0x4200; IX = IY = 0x9000; BC = 0x0100; F = FLAG_Z;
+        z80.halted = IFF1 = IFF2 = 0;
+        event_next_event = 1;
+        z80_do_opcodes();
+        BUS_CHECK( tstates == instructions[i].cycles );
+        BUS_CHECK( specplus3_unattached_port( 1 ) == instructions[i].result );
+      }
+      /* HALT repeats the M1 transfer; stack writes use the timed path. */
+      writebyte_internal( 0x4200, 0x54 );
+      event_next_event = tstates + 1;
+      z80_do_opcodes();
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x55 );
+      z80.halted = 0; PC = 0x9000; HL = 0x55aa; SP = 0x4300;
+      writebyte_internal( PC, 0xe5 ); /* PUSH HL */
+      event_next_event = tstates + 1;
+      z80_do_opcodes();
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xab );
+
+      /* IM2 vector reads drive slow RAM; the interrupt acknowledge and
+         stack on fast RAM must not supply a fabricated ASIC transfer. */
+      writebyte_internal( 0x41ff, 0xcd );
+      writebyte_internal( 0x4200, 0xaa );
+      I = 0x41; IM = 2; IFF1 = IFF2 = 1;
+      PC = 0x9000; SP = 0xa000; z80.interrupts_enabled_at = -1;
+      BUS_CHECK( z80_interrupt() != 0 );
+      BUS_CHECK( PC == 0xaacd );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xab );
+
+      /* All-RAM mappings prove physical page selection at every virtual
+         quadrant; no-MREQ internal cycles and host peeks do not latch. */
+      writeport_internal( 0x1ffd, 3 );
+      for( page = 4; page < 8; page++ ) {
+        start = ( page - 4 ) * 0x4000 + 0x100;
+        writebyte_internal( start, 0x20 + page );
+        readbyte( start );
+        BUS_CHECK( specplus3_unattached_port( 1 ) == ( ( 0x20 + page ) | 1 ) );
+        writebyte( start, 0x40 + page );
+        contend_read_no_mreq( start, 1 );
+        BUS_CHECK( specplus3_unattached_port( 1 ) == ( ( 0x40 + page ) | 1 ) );
+      }
+      value = specplus3_unattached_port( 1 );
+      writeport_internal( 0x1ffd, 1 ); /* Physical pages 0–3, all fast. */
+      for( page = 0; page < 4; page++ ) {
+        start = page * 0x4000 + 0x100;
+        writebyte( start, 0xaa );
+        readbyte( start );
+        BUS_CHECK( specplus3_unattached_port( 1 ) == value );
+      }
+      writeport_internal( 0x1ffd, 0 );
+      /* Snapshot restore and explicit clock rebase discard hidden state,
+         never reconstructing history from the newly restored RAM image. */
+      snap = libspectrum_snap_alloc();
+      BUS_CHECK( snapshot_copy_to( snap ) == 0 );
+      writebyte( 0x4100, 0x12 );
+      BUS_CHECK( snapshot_copy_from( snap ) == 0 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+      libspectrum_snap_free( snap );
+      specplus3_bus_invalidate(); tstates = 0; specplus3_bus_rebase();
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+
+      debugger_system_variable_set( "ula", "tstates", 100 );
+      writebyte( 0x4100, 0x12 );
+      debugger_system_variable_set( "ula", "tstates", 0 );
+      BUS_CHECK( tstates == 0 );
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+
+      if( !mode ) {
+        const char *recording = "/tmp/fuse-a0ee-lifecycle.rzx";
+        BUS_CHECK( rzx_start_recording( recording, 1 ) == 0 );
+        PC = 0x9000; writebyte_internal( PC, 0 );
+        z80.halted = IFF1 = IFF2 = 0;
+        event_next_event = tstates + 1;
+        z80_do_opcodes();
+        BUS_CHECK( rzx_frame() == 0 );
+        BUS_CHECK( rzx_stop_recording() == 0 );
+        BUS_CHECK( rzx_start_playback( recording, 1 ) == 0 );
+        BUS_CHECK( rzx_playback && !specplus3_bus_active );
+        BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+        BUS_CHECK( rzx_stop_playback( 1 ) == 0 );
+        BUS_CHECK( !rzx_playback && specplus3_bus_active );
+        BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+        unlink( recording );
+      }
+
+      /* Exhaust the real contention phases: memory samples must not land
+         in an ASIC fetch slot; observation must add no CPU wait states. */
+      for( y = 0; y < DISPLAY_HEIGHT; y++ ) {
+        for( phase = 0; phase < 128; phase++ ) {
+          specplus3_bus_invalidate();
+          start = first - 6 + y * machine_current->timings.tstates_per_line + phase;
+          tstates = start; specplus3_bus_rebase();
+          expected = start + ula_contention[start] + 3;
+          readbyte( 0x4100 );
+          BUS_CHECK( tstates == expected );
+          i = (int)tstates - (int)first -
+              y * machine_current->timings.tstates_per_line;
+          BUS_CHECK( i < 0 || i >= 128 || ( i & 7 ) >= 4 );
+        }
+      }
+      /* Retention across frame wrap and overshoot, not a reset. */
+      specplus3_bus_invalidate(); tstates = length - 10; specplus3_bus_rebase();
+      writebyte( 0x4100, 0x32 );
+      tstates = length + 4;
+      specplus3_bus_frame( length, tstates ); tstates -= length;
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0x33 );
+      specplus3_bus_invalidate();
+      BUS_CHECK( specplus3_unattached_port( 1 ) == 0xff );
+    }
+  }
+  settings_current.late_timings = late;
+  if( machine_select( LIBSPECTRUM_MACHINE_48 ) ) r++;
+  else {
+    if( machine_current->unattached_port_for_port || specplus3_bus_active ) r++;
+  }
+  if( machine_select( saved ) ) r++;
+#undef BUS_CHECK
   return r;
 }
 
@@ -4442,11 +4798,17 @@ int
 unittests_run( void )
 {
   int r = 0;
+  libspectrum_machine saved = machine_current->machine;
 
   r += contention_test();
+  r += floating_bus_test();
+  /* The general suite includes 48K ROM fixtures and synthetic clock rewinds.
+     Keep model-specific checks above on the requested machine; dedicated
+     retained-bus tests below exercise all ASIC models with explicit lifecycle
+     transitions rather than treating those synthetic clocks as real cycles. */
+  if( machine_select( LIBSPECTRUM_MACHINE_48 ) ) return r + 1;
   r += rzx_post_interrupt_autosave_test();
   r += rzx_retrigger_autosave_test();
-  r += floating_bus_test();
   r += loader_unittest();
   r += tape_unittest();
   r += blip_synth_level_test();
@@ -4460,6 +4822,12 @@ unittests_run( void )
   r += ay_render_grid_continuity_test();
   r += ay_tail_write_survives_frame_boundary_test();
   r += floating_bus_merge_test();
+  r += retained_bus_test();
+  r += floatingbus_differential_unittest();
+  r += floatingbus_original_unittest();
+  r += floatingbus_visual_unittest();
+  r += floatingbus_performance_fixtures();
+  r += retained_bus_benchmark();
   r += snapshot_copy_from_releases_keyboard_test();
   r += snapshot_copy_from_releases_joystick_test();
   r += snapshot_custom_rom_is_replaced_by_soft_reset_test();
@@ -4519,6 +4887,7 @@ unittests_run( void )
   r += automation_audio_artifacts_test();
 #endif /* ENABLE_AUTOMATION */
 
+  if( machine_select( saved ) ) r++;
   printf("Final return value: %d (should be 0)\n", r);
 
   return r;

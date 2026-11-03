@@ -34,6 +34,7 @@
 #include "loader.h"
 #include "machine.h"
 #include "memory_pages.h"
+#include "machines/specplus3.h"
 #include "module.h"
 #include "peripherals/printer.h"
 #include "peripherals/ula.h"
@@ -152,6 +153,7 @@ spectrum_frame( void )
   tape_record_frame( frame_length );
   event_frame( frame_length );
   debugger_breakpoint_reduce_tstates( frame_length );
+  specplus3_bus_frame( frame_length, tstates );
   tstates -= frame_length;
   if( z80.interrupts_enabled_at >= 0 )
     z80.interrupts_enabled_at -= frame_length;

@@ -25,11 +25,50 @@
 #ifndef FUSE_SPECPLUS3_H
 #define FUSE_SPECPLUS3_H
 
+#include <assert.h>
+
 #include "libspectrum.h"
 
 #include "machine.h"
+#include "memory_pages.h"
 #include "periph.h"
 #include "peripherals/disk/fdd.h"
+
+/* Notifications borrow mappings; they never perform timed memory accesses. */
+extern int specplus3_bus_active;
+libspectrum_byte specplus3_unattached_port( libspectrum_word port );
+void specplus3_bus_invalidate( void );
+void specplus3_bus_rebase( void );
+void specplus3_bus_frame( libspectrum_dword length, libspectrum_dword now );
+/* Qualified machine-owned paths; callers use the inline notifications below,
+   keeping inactive/unrelated mappings out of out-of-line calls. */
+void specplus3_bus_transfer( libspectrum_dword time, libspectrum_byte value );
+
+static inline int
+specplus3_bus_home_ram( const memory_page *mapping )
+{
+  return mapping->page_num >= 4 && mapping->page_num <= 7 &&
+         mapping->source == memory_source_ram;
+}
+
+static inline void
+specplus3_bus_memory_read( const memory_page *mapping,
+                          libspectrum_word address, libspectrum_dword time )
+{
+  if( !specplus3_bus_active || !specplus3_bus_home_ram( mapping ) ) return;
+  assert( mapping->contended );
+  specplus3_bus_transfer( time,
+                         mapping->page[ address & MEMORY_PAGE_SIZE_MASK ] );
+}
+
+static inline void
+specplus3_bus_memory_write( const memory_page *mapping,
+                           libspectrum_dword time, libspectrum_byte value )
+{
+  if( !specplus3_bus_active || !specplus3_bus_home_ram( mapping ) ) return;
+  assert( mapping->contended );
+  specplus3_bus_transfer( time, value );
+}
 
 int specplus3_port_from_ula( libspectrum_word port );
 

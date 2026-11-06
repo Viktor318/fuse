@@ -4794,6 +4794,75 @@ event_queue_test( void )
   return error;
 }
 
+static int
+printer_connection_test( void )
+{
+  libspectrum_machine old_machine = machine_current->machine;
+  int saved_printer = settings_current.printer;
+  int saved_zxprinter = settings_current.zxprinter;
+  int r = 0;
+
+  settings_current.printer = 0;
+  settings_current.zxprinter = 1;
+
+  if( machine_select( LIBSPECTRUM_MACHINE_PLUS3 ) ) {
+    settings_current.printer = saved_printer;
+    settings_current.zxprinter = saved_zxprinter;
+    return 1;
+  }
+
+  if( periph_is_active( PERIPH_TYPE_PARALLEL_PRINTER ) != 1 ) {
+    printf( "printer interface: +3 parallel port inactive with printer output disabled\n" );
+    r++;
+  }
+
+  if( readport_internal( 0x0ffd ) != 0xff ) {
+    printf( "printer interface: disconnected +3 printer must report busy\n" );
+    r++;
+  }
+  settings_current.printer = 1;
+  if( readport_internal( 0x0ffd ) != 0xfe ) {
+    printf( "printer interface: connected +3 printer must report ready\n" );
+    r++;
+  }
+  settings_current.printer = 0;
+
+  if( machine_select( LIBSPECTRUM_MACHINE_48 ) ) {
+    settings_current.printer = saved_printer;
+    settings_current.zxprinter = saved_zxprinter;
+    return 1;
+  }
+
+  if( periph_is_active( PERIPH_TYPE_ZXPRINTER ) != 1 ) {
+    printf( "printer interface: ZX Printer inactive with printer output disabled\n" );
+    r++;
+  }
+
+  if( readport_internal( 0x00fb ) != 0x3e ) {
+    printf( "printer connection: ZX Printer depends on serial/parallel setting\n" );
+    r++;
+  }
+  settings_current.printer = 1;
+  if( readport_internal( 0x00fb ) != 0x3e ) {
+    printf( "printer connection: connected ZX Printer must respond\n" );
+    r++;
+  }
+  settings_current.zxprinter = 0;
+  if( periph_update() ) r++;
+  if( periph_is_active( PERIPH_TYPE_ZXPRINTER ) ||
+      readport_internal( 0x00fb ) != 0xff ) {
+    printf( "printer connection: disconnected ZX Printer must not respond\n" );
+    r++;
+  }
+
+  settings_current.printer = saved_printer;
+  settings_current.zxprinter = saved_zxprinter;
+
+  if( machine_select( old_machine ) ) r++;
+
+  return r;
+}
+
 int
 unittests_run( void )
 {
@@ -4883,6 +4952,7 @@ unittests_run( void )
   r += disk_open_fdi_recovery_test();
   r += screenshot_scr_roundtrip_test();
   r += event_queue_test();
+  r += printer_connection_test();
 #ifdef ENABLE_AUTOMATION
   r += automation_audio_artifacts_test();
 #endif /* ENABLE_AUTOMATION */

@@ -50,6 +50,10 @@ There are two programs in the package, with the same settings:
   Alt + 0–9 gives Caps Shift + number (EDIT, the cursor keys, DELETE...).
   Otherwise Alt keeps its Windows meaning (menus, Alt+F4). The numeric
   keypad always gives digits and `+ - * / .`.
+- **Read the keyboard when the program does** (on by default): keys pressed
+  while Fuse runs a frame reach the Spectrum program at its next keyboard
+  read, not only at the start of the next frame (as in the SDL 2 version of
+  upstream Fuse).
 - **Help > Keyboard**: a high resolution picture of the Spectrum keyboard. It
   stays above Fuse without taking the focus, so you can keep typing; it can be
   resized and remembers its place and size.

@@ -54,6 +54,10 @@ A csomagban két program van, közös beállításokkal:
   DELETE...). Egyébként az Alt megtartja a Windowsban megszokott szerepét
   (menük, Alt+F4). A numerikus billentyűzet mindig számokat és `+ - * / .`
   jeleket ad.
+- **Billentyűzet beolvasása, amikor a program olvassa** (alapból
+  bekapcsolva): a képkocka futása közben lenyomott billentyűk a Spectrum
+  program következő billentyűzet-olvasásakor odaérnek, nem csak a következő
+  képkocka elején (ahogy az upstream Fuse SDL 2-es változatában).
 - **Súgó > Billentyűzet**: nagy felbontású kép a Spectrum billentyűzetéről.
   A Fuse fölött marad, de nem veszi el a fókuszt, így közben tovább lehet
   gépelni; átméretezhető, és megjegyzi a helyét és a méretét.

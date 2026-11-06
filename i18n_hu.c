@@ -791,6 +791,8 @@ const i18n_entry i18n_hu_table[] = {
     "Az RZX felvételben nincs pillanatkép, és külön sem lett betöltve" },
   { "Random len&gth MDR cartridge",
     "&Véletlen hosszú Microdrive-kazetta" },
+  { "Read the &keyboard when the program does",
+    "Billentyűzet beolvasása, amikor a &program olvassa" },
   { "Reading the length of the song...",
     "A dal hosszának beolvasása..." },
   { "Recor&d Stop",

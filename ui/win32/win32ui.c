@@ -37,7 +37,9 @@
 #include "spectrum.h"
 #include "z80/z80.h"
 #include "i18n.h"
+#include "input.h"
 #include "keyboard.h"
+#include "keyboard_refresh.h"
 #include "menu.h"
 #include "peripherals/joystick.h"
 #include "psg.h"
@@ -476,13 +478,8 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       return 0;
 
     case WM_KEYDOWN:
-      win32keyboard_alt_not_alone();
-      win32keyboard_keypress( wParam, lParam );
-      return 0;
-
     case WM_KEYUP:
-      if( !win32keyboard_alt_digit_keyrelease( wParam, lParam ) )
-        win32keyboard_keyrelease( wParam, lParam );
+      win32keyboard_key_message( msg, wParam, lParam, INPUT_DISPATCH_NORMAL );
       return 0;
 
     case WM_SYSKEYDOWN:
@@ -710,6 +707,149 @@ WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
   /* FIXME: how do deal with returning wParam */
 }
 
+/* Read-time keyboard refresh (see hacking/input-refresh.md): when the
+   emulated machine reads its keyboard, the key messages of the main window
+   waiting in the queue are handled first, so that a key gets there without
+   waiting for the next frame.
+
+   Only the keyboard and mouse messages are looked at (PM_QS_INPUT), so no
+   sent message is dispatched, and no window procedure runs, in the middle
+   of a Z80 instruction. They are taken in their order, and only from the
+   front of the queue: anything else (a mouse message, a system key such as
+   Alt or F10, a key of the accelerator table, a key for another window)
+   stops the collection there, and it is left for the normal message loop,
+   with what follows it. */
+
+#define READ_TIME_MESSAGE_LIMIT 64
+
+/* The keys of the accelerator table, which stop the collection */
+static WORD *accelerator_keys = NULL;
+static int accelerator_key_count = 0;
+
+/* Collecting now (the emulated machine reads its keyboard) */
+static int read_time_collecting = 0;
+
+static void
+read_time_init( void )
+{
+  ACCEL *table;
+  int i, count;
+
+  if( !hAccels ) return;
+  count = CopyAcceleratorTable( hAccels, NULL, 0 );
+  if( count <= 0 ) return;
+
+  table = libspectrum_new( ACCEL, count );
+  accelerator_keys = libspectrum_new( WORD, count );
+  count = CopyAcceleratorTable( hAccels, table, count );
+  for( i = 0; i < count; i++ ) accelerator_keys[i] = table[i].key;
+  accelerator_key_count = count;
+  libspectrum_free( table );
+}
+
+static void
+read_time_end( void )
+{
+  libspectrum_free( accelerator_keys );
+  accelerator_keys = NULL;
+  accelerator_key_count = 0;
+}
+
+static int
+is_accelerator_key( WPARAM key )
+{
+  int i;
+
+  for( i = 0; i < accelerator_key_count; i++ )
+    if( accelerator_keys[i] == key ) return 1;
+
+  return 0;
+}
+
+/* A character message of the main window waiting: of a dead key, or of a
+   key press handled without taking its WM_CHAR. The normal message loop
+   would handle it before the next key message, so the collection must
+   stop (the next key press would take it as its character otherwise) */
+static int
+character_waiting( void )
+{
+  MSG msg;
+
+  return PeekMessage( &msg, fuse_hWnd, WM_CHAR, WM_SYSDEADCHAR,
+                      PM_NOREMOVE | PM_QS_POSTMESSAGE );
+}
+
+/* The menus of the widget UI are not in this one: no key opens one */
+static int
+win32ui_popup_key( input_key key GCC_UNUSED )
+{
+  return 0;
+}
+
+static input_refresh_result
+win32ui_refresh_input( void *data GCC_UNUSED )
+{
+  input_refresh_result result = INPUT_REFRESH_SUCCESS;
+  input_dispatch_result dispatched;
+  MSG msg;
+  int count = 0;
+
+  if( !settings_current.keyboard_refresh ) return INPUT_REFRESH_UNSUPPORTED;
+
+  if( read_time_collecting || modal_emulating || !fuse_hWnd ||
+      GetFocus() != fuse_hWnd || input_dispatch_pending() )
+    return INPUT_REFRESH_SKIPPED;
+
+  read_time_collecting = 1;
+
+  while( PeekMessage( &msg, NULL, 0, 0, PM_NOREMOVE | PM_QS_INPUT ) ) {
+
+    if( msg.hwnd != fuse_hWnd ||
+        ( msg.message != WM_KEYDOWN && msg.message != WM_KEYUP ) ||
+        ( msg.message == WM_KEYDOWN && is_accelerator_key( msg.wParam ) ) ||
+        !win32keyboard_read_time_ready() || character_waiting() ) {
+      result = INPUT_REFRESH_SKIPPED;
+      break;
+    }
+
+    /* The same message: the first keyboard message of the window */
+    if( !PeekMessage( &msg, fuse_hWnd, msg.message, msg.message,
+                      PM_REMOVE | PM_QS_INPUT ) ) {
+      result = INPUT_REFRESH_SKIPPED;
+      break;
+    }
+
+    /* As the message loop does: posts the WM_CHAR of a key press, which
+       the key press handling takes at once */
+    TranslateMessage( &msg );
+
+    dispatched = win32keyboard_key_message( msg.message, msg.wParam,
+                                            msg.lParam,
+                                            INPUT_DISPATCH_READ_TIME );
+
+    /* Characters of this key press not taken (without character based
+       typing, or of a dead key): the window procedure would do nothing
+       with them, and the next key press mustn't take them */
+    while( PeekMessage( &msg, fuse_hWnd, WM_CHAR, WM_DEADCHAR,
+                        PM_REMOVE | PM_QS_POSTMESSAGE ) )
+      ;
+
+    if( dispatched == INPUT_DISPATCH_DEFERRED ) {
+      /* Consumed; only the action is left for the normal dispatch */
+      result = INPUT_REFRESH_SKIPPED;
+      break;
+    }
+
+    if( ++count == READ_TIME_MESSAGE_LIMIT ) {
+      result = INPUT_REFRESH_SKIPPED;
+      break;
+    }
+  }
+
+  read_time_collecting = 0;
+  return result;
+}
+
 int
 ui_init( int *argc, char ***argv )
 {
@@ -788,6 +928,11 @@ ui_init( int *argc, char ***argv )
   /* window will accept dragging and dropping */
   DragAcceptFiles( fuse_hWnd, TRUE );
 
+  /* the key messages can be taken when the machine reads its keyboard */
+  read_time_init();
+  input_dispatch_set_popup_filter( win32ui_popup_key );
+  keyboard_refresh_set_frontend( win32ui_refresh_input, NULL );
+
   ui_mouse_present = 1;
 
   return 0;
@@ -816,6 +961,9 @@ ui_event( void )
   if( modal_emulating ) return 0;
   QueryPerformanceCounter( &main_loop_time );
 
+  /* An action left by a key taken while the machine read its keyboard */
+  input_dispatch_deferred();
+
   display_timing_input_begin();
   win32ui_process_messages( 1 );
   display_timing_input_end();
@@ -827,6 +975,10 @@ int
 ui_end( void )
 {
   int error;
+
+  keyboard_refresh_set_frontend( NULL, NULL );
+  input_dispatch_set_popup_filter( NULL );
+  read_time_end();
 
   win32keyboard_end();
   win32i18n_end();
@@ -879,6 +1031,7 @@ static int
 win32ui_lose_focus( HWND hWnd, WPARAM wParam, LPARAM lParam )
 {
   keyboard_release_all();
+  keyboard_refresh_invalidate();
   ui_mouse_suspend();
   return 0;
 }
@@ -886,6 +1039,7 @@ win32ui_lose_focus( HWND hWnd, WPARAM wParam, LPARAM lParam )
 static int
 win32ui_gain_focus( HWND hWnd, WPARAM wParam, LPARAM lParam )
 {
+  keyboard_refresh_invalidate();
   ui_mouse_resume();
   return 0;
 }

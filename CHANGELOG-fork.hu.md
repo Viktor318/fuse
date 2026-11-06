@@ -8,6 +8,21 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 
 ## Kiadatlan
 
+### Billentyűzet
+
+- **Billentyűzet beolvasása, amikor a program olvassa** (*Beállítások >
+  Általános*, alapból bekapcsolva): ahogy az upstream Fuse SDL 2-es
+  változata, most a Windowsos is feldolgozza a főablak várakozó
+  billentyűleütéseit és -felengedéseit, amikor a Spectrum program a
+  billentyűzetet olvassa (egy képkockában az első olvasáskor, utána
+  legfeljebb 5 ms-onként), nem csak képkockánként egyszer, a képkocka
+  elején. A képkocka futása közben lenyomott billentyű így hamarabb
+  odaér. A menük, a gyorsbillentyűk (F2...F11, Insert, Delete, Pause), az
+  Alt-os kombinációk, az egérüzenetek és a más ablaknak szóló billentyűk
+  továbbra is a következő képkocka elején, sorrendben kerülnek sorra.
+  Kikapcsolva a billentyűzetet a program képkockánként egyszer olvassa,
+  mint eddig.
+
 ### AY keverő
 
 - Új **AY keverő** ablak (az AY lejátszó *Keverő...* gombja, *Beállítások >
@@ -203,8 +218,8 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   billentyűzetet, amikor a Spectrum program a billentyűket olvassa (egy
   képkockában az első olvasáskor, utána legfeljebb 5 ms-onként), nem csak
   képkockánként egyszer, így a billentyűk hamarabb eljutnak a programhoz.
-  A Windows-kiosztás szerinti gépelés ezzel is működik. A Windowsos (Win32)
-  változat a billentyűzetet továbbra is képkockánként egyszer olvassa.
+  A Windows-kiosztás szerinti gépelés ezzel is működik. (Most már a
+  Windowsos változat is így tesz, lásd fent a *Billentyűzet* részt.)
 
 ## v1.10.1-hu.1 – 2026-10-30
 

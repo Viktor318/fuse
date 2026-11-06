@@ -60,6 +60,9 @@ Checkbox, Recrea(t)ed ZX Spectrum, recreated_spectrum, INPUT_KEY_t
 Checkbox, Type using the Windows ke(y)board layout, hungarian_keyboard, INPUT_KEY_y
 Checkbox, Use shift with (a)rrow keys, keyboard_arrows_shifted, INPUT_KEY_a
 Checkbox, Use le(f)t Alt as Caps Shift with number keys, alt_caps_shift, INPUT_KEY_f
+#ifdef UI_WIN32
+Checkbox, Read the (k)eyboard when the program does, keyboard_refresh, INPUT_KEY_k
+#endif
 Checkbox, Allow (w)rites to ROM, writable_roms, INPUT_KEY_w
 Checkbox, Late t(i)mings, late_timings, INPUT_KEY_i
 Checkbox, (Z)80 is CMOS, z80_is_cmos, INPUT_KEY_z

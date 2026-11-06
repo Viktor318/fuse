@@ -7,6 +7,19 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
 ## Unreleased
 
+### Keyboard
+
+- **Read the keyboard when the program does** (*Options > General*, on by
+  default): as the SDL 2 version of upstream Fuse does now, the Windows
+  version also handles the waiting key presses and releases of the main
+  window when the Spectrum program reads its keyboard (at the first read of
+  a frame, then at most every 5 ms), not only once at the start of a frame.
+  A key pressed while a frame runs gets there sooner. Menus, accelerator
+  keys (F2...F11, Insert, Delete, Pause), Alt combinations, mouse messages
+  and keys meant for other windows are still handled at the start of the
+  next frame, in their order. With this switched off, the keyboard is read
+  once a frame, as before.
+
 ### AY mixer
 
 - New **AY mixer** window (*Mixer...* in the AY player, *Options > AY
@@ -198,7 +211,7 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   when the Spectrum program reads its keys (at the first read of a frame,
   then at most every 5 ms), not only once a frame, so keys reach the
   program sooner. Typing with the Windows keyboard layout works with it too.
-  The Windows (Win32) version reads the keyboard once a frame, as before.
+  (The Windows version does the same now, see *Keyboard* above.)
 
 ## v1.10.1-hu.1 – 2026-10-30
 

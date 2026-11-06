@@ -35,6 +35,8 @@
 
 #include "libspectrum.h"
 
+#include "input.h"
+
 #define ID_STATUSBAR 900
 
 /* Reduce listview flickering. Defined from WINVER >= 6.00 */
@@ -151,6 +153,10 @@ int win32keyboard_alt_digit_keyrelease( WPARAM wParam, LPARAM lParam );
 int win32keyboard_alt_digit_char( WPARAM wParam );
 void win32keyboard_alt_not_alone( void );
 int win32keyboard_menu_underline( void );
+input_dispatch_result win32keyboard_key_message( UINT message, WPARAM wParam,
+                                                 LPARAM lParam,
+                                                 input_dispatch_context context );
+int win32keyboard_read_time_ready( void );
 void win32ui_menubar_redraw( void );
 void win32ui_menubar_texts_changed( void );
 

@@ -45,6 +45,22 @@
 #include "utils.h"
 #include "win32internals.h"
 
+/* How the key events go to the input layer: normally, or while the
+   emulated machine reads its keyboard (see win32keyboard_key_message()) */
+static input_dispatch_context dispatch_context = INPUT_DISPATCH_NORMAL;
+
+/* A key event of the message being handled left an action (e.g. a mouse
+   release on Escape) for the next normal dispatch */
+static int dispatch_deferred = 0;
+
+static void
+send_event( const input_event_t *event )
+{
+  if( input_event_dispatch( event, dispatch_context ) ==
+      INPUT_DISPATCH_DEFERRED )
+    dispatch_deferred = 1;
+}
+
 /* Map OEM unshifted keys to Fuse input layer keysym */
 extern const keysyms_map_t oem_keysyms_map[];
 
@@ -198,7 +214,7 @@ sync_modifiers( void )
     fuse_event.types.key.spectrum_key = modifiers[i].key;
     fuse_event.types.key.character = 0;
     fuse_event.types.key.physical_key = 0;
-    input_event( &fuse_event );
+    send_event( &fuse_event );
   }
 }
 
@@ -265,7 +281,7 @@ win32keyboard_keypress( WPARAM wParam, LPARAM lParam )
   fuse_event.types.key.character = character;
   fuse_event.types.key.physical_key = physical_key( lParam );
 
-  input_event( &fuse_event );
+  send_event( &fuse_event );
 }
 
 void
@@ -309,7 +325,7 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
   fuse_event.types.key.character = 0;
   fuse_event.types.key.physical_key = physical_key( lParam );
 
-  input_event( &fuse_event );
+  send_event( &fuse_event );
 }
 
 
@@ -347,7 +363,7 @@ send_alt( int press )
 
   /* The left Alt is Caps Shift for this press and its release */
   keyboard_alt_caps_shift = 1;
-  input_event( &fuse_event );
+  send_event( &fuse_event );
   if( !press ) keyboard_alt_caps_shift = 0;
 }
 
@@ -487,4 +503,36 @@ win32keyboard_menu_underline( void )
 {
   return settings_current.alt_caps_shift && alt_alone &&
          ( GetKeyState( VK_LMENU ) & 0x8000 );
+}
+
+/* WM_KEYDOWN and WM_KEYUP of the main window, from the window procedure, or
+   taken from the queue while the emulated machine reads its keyboard
+   (INPUT_DISPATCH_READ_TIME). Returns INPUT_DISPATCH_DEFERRED if an action
+   was left for the next normal dispatch */
+input_dispatch_result
+win32keyboard_key_message( UINT message, WPARAM wParam, LPARAM lParam,
+                           input_dispatch_context context )
+{
+  dispatch_context = context;
+  dispatch_deferred = 0;
+
+  if( message == WM_KEYDOWN ) {
+    win32keyboard_alt_not_alone();
+    win32keyboard_keypress( wParam, lParam );
+  } else if( message == WM_KEYUP ) {
+    if( !win32keyboard_alt_digit_keyrelease( wParam, lParam ) )
+      win32keyboard_keyrelease( wParam, lParam );
+  }
+
+  dispatch_context = INPUT_DISPATCH_NORMAL;
+  return dispatch_deferred ? INPUT_DISPATCH_DEFERRED : INPUT_DISPATCH_APPLIED;
+}
+
+/* Can a key message be handled while the emulated machine reads its
+   keyboard? Not while the left Alt is held alone: the next key redraws the
+   menu bar (see win32keyboard_alt_not_alone()) */
+int
+win32keyboard_read_time_ready( void )
+{
+  return !alt_alone;
 }

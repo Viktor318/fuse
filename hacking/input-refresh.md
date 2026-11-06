@@ -71,6 +71,21 @@ are blocked. General `ui_event()` is not a safe read-time callback; another
 frontend must supply an equivalent audited collection/ordering boundary before
 registering this capability. SDL pumping can still execute platform-native code.
 
+## Win32 collection boundary
+
+The Windows frontend of this fork registers the capability too, behind the
+`keyboard_refresh` setting (on by default; off returns UNSUPPORTED).
+`win32ui_refresh_input()` in `ui/win32/win32ui.c` peeks only the input queue
+(`PM_QS_INPUT`), so no sent message is dispatched during a read. It takes
+`WM_KEYDOWN`/`WM_KEYUP` of the main window from the front of the queue, in
+order, through `TranslateMessage()` and the same handling as the window
+procedure (`win32keyboard_key_message()`), and drops the characters a key
+press posted but did not use. Anything else at the front is a barrier left
+for the message loop: mouse and system key messages, keys of the accelerator
+table, keys for other windows, a waiting character message, or the left Alt
+held alone. It skips while frames run from a modal loop or without focus.
+`ui_event()` drains a deferred action first.
+
 ## Tests
 
 Run `make -j4 fuse`, then `make -j4 check` separately. Focused targets are:

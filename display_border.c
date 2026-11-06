@@ -27,9 +27,6 @@ libspectrum_byte display_lores_border;
 libspectrum_byte display_hires_border;
 libspectrum_byte display_last_border;
 
-/* The current border colour */
-int current_border[ DISPLAY_SCREEN_HEIGHT ][ DISPLAY_SCREEN_WIDTH_COLS ];
-
 /* The border colour changes which have occurred in this frame */
 struct border_change_t {
   int x, y;

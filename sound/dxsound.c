@@ -62,6 +62,7 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   if( IDirectSound_Initialize( lpDS, NULL ) != DS_OK ) {
     settings_current.sound = 0;
     ui_error( UI_ERROR_ERROR, "Couldn't initialize DirectSound." );
+    IDirectSound_Release( lpDS );
     CoUninitialize();
     return 1;
   }

@@ -32,30 +32,34 @@ following event types are supported:
 
 typedef struct input_event_key_t {
 
-  input_key key;
+  input_key native_key;
+  input_key spectrum_key;
 
 } input_event_key_t;
 
   The 'input_key' type is defined in input.h and specifies which key
-  this event refers to.
+  this event refers to. 'native_key' is the key as produced by the
+  host, including any shift or modifier applied by the user interface;
+  it is used for widget and menu shortcuts. 'spectrum_key' is the
+  unshifted key to pass to the emulated Spectrum keyboard.
 
   Event types:
 
   * INPUT_EVENT_KEYPRESS
-    The key specified in types.key.key has been pressed.
+    The key specified in types.key has been pressed.
 
   * INPUT_EVENT_KEYRELEASE
-    The key specified in types.key.key has been released.
+    The key specified in types.key has been released.
 
 * Joystick events
 
-  These receive event-specific dat in 'types.joystick', which is
+  These receive event-specific data in 'types.joystick', which is
   defined as
 
 typedef struct input_event_joystick_t {
 
   int which;
-  input_joystick_button button;
+  input_key button;
 
 } input_event_joystick_t;
 
@@ -78,6 +82,11 @@ typedef struct input_event_joystick_t {
   * INPUT_JOYSTICK_FIRE_8
   * INPUT_JOYSTICK_FIRE_9
   * INPUT_JOYSTICK_FIRE_10
+  * INPUT_JOYSTICK_FIRE_11
+  * INPUT_JOYSTICK_FIRE_12
+  * INPUT_JOYSTICK_FIRE_13
+  * INPUT_JOYSTICK_FIRE_14
+  * INPUT_JOYSTICK_FIRE_15
 
   The INPUT_JOYSTICK_FIRE_<n> constants are guaranteed to have
   consecutive values.
@@ -91,3 +100,13 @@ typedef struct input_event_joystick_t {
   * INPUT_EVENT_JOYSTICK_RELEASE
     The joystick specified in types.joystick.which has left the state
     specified in types.joystick.button.
+
+input_event() returns zero on success and non-zero on error. A
+frontend which can safely collect input while the emulated machine is
+running should use input_event_dispatch() with INPUT_DISPATCH_NORMAL
+for ordinary handling and INPUT_DISPATCH_READ_TIME at a keyboard-matrix
+read; the latter applies the same physical mapping but defers UI
+actions and never invokes menus or widgets inside an instruction. See
+hacking/input-refresh.md for the read-time ordering and freshness
+rules. Focus loss should call input_cancel_physical() to clear physical
+matrix and joystick state without touching synthetic overlays.

@@ -96,7 +96,7 @@ jobs:
           .github/scripts/in_config.sh "${{ inputs.verify_other }}"
 
       - name: (8) Make
-        run: make
+        run: make -j$(nproc)
 
       - name: (9) Install
         run: sudo make install

@@ -56,8 +56,7 @@ mock_open( const char *name, int capture, const SDL_AudioSpec *want,
            SDL_AudioSpec *have, int flags )
 {
   (void)name; (void)capture;
-  CHECK( flags == ( SDL_AUDIO_ALLOW_FREQUENCY_CHANGE |
-                    SDL_AUDIO_ALLOW_CHANNELS_CHANGE ) );
+  CHECK( flags == SDL_AUDIO_ALLOW_FREQUENCY_CHANGE );
   *have = *want;
   have->channels = channels;
   have->format = format;
@@ -204,7 +203,7 @@ static void wake_consume( unsigned int frames )
 
 int main( int argc, char **argv )
 {
-  int c, freq, stereo, old_starts;
+  int c, mode, freq, stereo, old_starts;
   (void)argv;
   test_machine.timings.tstates_per_frame = 70000;
   if( argc > 1 ) {
@@ -220,11 +219,13 @@ int main( int argc, char **argv )
     return 0;
   }
   format = AUDIO_S16SYS;
-  for( c = 1; c <= 2; c++ ) {
-    channels = c; freq = 48000; stereo = !c;
+  /* Preserve None, ACB and ABC, not just a boolean stereo flag. */
+  for( mode = 0; mode <= 2; mode++ ) {
+    c = mode ? 2 : 1;
+    channels = c; freq = 48000; stereo = mode;
     CHECK( !sound_lowlevel_init( NULL, &freq, &stereo ) );
     CHECK( paused && !audio_output_started && sound_fifo.buffer );
-    CHECK( stereo == ( c == 2 ) && bytes_per_frame == c * 2 );
+    CHECK( stereo == mode && bytes_per_frame == c * 2 );
     CHECK( sound_lowlevel_init( NULL, &freq, &stereo ) == 1 );
     old_starts = starts;
     {
@@ -254,11 +255,17 @@ int main( int argc, char **argv )
     CHECK( sound_lowlevel_init( NULL, &freq, &stereo ) == 1 );
     CHECK( !live && !sound_fifo.buffer );
   }
+  /* Unexpected callback channel changes must not override AY separation. */
+  for( mode = 0; mode <= 1; mode++ ) {
+    channels = mode ? 1 : 2; freq = 48000; stereo = mode;
+    CHECK( sound_lowlevel_init( NULL, &freq, &stereo ) == 1 );
+    CHECK( stereo == mode && !live && !sound_fifo.buffer );
+  }
   channels = 2; format = AUDIO_F32SYS; freq = 48000; stereo = 1;
   CHECK( sound_lowlevel_init( NULL, &freq, &stereo ) == 1 );
   CHECK( !live && !sound_fifo.buffer );
   sound_lowlevel_end();
-  CHECK( closes == 6 );
+  CHECK( closes == 9 );
   pacing_tests();
   wake_regressions();
 #ifdef AUDIO_WAKE_THREADS

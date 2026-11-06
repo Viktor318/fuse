@@ -41,17 +41,35 @@ print Fuse::GPL( 'options.c: options dialog boxes',
    Do not edit unless you know what you\'re doing! */
 
 #include "config.h"
+
+#include <string.h>
+
+#include "settings.h"
 CODE
 
 foreach( @dialogs ) {
     foreach my $widget ( @{ $_->{widgets} } ) {
 	if( $widget->{type} eq "Combo" ) {
+            my @values = split /\|/, $widget->{data1};
+            my $default = 0;
+            for my $i ( 0 .. $#values ) {
+                $default = $i if $values[$i] =~ s/^\*//;
+            }
             print << "CODE";
 
 int
 option_enumerate_$_->{name}_$widget->{value}( void )
 {
-  return 0;
+CODE
+            for my $i ( 0 .. $#values ) {
+                print << "CODE";
+  if( settings_current.$widget->{value} &&
+      !strcmp( settings_current.$widget->{value}, "$values[$i]" ) )
+    return $i;
+CODE
+            }
+            print << "CODE";
+  return $default;
 }
 CODE
 	}

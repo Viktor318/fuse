@@ -34,7 +34,9 @@ fuse_SOURCES = display.c \
 	event.c \
 	fuse.c \
 	input.c \
+	input_refresh.c \
 	keyboard.c \
+	keyboard_refresh.c \
 	loader.c \
 	loader_detector.c \
 	loader_internals.h \
@@ -141,7 +143,9 @@ noinst_HEADERS = bitmap.h \
 	event.h \
 	fuse.h \
 	input.h \
+	input_refresh.h \
 	keyboard.h \
+	keyboard_refresh.h \
 	loader.h \
 	machine.h \
 	memory_pages.h \
@@ -189,6 +193,7 @@ EXTRA_DIST = AUTHORS \
 	     update-release.py \
 	     tools/metrics \
 	     tools/test_metrics.py \
+	     hacking/input-refresh.md \
 	     .agents/skills/README.md \
 	     .agents/skills/update-changelog/SKILL.md
 
@@ -264,7 +269,7 @@ include unittests/Makefile.am
 include z80/Makefile.am
 
 if UI_NULL
-check-local: check-widget-utf8 $(AUDIO_CHECK_TARGETS) fuse unittests/displaytest unittests/sdl2displaytest unittests/sdl2scalerstatetest unittests/sdl2joysticktest unittests/sdl2mousetest unittests/palcompositetest unittests/scalerexpandtest z80/coretest
+check-local: $(INPUT_CHECK_TARGETS) check-widget-utf8 $(AUDIO_CHECK_TARGETS) fuse unittests/displaytest unittests/sdl2displaytest unittests/sdl2scalerstatetest unittests/sdl2joysticktest unittests/sdl2mousetest unittests/palcompositetest unittests/scalerexpandtest z80/coretest
 	@test -e $(top_builddir)/roms || ln -sf "$(abs_top_srcdir)/roms" $(top_builddir)/roms
 	FUSE_TEST_SRCDIR="$(abs_top_srcdir)" $(top_builddir)/fuse --unittests
 	$(top_builddir)/unittests/displaytest
@@ -280,6 +285,6 @@ endif
 	$(top_builddir)/z80/coretest $(srcdir)/z80/tests/tests.in > $(top_builddir)/z80/tests.actual
 	cmp $(top_builddir)/z80/tests.actual $(srcdir)/z80/tests/tests.expected
 else
-check-local: check-widget-utf8 $(AUDIO_CHECK_TARGETS)
+check-local: $(INPUT_CHECK_TARGETS) check-widget-utf8 $(AUDIO_CHECK_TARGETS)
 	@echo "SKIP: internal unit tests require a null-UI build"
 endif

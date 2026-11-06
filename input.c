@@ -33,30 +33,122 @@
 #include "ui/ui.h"
 #include "utils.h"
 
-static int keypress( const input_event_key_t *event );
+static int keypress( const input_event_key_t *event,
+                     input_dispatch_context context );
 static int keyrelease( const input_event_key_t *event );
 static int do_joystick( const input_event_joystick_t *joystick_event,
-			int press );
+                        int press, input_dispatch_context context );
+
+/* One bounded slot is sufficient: any deferred action is an ordering barrier.
+   Frontends must retain all subsequent events until normal dispatch resumes. */
+static struct {
+  enum { ACTION_NONE, ACTION_POPUP, ACTION_KEYPRESS } type;
+  input_event_key_t key;
+} deferred_action;
+static int executing_deferred;
+static int (*popup_filter)( input_key native_key );
+
+void
+input_dispatch_set_popup_filter( int (*filter)( input_key native_key ) )
+{
+  popup_filter = filter;
+}
+
+int
+input_dispatch_pending( void )
+{
+  return deferred_action.type != ACTION_NONE || executing_deferred;
+}
+
+void
+input_dispatch_deferred( void )
+{
+  input_event_key_t key;
+  int type;
+
+  if( executing_deferred || deferred_action.type == ACTION_NONE ) return;
+  type = deferred_action.type;
+  key = deferred_action.key;
+  deferred_action.type = ACTION_NONE;
+  executing_deferred = 1;
+  if( type == ACTION_POPUP ) {
+    ui_popup_menu( key.native_key );
+  } else {
+    /* Escape's mouse-release decision precedes all physical effects. None
+       have been applied for this action, so normal handling is safe here. */
+    keypress( &key, INPUT_DISPATCH_NORMAL );
+  }
+  executing_deferred = 0;
+}
+
+static int
+popup_menu( input_key native_key, input_dispatch_context context )
+{
+  if( context == INPUT_DISPATCH_NORMAL ) {
+    ui_popup_menu( native_key );
+    return INPUT_DISPATCH_APPLIED;
+  }
+  if( popup_filter && !popup_filter( native_key ) ) return INPUT_DISPATCH_APPLIED;
+  deferred_action.type = ACTION_POPUP;
+  deferred_action.key.native_key = native_key;
+  deferred_action.key.spectrum_key = INPUT_KEY_NONE;
+  return INPUT_DISPATCH_DEFERRED;
+}
+
+static int
+joystick_output_valid( int which )
+{
+  int output;
+  switch( which ) {
+  case 0: output = settings_current.joystick_1_output; break;
+  case 1: output = settings_current.joystick_2_output; break;
+  case JOYSTICK_KEYBOARD: output = settings_current.joystick_keyboard_output; break;
+  default: return 0;
+  }
+  return output >= JOYSTICK_TYPE_NONE && output < JOYSTICK_TYPE_COUNT;
+}
 
 int
 input_event( const input_event_t *event )
 {
+  return input_event_dispatch( event, INPUT_DISPATCH_NORMAL );
+}
 
-  switch( event->type ) {
-
-  case INPUT_EVENT_KEYPRESS: return keypress( &( event->types.key ) );
-  case INPUT_EVENT_KEYRELEASE: return keyrelease( &( event->types.key ) );
-
-  case INPUT_EVENT_JOYSTICK_PRESS:
-    return do_joystick( &( event->types.joystick ), 1 );
-  case INPUT_EVENT_JOYSTICK_RELEASE:
-    return do_joystick( &( event->types.joystick ), 0 );
-
+input_dispatch_result
+input_event_dispatch( const input_event_t *event, input_dispatch_context context )
+{
+  if( context == INPUT_DISPATCH_READ_TIME ) {
+    if( input_dispatch_pending() || ui_widget_level >= 0 || fuse_emulation_paused )
+      return INPUT_DISPATCH_BLOCKED;
+    /* Avoid the ordinary diagnostic/UI paths on malformed input/settings. */
+    if( event->type == INPUT_EVENT_KEYPRESS ||
+        event->type == INPUT_EVENT_KEYRELEASE ) {
+      if( !joystick_output_valid( JOYSTICK_KEYBOARD ) ) return INPUT_DISPATCH_ERROR;
+    } else if( event->type == INPUT_EVENT_JOYSTICK_PRESS ||
+               event->type == INPUT_EVENT_JOYSTICK_RELEASE ) {
+      const input_event_joystick_t *j = &event->types.joystick;
+      if( j->which < 0 || j->which > 1 || j->button < INPUT_JOYSTICK_UP ||
+          j->button > INPUT_JOYSTICK_FIRE_15 || !joystick_output_valid( j->which ) )
+        return INPUT_DISPATCH_ERROR;
+    }
+  } else if( context == INPUT_DISPATCH_NORMAL ) {
+    input_dispatch_deferred();
+  } else {
+    return INPUT_DISPATCH_ERROR;
   }
 
-  ui_error( UI_ERROR_ERROR, "unknown input event type %d", event->type );
-  return 1;
+  switch( event->type ) {
+  case INPUT_EVENT_KEYPRESS: return keypress( &event->types.key, context );
+  case INPUT_EVENT_KEYRELEASE: return keyrelease( &event->types.key );
+  case INPUT_EVENT_JOYSTICK_PRESS:
+    return do_joystick( &event->types.joystick, 1, context );
+  case INPUT_EVENT_JOYSTICK_RELEASE:
+    return do_joystick( &event->types.joystick, 0, context );
+  }
 
+  if( context == INPUT_DISPATCH_NORMAL )
+    ui_error( UI_ERROR_ERROR, "unknown input event type %d", event->type );
+  return INPUT_DISPATCH_ERROR;
 }
 
 static int
@@ -238,6 +330,16 @@ recreated_is_upkey( int code )
 
 static int recreated_key_down = 0;
 
+void
+input_cancel_physical( void )
+{
+  keyboard_release_all();
+  recreated_key_down = 0;
+  /* Clear every interface, even one whose configured output has changed.
+     Never pass cancellation through joystick-to-menu or widget routing. */
+  joystick_clear_interfaces();
+}
+
 static void
 recreated_keypress( input_key k )
 {
@@ -265,7 +367,7 @@ recreated_keypress( input_key k )
 }
 
 static int
-keypress( const input_event_key_t *event )
+keypress( const input_event_key_t *event, input_dispatch_context context )
 {
   int swallow;
 
@@ -276,6 +378,11 @@ keypress( const input_event_key_t *event )
 
   /* Escape => ask UI to end mouse grab, return if grab ended */
   if( event->native_key == INPUT_KEY_Escape && ui_mouse_grabbed ) {
+    if( context == INPUT_DISPATCH_READ_TIME ) {
+      deferred_action.type = ACTION_KEYPRESS;
+      deferred_action.key = *event;
+      return INPUT_DISPATCH_DEFERRED;
+    }
     ui_mouse_grabbed = ui_mouse_release( 0 );
     if( !ui_mouse_grabbed ) return 0;
   }
@@ -306,9 +413,7 @@ keypress( const input_event_key_t *event )
     send_keyboard_press( event->spectrum_key );
   }
 
-  ui_popup_menu( event->native_key );
-
-  return 0;
+  return popup_menu( event->native_key, context );
 }
 
 static int
@@ -396,21 +501,23 @@ get_fire_button_key( int which, input_key button )
    except on the Wii where the home button already opens the menu; on UIs
    without a widget menu, and on the Wii, the menu key falls back to a plain
    joystick fire button to preserve the previous behaviour */
-static void
-do_menu_key( int which, int press )
+static int
+do_menu_key( int which, int press, input_dispatch_context context GCC_UNUSED )
 {
 #ifdef USE_WIDGET
 #ifndef GEKKO /* Home button opens the menu on Wii */
-  if( press ) ui_popup_menu( INPUT_KEY_F1 );
-  return;
+  if( press ) return popup_menu( INPUT_KEY_F1, context );
+  return INPUT_DISPATCH_APPLIED;
 #endif  /* #ifndef GEKKO */
 #endif				/* #ifdef USE_WIDGET */
 
   joystick_press( which, JOYSTICK_BUTTON_FIRE, press );
+  return INPUT_DISPATCH_APPLIED;
 }
 
 static int
-do_joystick( const input_event_joystick_t *joystick_event, int press )
+do_joystick( const input_event_joystick_t *joystick_event, int press,
+             input_dispatch_context context )
 {
   int which;
 
@@ -450,7 +557,7 @@ do_joystick( const input_event_joystick_t *joystick_event, int press )
     if( key == KEYBOARD_JOYSTICK_FIRE ) {
       joystick_press( which, JOYSTICK_BUTTON_FIRE, press );
     } else if( key == KEYBOARD_MENU ) {
-      do_menu_key( which, press );
+      return do_menu_key( which, press, context );
     } else {
       if( press ) {
 	keyboard_press( key );

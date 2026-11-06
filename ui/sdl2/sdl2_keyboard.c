@@ -128,21 +128,23 @@ sdl2keyboard_native_map( const SDL_KeyboardEvent *keyevent )
   return keysyms_remap( keyevent->keysym.sym );
 }
 
-static void
-sdl2keyboard_dispatch( input_event_type type, SDL_KeyboardEvent *keyevent )
+input_dispatch_result
+sdl2keyboard_event( SDL_KeyboardEvent *keyevent, input_dispatch_context context )
 {
   input_key keysym;
   input_event_t fuse_event;
+  input_event_type type = keyevent->type == SDL_KEYDOWN ?
+                          INPUT_EVENT_KEYPRESS : INPUT_EVENT_KEYRELEASE;
 
   keysym = sdl2keyboard_native_map( keyevent );
 
-  if( keysym == INPUT_KEY_NONE ) return;
+  if( keysym == INPUT_KEY_NONE ) return INPUT_DISPATCH_APPLIED;
 
   fuse_event.type = type;
   fuse_event.types.key.native_key = keysym;
   fuse_event.types.key.spectrum_key = keysym;
 
-  input_event( &fuse_event );
+  return input_event_dispatch( &fuse_event, context );
 }
 
 void
@@ -158,17 +160,21 @@ sdl2keyboard_end( void )
 void
 sdl2keyboard_release_all( void )
 {
-  keyboard_release_all();
+  input_cancel_physical();
 }
 
 void
 sdl2keyboard_keypress( SDL_KeyboardEvent *keyevent )
 {
-  sdl2keyboard_dispatch( INPUT_EVENT_KEYPRESS, keyevent );
+  SDL_KeyboardEvent event = *keyevent;
+  event.type = SDL_KEYDOWN;
+  sdl2keyboard_event( &event, INPUT_DISPATCH_NORMAL );
 }
 
 void
 sdl2keyboard_keyrelease( SDL_KeyboardEvent *keyevent )
 {
-  sdl2keyboard_dispatch( INPUT_EVENT_KEYRELEASE, keyevent );
+  SDL_KeyboardEvent event = *keyevent;
+  event.type = SDL_KEYUP;
+  sdl2keyboard_event( &event, INPUT_DISPATCH_NORMAL );
 }

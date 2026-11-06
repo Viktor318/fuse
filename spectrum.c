@@ -30,6 +30,8 @@
 #include "display.h"
 #include "event.h"
 #include "keyboard.h"
+#include "input.h"
+#include "keyboard_refresh.h"
 #include "infrastructure/startup_manager.h"
 #include "loader.h"
 #include "machine.h"
@@ -79,6 +81,7 @@ static void
 spectrum_reset( int hard_reset )
 {
   frames_since_reset = 0;
+  keyboard_refresh_invalidate();
 }
 
 static module_info_t module_info = {
@@ -99,6 +102,7 @@ spectrum_frame_event_fn( libspectrum_dword last_tstates, int type,
   spectrum_frame();
   z80_interrupt();
   rzx_frame_interrupt_complete();
+  input_dispatch_deferred();
   ui_joystick_poll();
   timer_estimate_speed();
   debugger_add_time_events();

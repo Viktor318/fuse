@@ -13,6 +13,8 @@
 
 #include "display.h"
 #include "fuse.h"
+#include "input.h"
+#include "keyboard_refresh.h"
 #include "menu.h"
 #include "settings.h"
 #include "ui/display_timing.h"
@@ -23,9 +25,36 @@
 #include "sdl2_keyboard.h"
 #include "sdl2_mouse_internal.h"
 #include "sdl2_ui.h"
+#include "sdl2_events.h"
 
 static SDL_Cursor *sdl2ui_blank_cursor;
 static SDL_Cursor *sdl2ui_default_cursor;
+static sdl2_event_collector sdl2ui_events;
+
+static input_dispatch_result sdl2ui_dispatch_event(
+  SDL_Event *event, input_dispatch_context context, int focus_cancelled,
+  void *data );
+
+static void
+sdl2ui_cancel_focus( void *data GCC_UNUSED )
+{
+  sdl2keyboard_release_all();
+  keyboard_refresh_invalidate();
+}
+
+/* Matches the widget popup switch, without invoking it. Normal dispatch is
+   unchanged; only known no-op checks may be omitted during a read. */
+static int
+sdl2ui_popup_key( input_key key )
+{
+  return key >= INPUT_KEY_F1 && key <= INPUT_KEY_F10;
+}
+
+static input_refresh_result
+sdl2ui_refresh_input( void *data GCC_UNUSED )
+{
+  return sdl2_events_collect( &sdl2ui_events, INPUT_DISPATCH_READ_TIME );
+}
 
 static int
 sdl2ui_init_blank_cursor( void )
@@ -61,7 +90,7 @@ sdl2ui_set_cursor_visibility( int show_cursor )
 }
 
 static void
-sdl2ui_handle_window_event( const SDL_WindowEvent *event )
+sdl2ui_handle_window_event( const SDL_WindowEvent *event, int focus_cancelled )
 {
   switch( event->event ) {
   case SDL_WINDOWEVENT_EXPOSED:
@@ -70,10 +99,12 @@ sdl2ui_handle_window_event( const SDL_WindowEvent *event )
     display_refresh_all();
     break;
   case SDL_WINDOWEVENT_FOCUS_GAINED:
+    keyboard_refresh_invalidate();
     ui_mouse_resume();
     break;
   case SDL_WINDOWEVENT_FOCUS_LOST:
-    sdl2keyboard_release_all();
+    if( !focus_cancelled ) sdl2keyboard_release_all();
+    keyboard_refresh_invalidate();
     ui_mouse_suspend();
     break;
   default:
@@ -100,26 +131,29 @@ ui_init( int *argc, char ***argv )
   sdl2ui_default_cursor = SDL_GetDefaultCursor();
 
   sdl2keyboard_init();
+  sdl2_events_init( &sdl2ui_events, sdl2ui_dispatch_event, sdl2ui_cancel_focus, NULL );
+  input_dispatch_set_popup_filter( sdl2ui_popup_key );
+  keyboard_refresh_set_frontend( sdl2ui_refresh_input, NULL );
   ui_mouse_present = 1;
 
   return 0;
 }
 
-int
-ui_event( void )
+static input_dispatch_result
+sdl2ui_dispatch_event( SDL_Event *incoming, input_dispatch_context context,
+                       int focus_cancelled, void *data GCC_UNUSED )
 {
-  SDL_Event event;
-
-  display_timing_input_begin();
-  while( SDL_PollEvent( &event ) ) {
-    switch( event.type ) {
+  SDL_Event event = *incoming;
+  if( context == INPUT_DISPATCH_READ_TIME &&
+      event.type != SDL_KEYDOWN && event.type != SDL_KEYUP )
+    return INPUT_DISPATCH_BLOCKED;
+  switch( event.type ) {
     case SDL_KEYDOWN:
       if( !event.key.repeat || ui_widget_level >= 0 )
-        sdl2keyboard_keypress( &event.key );
+        return sdl2keyboard_event( &event.key, context );
       break;
     case SDL_KEYUP:
-      sdl2keyboard_keyrelease( &event.key );
-      break;
+      return sdl2keyboard_event( &event.key, context );
 
     case SDL_MOUSEBUTTONDOWN:
       ui_mouse_button( event.button.button, 1 );
@@ -155,17 +189,24 @@ ui_event( void )
       break;
 
     case SDL_WINDOWEVENT:
-      sdl2ui_handle_window_event( &event.window );
+      sdl2ui_handle_window_event( &event.window, focus_cancelled );
       break;
 
     default:
       break;
-    }
   }
+  return INPUT_DISPATCH_APPLIED;
+}
 
+int
+ui_event( void )
+{
+  input_refresh_result result;
+  display_timing_input_begin();
+  result = sdl2_events_collect( &sdl2ui_events, INPUT_DISPATCH_NORMAL );
   display_timing_input_end();
 
-  return 0;
+  return result == INPUT_REFRESH_FAILED;
 }
 
 int
@@ -173,6 +214,9 @@ ui_end( void )
 {
   int error;
 
+  keyboard_refresh_set_frontend( NULL, NULL );
+  input_dispatch_set_popup_filter( NULL );
+  sdl2_events_end( &sdl2ui_events );
   error = uidisplay_end();
   if( error ) return error;
 

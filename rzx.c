@@ -24,6 +24,7 @@
 */
 
 #include "config.h"
+#include "keyboard_refresh.h"
 
 #include "machines/specplus3.h"
 
@@ -403,6 +404,7 @@ start_playback( libspectrum_rzx *from_rzx )
   tstates = libspectrum_rzx_tstates( from_rzx );
   rzx_instruction_count = libspectrum_rzx_instructions( from_rzx );
   rzx_playback = 1;
+  keyboard_refresh_invalidate();
   rzx_counter_reset();
 
   ui_menu_activate( UI_MENU_ITEM_RECORDING, 1 );
@@ -436,6 +438,7 @@ int rzx_stop_playback( int add_interrupt )
   /* Rejoin CPU-driven audio timing only at a fresh frame boundary. */
   sound_suspend_subframe();
   rzx_playback = 0;
+  keyboard_refresh_invalidate();
   if( rzx_cmos_forced ) settings_current.z80_is_cmos = 0;
   rzx_cmos_forced = 0;
   rzx_spin_tape_save_compat = 0;

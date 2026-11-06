@@ -238,7 +238,38 @@ typedef struct input_event_t {
 
 } input_event_t;
 
+typedef enum input_dispatch_context {
+  INPUT_DISPATCH_NORMAL,
+  INPUT_DISPATCH_READ_TIME
+} input_dispatch_context;
+
+typedef enum input_dispatch_result {
+  INPUT_DISPATCH_APPLIED = 0,
+  INPUT_DISPATCH_ERROR = 1,
+  INPUT_DISPATCH_DEFERRED,
+  INPUT_DISPATCH_BLOCKED
+} input_dispatch_result;
+
+/* Normal dispatch retains its existing 0/error return convention. */
 int input_event( const input_event_t *event );
+/* READ_TIME applies the same physical mapping but never invokes UI handlers.
+   DEFERRED means this event was consumed: an action, not its already-applied
+   physical transitions, awaits a normal safe point. BLOCKED means untouched:
+   the caller must retain the event for normal dispatch. Both are ordering
+   barriers: stop collection and do not bypass them with later events. */
+input_dispatch_result input_event_dispatch( const input_event_t *event,
+                                             input_dispatch_context context );
+/* Drain before collecting/removing new native events, never from a port read.
+   A deferred menu can nest the event loop: do not dequeue a later event first.
+   Actions are removed before execution so nested dispatch cannot repeat them. */
+void input_dispatch_deferred( void );
+int input_dispatch_pending( void );
+/* Optional pure frontend classifier; NULL conservatively defers every popup
+   check. Never affects normal dispatch. Set only at a frontend safe point. */
+void input_dispatch_set_popup_filter( int (*filter)( input_key native_key ) );
+/* Focus-loss cancellation: physical matrix/joysticks and translation state
+   only. Synthetic overlays and pending UI actions are neither run nor cleared. */
+void input_cancel_physical( void );
 
 /* Reset the shifted-arrow-key tracking state (called when all keys are
    released, e.g. on focus loss or emulation pause). */

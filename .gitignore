@@ -103,6 +103,11 @@ tags
 /unittests/coreaudiofilltest
 /unittests/displaytest
 /unittests/floatingbus-output/
+/unittests/inputdispatchtest
+/unittests/inputrefreshtest
+/unittests/keyboardrefreshtest
+/unittests/sdl2eventstest
+/tools/__pycache__/
 /unittests/pcm_fifotest
 /unittests/sfifotest
 /unittests/silencenoisetest

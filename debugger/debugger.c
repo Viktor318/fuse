@@ -22,6 +22,7 @@
 */
 
 #include "config.h"
+#include "keyboard_refresh.h"
 
 #include "debugger.h"
 #include "debugger_internals.h"
@@ -71,6 +72,7 @@ debugger_init( void *context )
 void
 debugger_reset( void )
 {
+  keyboard_refresh_invalidate();
   debugger_breakpoint_remove_all();
   debugger_mode = DEBUGGER_MODE_INACTIVE;
 }
@@ -101,6 +103,7 @@ debugger_register_startup( void )
 int
 debugger_trap( void )
 {
+  keyboard_refresh_invalidate();
   return ui_debugger_activate();
 }
 
@@ -108,6 +111,7 @@ debugger_trap( void )
 int
 debugger_step( void )
 {
+  keyboard_refresh_invalidate();
   debugger_mode = DEBUGGER_MODE_HALTED;
   ui_debugger_deactivate( 0 );
   return 0;
@@ -137,6 +141,7 @@ debugger_next( void )
 int
 debugger_run( void )
 {
+  keyboard_refresh_invalidate();
   debugger_mode = debugger_breakpoints ?
                   DEBUGGER_MODE_ACTIVE :
                   DEBUGGER_MODE_INACTIVE;

@@ -25,6 +25,45 @@ noinst_HEADERS += unittests/helpers.h
 EXTRA_DIST += unittests/fixtures/floatingbus/README.md \
 	unittests/fixtures/floatingbus/.gitignore
 
+INPUT_CHECK_TARGETS = check-input-refresh check-input-dispatch \
+                      check-keyboard-refresh check-sdl2-events
+.PHONY: $(INPUT_CHECK_TARGETS)
+
+noinst_PROGRAMS += unittests/keyboardrefreshtest
+unittests_keyboardrefreshtest_SOURCES = unittests/keyboardrefreshtest.c \
+                                      keyboard_refresh.c input_refresh.c
+unittests_keyboardrefreshtest_CPPFLAGS = $(AM_CPPFLAGS) -DENABLE_AUTOMATION
+unittests_keyboardrefreshtest_LDADD =
+
+check-keyboard-refresh: unittests/keyboardrefreshtest
+	$(top_builddir)/unittests/keyboardrefreshtest
+
+if USE_SDL2
+noinst_PROGRAMS += unittests/sdl2eventstest
+unittests_sdl2eventstest_SOURCES = unittests/sdl2eventstest.c ui/sdl2/sdl2_events.c
+unittests_sdl2eventstest_LDADD = $(SDL2_LIBS)
+check-sdl2-events: unittests/sdl2eventstest
+	$(top_builddir)/unittests/sdl2eventstest
+else
+check-sdl2-events:
+	@echo "SKIP: SDL2 event collection tests require SDL2"
+endif
+
+noinst_PROGRAMS += unittests/inputdispatchtest
+unittests_inputdispatchtest_SOURCES = unittests/inputdispatchtest.c input.c \
+                                      unittests/hungarian_keyboard_stub.c
+unittests_inputdispatchtest_LDADD =
+
+check-input-dispatch: unittests/inputdispatchtest
+	$(top_builddir)/unittests/inputdispatchtest
+
+noinst_PROGRAMS += unittests/inputrefreshtest
+unittests_inputrefreshtest_SOURCES = unittests/inputrefreshtest.c input_refresh.c
+unittests_inputrefreshtest_LDADD =
+
+check-input-refresh: unittests/inputrefreshtest
+	$(top_builddir)/unittests/inputrefreshtest
+
 # SDK-specific cooperative wait test; see hacking/emscripten.md for Node usage.
 EXTRA_DIST += unittests/emscriptenwaittest.c
 

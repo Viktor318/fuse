@@ -165,21 +165,24 @@ sdl2keyboard_get_character( const SDL_KeyboardEvent *keyevent )
   /* Ctrl or left Alt without AltGr act as Symbol Shift: no character */
   if( !altgr && ( mod & ( KMOD_CTRL | KMOD_LALT ) ) ) return 0;
 
+  /* Only peeked: the event is taken once the key press has been used, as
+     a read-time dispatch may leave the key press for the normal one */
   if( SDL_PeepEvents( &next, 1, SDL_PEEKEVENT, SDL_FIRSTEVENT,
-                      SDL_LASTEVENT ) == 1 && next.type == SDL_TEXTINPUT ) {
-    SDL_PeepEvents( &next, 1, SDL_GETEVENT, SDL_TEXTINPUT, SDL_TEXTINPUT );
+                      SDL_LASTEVENT ) == 1 && next.type == SDL_TEXTINPUT )
     return utf8_first_character( next.text.text );
-  }
 
   return 0;
 }
 
-static void
-sdl2keyboard_dispatch( input_event_type type, SDL_KeyboardEvent *keyevent )
+input_dispatch_result
+sdl2keyboard_event( SDL_KeyboardEvent *keyevent, input_dispatch_context context )
 {
   input_key keysym;
   input_event_t fuse_event;
+  input_dispatch_result result;
   libspectrum_dword character = 0;
+  input_event_type type = keyevent->type == SDL_KEYDOWN ?
+                          INPUT_EVENT_KEYPRESS : INPUT_EVENT_KEYRELEASE;
 
   keysym = sdl2keyboard_native_map( keyevent );
 
@@ -191,7 +194,7 @@ sdl2keyboard_dispatch( input_event_type type, SDL_KeyboardEvent *keyevent )
   if( keysym == INPUT_KEY_NONE && !character &&
       !( type == INPUT_EVENT_KEYRELEASE &&
          settings_current.hungarian_keyboard ) )
-    return;
+    return INPUT_DISPATCH_APPLIED;
 
   fuse_event.type = type;
   fuse_event.types.key.native_key = keysym;
@@ -199,7 +202,16 @@ sdl2keyboard_dispatch( input_event_type type, SDL_KeyboardEvent *keyevent )
   fuse_event.types.key.character = character;
   fuse_event.types.key.physical_key = keyevent->keysym.scancode;
 
-  input_event( &fuse_event );
+  result = input_event_dispatch( &fuse_event, context );
+
+  /* The SDL_TEXTINPUT event of the character has been used with the key */
+  if( character && result != INPUT_DISPATCH_BLOCKED &&
+      result != INPUT_DISPATCH_ERROR ) {
+    SDL_Event next;
+    SDL_PeepEvents( &next, 1, SDL_GETEVENT, SDL_TEXTINPUT, SDL_TEXTINPUT );
+  }
+
+  return result;
 }
 
 void
@@ -215,17 +227,21 @@ sdl2keyboard_end( void )
 void
 sdl2keyboard_release_all( void )
 {
-  keyboard_release_all();
+  input_cancel_physical();
 }
 
 void
 sdl2keyboard_keypress( SDL_KeyboardEvent *keyevent )
 {
-  sdl2keyboard_dispatch( INPUT_EVENT_KEYPRESS, keyevent );
+  SDL_KeyboardEvent event = *keyevent;
+  event.type = SDL_KEYDOWN;
+  sdl2keyboard_event( &event, INPUT_DISPATCH_NORMAL );
 }
 
 void
 sdl2keyboard_keyrelease( SDL_KeyboardEvent *keyevent )
 {
-  sdl2keyboard_dispatch( INPUT_EVENT_KEYRELEASE, keyevent );
+  SDL_KeyboardEvent event = *keyevent;
+  event.type = SDL_KEYUP;
+  sdl2keyboard_event( &event, INPUT_DISPATCH_NORMAL );
 }

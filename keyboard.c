@@ -33,6 +33,7 @@
 #include "hungarian_keyboard.h"
 #include "infrastructure/startup_manager.h"
 #include "input.h"
+#include "keyboard_refresh.h"
 #include "keyboard.h"
 #include "settings.h"
 #include "ui/ui.h"
@@ -344,7 +345,10 @@ keyboard_register_startup( void )
 libspectrum_byte
 keyboard_read( libspectrum_byte porth )
 {
-  libspectrum_byte data = 0xff; int i;
+  libspectrum_byte data = 0xff;
+  int i;
+
+  if( keyboard_refresh_enabled ) keyboard_refresh_before_read( porth );
 
   for( i=0; i<KEYBOARD_HALFROWS; i++,porth>>=1 ) {
     int source;

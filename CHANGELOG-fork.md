@@ -194,6 +194,11 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   screen) run on these machines too.
 - From upstream `master`: **EmuZWin snapshots** (`.ezx`) can be opened
   (read only), and are in the file selector filters.
+- From upstream `master`: the **SDL 2** version also reads the keyboard
+  when the Spectrum program reads its keys (at the first read of a frame,
+  then at most every 5 ms), not only once a frame, so keys reach the
+  program sooner. Typing with the Windows keyboard layout works with it too.
+  The Windows (Win32) version reads the keyboard once a frame, as before.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

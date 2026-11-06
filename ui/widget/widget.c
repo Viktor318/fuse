@@ -44,6 +44,7 @@
 #include "ui/uidisplay.h"
 #include "ui/ui_internals.h"
 #include "keyboard.h"
+#include "keyboard_refresh.h"
 #include "menu.h"
 #include "periph.h"
 #include "peripherals/joystick.h"
@@ -527,6 +528,7 @@ int widget_do( widget_type which, void *data )
 
   /* We're now one widget level deeper */
   ui_widget_level++;
+  keyboard_refresh_invalidate();
 
   /* Store what type of widget we are and what data we were given */
   widget_return[ui_widget_level].type = which;
@@ -560,6 +562,7 @@ int widget_do( widget_type which, void *data )
 
   /* Now return to the previous widget level */
   ui_widget_level--;
+  keyboard_refresh_invalidate();
     
   if( ui_widget_level >= 0 ) {
 

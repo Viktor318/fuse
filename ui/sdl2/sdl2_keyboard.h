@@ -9,6 +9,8 @@
 
 #include "keyboard.h"
 
+input_dispatch_result sdl2keyboard_event( SDL_KeyboardEvent *event,
+                                          input_dispatch_context context );
 void sdl2keyboard_init( void );
 void sdl2keyboard_end( void );
 void sdl2keyboard_release_all( void );

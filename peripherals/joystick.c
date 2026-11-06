@@ -131,6 +131,12 @@ joystick_reset( int hard_reset GCC_UNUSED )
   fuller_value = 0xff;
 }
 
+void
+joystick_clear_interfaces( void )
+{
+  joystick_reset( 0 );
+}
+
 static int
 joystick_init( void *context )
 {

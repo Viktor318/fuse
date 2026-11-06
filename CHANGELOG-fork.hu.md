@@ -199,6 +199,12 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   ezeken a gépeken is futnak.
 - Az upstream `master`-ből: az **EmuZWin pillanatfelvételek** (`.ezx`)
   megnyithatók (csak olvasásra), és ott vannak a fájlválasztó szűrőiben.
+- Az upstream `master`-ből: az **SDL 2-es** változat akkor is beolvassa a
+  billentyűzetet, amikor a Spectrum program a billentyűket olvassa (egy
+  képkockában az első olvasáskor, utána legfeljebb 5 ms-onként), nem csak
+  képkockánként egyszer, így a billentyűk hamarabb eljutnak a programhoz.
+  A Windows-kiosztás szerinti gépelés ezzel is működik. A Windowsos (Win32)
+  változat a billentyűzetet továbbra is képkockánként egyszer olvassa.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

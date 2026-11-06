@@ -69,6 +69,7 @@ void win32_ayplayer_show( void );
 #endif
 #include "infrastructure/startup_manager.h"
 #include "keyboard.h"
+#include "keyboard_refresh.h"
 #include "machine.h"
 #include "machines/machines_periph.h"
 #include "memory_pages.h"
@@ -668,11 +669,13 @@ static void fuse_show_help( void )
 /* Stop all activities associated with actual Spectrum emulation */
 int fuse_emulation_pause(void)
 {
-  int error;
+  int error, was_paused;
 
   /* If we were already paused, just return. In any case, increment
      the pause count */
-  if( fuse_emulation_paused++ ) return 0;
+  was_paused = fuse_emulation_paused++;
+  if( was_paused ) return 0;
+  keyboard_refresh_invalidate();
 
   /* Stop recording any competition mode RZX file */
   if( rzx_recording && rzx_competition_mode ) {
@@ -694,7 +697,9 @@ int fuse_emulation_unpause(void)
 
   /* If this doesn't start us running again, just return. In any case,
      decrement the pause count */
-  if( --fuse_emulation_paused ) return 0;
+  --fuse_emulation_paused;
+  if( fuse_emulation_paused ) return 0;
+  keyboard_refresh_invalidate();
 
   /* If we now want sound, enable it */
   sound_unpause();

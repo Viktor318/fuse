@@ -42,6 +42,7 @@
 #include "keyboard_refresh.h"
 #include "menu.h"
 #include "peripherals/joystick.h"
+#include "peripherals/keypad128.h"
 #include "psg.h"
 #include "rzx.h"
 #include "screenshot.h"
@@ -722,6 +723,8 @@ WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
 
 #define READ_TIME_MESSAGE_LIMIT 64
 
+static int keypad_key_message( const MSG *msg );
+
 /* The keys of the accelerator table, which stop the collection */
 static WORD *accelerator_keys = NULL;
 static int accelerator_key_count = 0;
@@ -806,7 +809,8 @@ win32ui_refresh_input( void *data GCC_UNUSED )
 
     if( msg.hwnd != fuse_hWnd ||
         ( msg.message != WM_KEYDOWN && msg.message != WM_KEYUP ) ||
-        ( msg.message == WM_KEYDOWN && is_accelerator_key( msg.wParam ) ) ||
+        ( msg.message == WM_KEYDOWN && is_accelerator_key( msg.wParam ) &&
+          !keypad_key_message( &msg ) ) ||
         !win32keyboard_read_time_ready() || character_waiting() ) {
       result = INPUT_REFRESH_SKIPPED;
       break;
@@ -2034,6 +2038,19 @@ win32ui_fullscreen_apply( void )
   }
 }
 
+/* Insert and Delete are keys of the Spectrum 128 keypad (CMND and DEL)
+   when it is plugged in, and not shortcuts for the RZX menu items unless
+   an RZX file is being recorded (they only work then) */
+static int
+keypad_key_message( const MSG *msg )
+{
+  if( msg->hwnd != fuse_hWnd ) return 0;
+  if( msg->message != WM_KEYDOWN && msg->message != WM_KEYUP ) return 0;
+  if( msg->wParam != VK_INSERT && msg->wParam != VK_DELETE ) return 0;
+
+  return keypad128_active() && !rzx_recording;
+}
+
 /* win32ui_process_messages() is an equivalent of gtk's gtk_main(),
  * it processes messages until it receives WM_USER_EXIT_PROCESS_MESSAGES
  * message, which should be sent using:
@@ -2069,7 +2086,8 @@ win32ui_process_messages( int process_queue_once )
       }
 
       if( processMsg ) {
-        if( !TranslateAccelerator( fuse_hWnd, hAccels, &msg ) ) {
+        if( keypad_key_message( &msg ) ||
+            !TranslateAccelerator( fuse_hWnd, hAccels, &msg ) ) {
           if( ( LOWORD( msg.message ) == WM_QUIT ) ||
               ( LOWORD( msg.message ) == WM_USER_EXIT_PROCESS_MESSAGES ) )
             return;

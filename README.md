@@ -54,6 +54,24 @@ There are two programs in the package, with the same settings:
   while Fuse runs a frame reach the Spectrum program at its next keyboard
   read, not only at the start of the next frame (as in the SDL 2 version of
   upstream Fuse).
+- **Spectrum 128 keypad** (Options > Peripherals > General, off by
+  default): the keypad of the Spectrum 128, plugged in. The 128 BASIC
+  editor has editing functions only on the keypad; the editing keys of the
+  PC give them on the 128 and the +2 (the +2A and +3 ROMs don't use the
+  keypad):
+
+  | Key | 128 BASIC editor |
+  |---|---|
+  | Home / End | start / end of the line |
+  | Ctrl + ← / → | previous / next word |
+  | Page Up / Page Down | 10 lines up / down |
+  | Delete | delete the character under the cursor |
+  | Ctrl + Delete | delete to the end of the line |
+  | Ctrl + Backspace | delete to the start of the line |
+  | Insert | the Options menu (CMND) |
+
+  Insert and Delete are then shortcuts for the RZX menu items only while
+  an RZX file is being recorded.
 - **Help > Keyboard**: a high resolution picture of the Spectrum keyboard. It
   stays above Fuse without taking the focus, so you can keep typing; it can be
   resized and remembers its place and size.

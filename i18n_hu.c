@@ -877,6 +877,8 @@ const i18n_entry i18n_hu_table[] = {
     "Spec&Drum interfész" },
   { "Spec&Drum volume",
     "Spec&Drum hangerő" },
+  { "Spectrum 128 ke&ypad",
+    "&Spectrum 128 keypad (számbillentyűzet)" },
   { "Start",
     "Kezdőcím" },
   { "Start must be between 0 and 65535",

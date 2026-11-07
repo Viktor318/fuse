@@ -56,6 +56,7 @@ bw_tv, boolean, 0
 recreated_spectrum, boolean, 0
 hungarian_keyboard, boolean, 0,, windows-layout, windowslayout, hungarian-keyboard, hungariankeyboard
 keyboard_refresh, boolean, 1
+keypad128, boolean, 0
 rs232_handshake, boolean, 0
 rs232_tx, string, NULL
 rs232_rx, string, NULL

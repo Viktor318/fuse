@@ -58,6 +58,24 @@ A csomagban két program van, közös beállításokkal:
   bekapcsolva): a képkocka futása közben lenyomott billentyűk a Spectrum
   program következő billentyűzet-olvasásakor odaérnek, nem csak a következő
   képkocka elején (ahogy az upstream Fuse SDL 2-es változatában).
+- **Spectrum 128 keypad (számbillentyűzet)** (Beállítások > Perifériák >
+  Általános, alapból kikapcsolva): a Spectrum 128 csatlakoztatott keypadje.
+  A 128 BASIC szerkesztőjének egyes szerkesztési funkciói csak a keypaden
+  voltak; ezeket a PC szerkesztőbillentyűi adják a 128-on és a +2-n (a
+  +2A és a +3 ROM-ja nem használja a keypadet):
+
+  | Billentyű | 128 BASIC szerkesztő |
+  |---|---|
+  | Home / End | a sor eleje / vége |
+  | Ctrl + ← / → | előző / következő szó |
+  | Page Up / Page Down | 10 sorral fel / le |
+  | Delete | a kurzor alatti karakter törlése |
+  | Ctrl + Delete | törlés a sor végéig |
+  | Ctrl + Backspace | törlés a sor elejéig |
+  | Insert | az Options menü (CMND) |
+
+  Az Insert és a Delete ilyenkor csak RZX felvétel közben gyorsbillentyűje
+  az RZX menüpontoknak.
 - **Súgó > Billentyűzet**: nagy felbontású kép a Spectrum billentyűzetéről.
   A Fuse fölött marad, de nem veszi el a fókuszt, így közben tovább lehet
   gépelni; átméretezhető, és megjegyzi a helyét és a méretét.

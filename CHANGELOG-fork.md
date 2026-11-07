@@ -19,6 +19,16 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   and keys meant for other windows are still handled at the start of the
   next frame, in their order. With this switched off, the keyboard is read
   once a frame, as before.
+- **Spectrum 128 keypad** (*Options > Peripherals > General*, off by
+  default), on the 128 and the +2: the editing keys of the PC give the
+  editing functions of the 128 BASIC editor that only the keypad had. Home
+  / End: start / end of the line; Ctrl + Left / Right: previous / next
+  word; Page Up / Page Down: 10 lines up / down; Delete: the character under
+  the cursor; Ctrl + Delete / Ctrl + Backspace: delete to the end / start of
+  the line; Insert: the Options menu (CMND). The keypad protocol follows
+  EightyOne's emulation, with longer timeouts between bits (the ROM may be
+  interrupted there). While it is plugged in, Insert and Delete are
+  shortcuts for the RZX menu items only during RZX recording.
 
 ### AY mixer
 

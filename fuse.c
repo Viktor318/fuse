@@ -93,6 +93,7 @@ void win32_ayplayer_show( void );
 #include "peripherals/if1.h"
 #include "peripherals/if2.h"
 #include "peripherals/kempmouse.h"
+#include "peripherals/keypad128.h"
 #include "peripherals/multiface.h"
 #include "peripherals/printer.h"
 #include "peripherals/scld.h"
@@ -365,6 +366,7 @@ run_startup_manager( int *argc, char ***argv )
   if2_register_startup();
   joystick_register_startup();
   kempmouse_register_startup();
+  keypad128_register_startup();
   keyboard_register_startup();
   libspectrum_register_startup();
   libxml2_register_startup();

@@ -51,7 +51,7 @@ endif
 
 noinst_PROGRAMS += unittests/inputdispatchtest
 unittests_inputdispatchtest_SOURCES = unittests/inputdispatchtest.c input.c \
-                                      unittests/hungarian_keyboard_stub.c
+                                      unittests/fork_input_stubs.c
 unittests_inputdispatchtest_LDADD =
 
 check-input-dispatch: unittests/inputdispatchtest

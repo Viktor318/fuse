@@ -27,6 +27,7 @@
 #include "input.h"
 #include "hungarian_keyboard.h"
 #include "keyboard.h"
+#include "peripherals/keypad128.h"
 #include "peripherals/joystick.h"
 #include "settings.h"
 #include "snapshot.h"
@@ -372,6 +373,10 @@ keypress( const input_event_key_t *event, input_dispatch_context context )
 {
   int swallow;
 
+  /* Editing keys as the keys of the Spectrum 128 keypad */
+  if( ui_widget_level < 0 && keypad128_host_key( event->native_key, 1 ) )
+    return 0;
+
   /* Track host modifiers; swallowed while a timed key sequence runs */
   if( hungarian_keyboard_modifier( event, 1 ) ) return 0;
 
@@ -431,6 +436,8 @@ keypress( const input_event_key_t *event, input_dispatch_context context )
 static int
 keyrelease( const input_event_key_t *event )
 {
+  if( keypad128_host_key( event->native_key, 0 ) ) return 0;
+
   if( hungarian_keyboard_modifier( event, 0 ) ) return 0;
 
   if( hungarian_keyboard_keyrelease( event ) ) return 0;

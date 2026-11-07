@@ -35,6 +35,7 @@
 #include "input.h"
 #include "keyboard_refresh.h"
 #include "keyboard.h"
+#include "peripherals/keypad128.h"
 #include "settings.h"
 #include "ui/ui.h"
 
@@ -392,6 +393,9 @@ int keyboard_release_all( void )
 
   /* Forget the keys held by character based typing too */
   hungarian_keyboard_reset();
+
+  /* And the keys of the Spectrum 128 keypad */
+  keypad128_release_all();
 
   /* The physical keys (including any held cursor keys) are all released,
      so the shifted-arrow tracking state must be reset too.  Otherwise the

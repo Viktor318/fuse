@@ -26,6 +26,7 @@ fuse_SOURCES += \
                 peripherals/if2.c \
                 peripherals/joystick.c \
                 peripherals/kempmouse.c \
+                peripherals/keypad128.c \
                 peripherals/multiface.c \
                 peripherals/printer.c \
                 peripherals/scld.c \
@@ -78,6 +79,7 @@ noinst_HEADERS += \
                   peripherals/if2.h \
                   peripherals/joystick.h \
                   peripherals/kempmouse.h \
+                  peripherals/keypad128.h \
                   peripherals/multiface.h \
                   peripherals/printer.h \
                   peripherals/scld.h \

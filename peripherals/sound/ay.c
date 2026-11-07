@@ -32,6 +32,7 @@
 #include "machine.h"
 #include "module.h"
 #include "periph.h"
+#include "peripherals/keypad128.h"
 #include "peripherals/printer.h"
 #include "psg.h"
 #include "sound.h"
@@ -159,7 +160,7 @@ libspectrum_byte
 ay_registerport_read( libspectrum_word port GCC_UNUSED, libspectrum_byte *attached )
 {
   int current;
-  const libspectrum_byte port_input = 0xbf; /* always allow serial output */
+  libspectrum_byte port_input = 0xbf; /* always allow serial output */
 
   *attached = 0xff;
 
@@ -171,6 +172,8 @@ ay_registerport_read( libspectrum_word port GCC_UNUSED, libspectrum_byte *attach
      reading R14... */
 
   if( current == 14 ) {
+    /* Bit 5: the line from the Spectrum 128 keypad (high without one) */
+    port_input = ( port_input & ~0x20 ) | keypad128_read();
     if(machine_current->ay.registers[7] & 0x40)
       return (port_input & machine_current->ay.registers[14]);
     else
@@ -208,6 +211,10 @@ ay_dataport_write( libspectrum_word port GCC_UNUSED, libspectrum_byte b )
   if( psg_recording ) psg_write_register( current, b );
 
   if( current == 14 ) printer_serial_write( b );
+
+  /* Bit 0 of register 14 in output mode: the line to the keypad */
+  if( machine_current->ay.registers[7] & 0x40 )
+    keypad128_write( machine_current->ay.registers[14] );
 }
 
 void

@@ -8,6 +8,16 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 
 ## Kiadatlan
 
+### ROM-ok
+
+- A csomag tartalmazza a Pentagon (`128p-0.rom`, `128p-1.rom`,
+  `gluck.rom`), a Scorpion ZS 256 (`256s-0.rom`...`256s-3.rom`), a TR-DOS
+  (`trdos.rom`) és az Interface 1 (`if1-1.rom`, `if1-2.rom`) ROM-jait, így
+  a 128K-s `.sna` pillanatképek (amelyek Pentagon 128K-ként töltődnek be),
+  a Pentagon és a Scorpion gép, a Beta 128 lemezinterfész és az Interface 1
+  külön beszerzés nélkül működik. Az upstream Fuse ezeket nem tartalmazza;
+  lásd `roms/README.copyright`.
+
 ### Fájl-ablakok
 
 - A mentés-ablakok csak azokat a típusokat sorolják fel, egyenként,

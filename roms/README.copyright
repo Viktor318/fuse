@@ -43,6 +43,30 @@ by Andrew Owen with code from the ZX81 ROM, ZX80 ROM, skeleton ROM (from The
 Messenger), SAM Coupe and SE Basic. Available under the GNU GPL v2 or later
 license.
 
+if1-1.rom
+if1-2.rom
+
+The Interface 1 ROMs (editions 1 and 2) are copyright Amstrad (formerly
+Sinclair Research), so the statement for the Amstrad ROMs above applies.
+
+128p-0.rom
+128p-1.rom
+256s-0.rom
+256s-1.rom
+256s-2.rom
+256s-3.rom
+gluck.rom
+trdos.rom
+
+The ROMs of the Pentagon (128p-*: 128p-1.rom is the Amstrad 48 BASIC ROM,
+128p-0.rom a modified Amstrad 128 ROM) and the Scorpion ZS 256 (256s-*),
+the Gluck service ROM and TR-DOS (copyright Technology Research Ltd) are
+not part of upstream Fuse, as their copyright holders have given no
+explicit permission to distribute them. The Hungarian Windows edition
+includes them, as other emulators do, taken from the Fuse resources of
+the PC-BSD PBI packages (https://github.com/pcbsd/pbi), so that 128K .sna snapshots (loaded as Pentagon 128K), the Pentagon and
+Scorpion machines and the Beta 128 interface work out of the box.
+
 disciple.rom
 plusd.rom
 

@@ -7,6 +7,15 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
 ## Unreleased
 
+### ROMs
+
+- The ROMs of the Pentagon (`128p-0.rom`, `128p-1.rom`, `gluck.rom`), the
+  Scorpion ZS 256 (`256s-0.rom`...`256s-3.rom`), TR-DOS (`trdos.rom`) and
+  the Interface 1 (`if1-1.rom`, `if1-2.rom`) are included, so 128K `.sna`
+  snapshots (loaded as Pentagon 128K), the Pentagon and Scorpion machines,
+  the Beta 128 disk interface and the Interface 1 work out of the box.
+  Upstream Fuse doesn't include them; see `roms/README.copyright`.
+
 ### File dialogs
 
 - The save dialogs list only the types they can write, one by one, and a

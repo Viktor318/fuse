@@ -76,8 +76,8 @@ static int sound_tv_route = -1;
 /* The AY stereo mode changed while playing */
 static int sound_ay_route_pending = 0;
 static libspectrum_dword audio_position;
-/* Advance audio at the ordinary time cadence, independently of FIFO latency
-   policy. Test builds may override the interval in CPU T-states. */
+/* Subframe delivery is opt-in: legacy backends retain frame-sized batches.
+   Test builds may override the interval in CPU T-states. */
 #ifdef FUSE_SOUND_TEST_INTERVAL
 static libspectrum_dword audio_cut_interval = FUSE_SOUND_TEST_INTERVAL;
 #else
@@ -188,8 +188,12 @@ sound_init( const char *device )
   frame_sample_count = 0;
   audio_frame_suspended = 1;
 #ifndef FUSE_SOUND_TEST_INTERVAL
+#ifdef SOUND_SUBFRAME_OUTPUT
   audio_cut_interval = sound_audio_interval_tstates(
                          sound_get_effective_processor_speed() );
+#else
+  audio_cut_interval = 0;
+#endif
 #endif
   if( audio_cut_interval && audio_event < 0 )
     audio_event = event_register( sound_audio_event, "Audio cut" );

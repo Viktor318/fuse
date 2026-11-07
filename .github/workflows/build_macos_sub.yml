@@ -110,7 +110,7 @@ jobs:
           .github/scripts/in_config.sh "${{ inputs.verify_other }}"
 
       - name: (9) Make
-        run: make
+        run: make -j$(sysctl -n hw.ncpu)
 
       - name: (10) Install
         run: sudo make install

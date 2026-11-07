@@ -169,7 +169,7 @@ jobs:
         uses: actions/download-artifact@v8
 
       - name: (4) Create release with zip files
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         id: create-release
         with:
           name: "Test build for ${{ github.ref_name }}"
@@ -201,7 +201,7 @@ jobs:
       - run: sleep 5
 
       - name: (5) Update body of release (forcing files sync to SourceForge)
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         with:
           # Repeat some values as they were in the previous step
           name: "Test build for ${{ github.ref_name }}"
@@ -239,7 +239,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete Older Releases
-        uses: dev-drprasad/delete-older-releases@v0.3.4
+        uses: dev-drprasad/delete-older-releases@dfbe6be2a006e9475dfcbe5b8d201f1824c2a9fe # v0.3.4
         with:
           keep_latest: ${{ inputs.keep_latest }}
           delete_tags: true

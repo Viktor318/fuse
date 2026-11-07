@@ -1194,9 +1194,9 @@ Insert the specified file into the emulated +D's drive\ 1.
 .PP
 .B \-\-printer
 .RS
-Specify whether the emulation should include a printer. Same as the
+Specify whether serial/parallel printers are connected. Same as the
 General Peripherals Options dialog's
-.I "Emulate printers"
+.I "Serial/parallel printer connected"
 option.
 .RE
 .PP
@@ -2193,8 +2193,9 @@ Specify an HDF image to be loaded into the ZXMMC's emulated memory card.
 .PP
 .B \-\-zxprinter
 .RS
-Emulate the ZX Printer. Same as the General Peripherals Options dialog's
-.I "ZX Printer"
+Connect the ZX Printer, independently of the serial/parallel printer
+setting. Same as the General Peripherals Options dialog's
+.I "ZX Printer connected"
 option.
 .RE
 .PP
@@ -2911,16 +2912,21 @@ This option controls the `invisible' or `stealth' mode of Multiface One,
 as the physical switch on the side of the interface.
 .RE
 .PP
-.I "Emulate printers"
+.I "Serial/parallel printer connected"
 .RS
-If this option is selected, Fuse will emulate a printer. See the
+Connect printers to the configured serial and parallel interfaces.
+When disabled, these interfaces remain present but have no printer attached
+and no new serial/parallel printout is saved. This does not affect the
+ZX Printer. See the
 .B "PRINTER EMULATION"
 section for more details.
 .RE
 .PP
-.I "ZX Printer"
+.I "ZX Printer connected"
 .RS
-If this option is selected, Fuse will emulate the ZX Printer. See the
+Connect the ZX Printer. When disabled, the ZX Printer does not respond
+and no new ZX printout is saved. This is independent of the serial/parallel
+printer setting. See the
 .B "PRINTER EMULATION"
 section for more details.
 .RE
@@ -4546,9 +4552,21 @@ Serial printer (text-only)
 .IR +2A ", " +3
 Parallel printer (text-only)
 .PP
-If Opus Discovery, +D or DISCiPLE emulation is in use and printer
-emulation is enabled, text-only emulation of the disk interface's
-parallel printer interface is provided.
+If Opus Discovery, +D or DISCiPLE emulation is in use, its parallel
+printer interface is provided independently of whether a printer is connected.
+The built-in +2A/+3 parallel interface is likewise always present.
+.I "Serial/parallel printer connected"
+controls whether serial/parallel printers are attached; disconnected parallel
+printers report busy. The ZX Printer has no separate interface, so it does
+not respond when disconnected using
+.I "ZX Printer connected" .
+The existing
+.B \-\-printer
+and
+.B \-\-zxprinter
+options and configuration settings control these independent connection states.
+Enabling the ZX Printer permits both graphics and decoded text output even
+when the serial/parallel printer is disconnected.
 .PP
 Any printout is appended to one (or both) of two files, depending on
 the printer \(em these default to

@@ -314,8 +314,11 @@ opus_6821_access( libspectrum_byte reg, libspectrum_byte data,
       }
     } else {
       if( control_a & 0x04 ) {
-        /* printer never busy (bit 6) */
-        data_reg_a &= ~0x40;
+        /* Bit 6 is high when the printer is busy or disconnected. */
+        if( settings_current.printer )
+          data_reg_a &= ~0x40;
+        else
+          data_reg_a |= 0x40;
         return data_reg_a;
       } else {
         return data_dir_a;

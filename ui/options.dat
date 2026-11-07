@@ -111,8 +111,8 @@ Checkbox, Mu(l)tiface One, multiface1, INPUT_KEY_l
 Checkbox, Multiface 12(8), multiface128, INPUT_KEY_8
 Checkbox, Multiface (3), multiface3, INPUT_KEY_3
 Checkbox, Stealt(h) Multiface One, multiface1_stealth, INPUT_KEY_h
-Checkbox, Emulate (p)rinters, printer, INPUT_KEY_p
-Checkbox, (Z)X Printer, zxprinter, INPUT_KEY_z
+Checkbox, Serial/parallel (p)rinter connected, printer, INPUT_KEY_p
+Checkbox, (Z)X Printer connected, zxprinter, INPUT_KEY_z
 Checkbox, Spectrum 128 ke(y)pad, keypad128, INPUT_KEY_y
 #ifdef BUILD_SPECCYBOOT
 Checkbox, Speccy(B)oot interface, speccyboot, INPUT_KEY_b

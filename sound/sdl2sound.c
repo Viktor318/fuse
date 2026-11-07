@@ -87,9 +87,10 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   requested.samples = sound_framesiz;
 #endif
 
+  /* Keep callback channels consistent with the AY arrangement. SDL can
+     convert mono to the device's native stereo format internally. */
   audio_device = SDL_OpenAudioDevice( NULL, 0, &requested, &received,
-                                      SDL_AUDIO_ALLOW_FREQUENCY_CHANGE |
-                                      SDL_AUDIO_ALLOW_CHANNELS_CHANGE );
+                                      SDL_AUDIO_ALLOW_FREQUENCY_CHANGE );
   if( !audio_device ) {
     settings_current.sound = 0;
     ui_error( UI_ERROR_ERROR, "Couldn't open sound device: %s",
@@ -101,7 +102,7 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
      SDL may convert internally, but Fuse supplies only native signed 16-bit
      interleaved mono or stereo. Do not infer stereo from arbitrary channels. */
   if( received.format != AUDIO_S16SYS ||
-      ( received.channels != 1 && received.channels != 2 ) ||
+      received.channels != requested.channels ||
       received.freq <= 0 || !received.samples ) {
     SDL_CloseAudioDevice( audio_device );
     audio_device = 0;
@@ -112,7 +113,6 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   audio_channels = received.channels;
   bytes_per_frame = audio_channels * sizeof( libspectrum_signed_word );
   *freqptr = received.freq;
-  *stereoptr = audio_channels == 2;
 
   sound_framesiz = *freqptr / hz;
 

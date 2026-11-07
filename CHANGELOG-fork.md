@@ -251,6 +251,17 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   then at most every 5 ms), not only once a frame, so keys reach the
   program sooner. Typing with the Windows keyboard layout works with it too.
   (The Windows version does the same now, see *Keyboard* above.)
+- From upstream `master`: the **printers** have two switches in
+  *Options > Peripherals > General*: *Serial/parallel printer connected* and
+  *ZX Printer connected* (bug #277). The parallel port of the +3 is always
+  there; the switch only says whether a printer is on it.
+- From upstream `master`: **EDSK disk images** (`.dsk`) are read more
+  safely, and oversized tracks are rebuilt from the sector offsets, so some
+  +3 disks that loaded wrongly now work (bug #473).
+- From upstream `master`: DirectSound releases its object when it can't be
+  initialised. Audio is delivered in parts of a frame only by the outputs
+  made for it; in this edition DirectSound and WASAPI stay among them, so
+  the sound timing is unchanged.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

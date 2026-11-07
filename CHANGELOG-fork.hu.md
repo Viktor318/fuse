@@ -263,6 +263,18 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   képkockánként egyszer, így a billentyűk hamarabb eljutnak a programhoz.
   A Windows-kiosztás szerinti gépelés ezzel is működik. (Most már a
   Windowsos változat is így tesz, lásd fent a *Billentyűzet* részt.)
+- Az upstream `master`-ből: a **nyomtatóknak** két kapcsolójuk van a
+  *Beállítások > Perifériák > Általános* ablakban: *Soros/párhuzamos
+  nyomtató csatlakoztatva* és *ZX Printer csatlakoztatva* (#277-es hiba). A
+  +3 párhuzamos portja mindig megvan; a kapcsoló csak azt mondja meg, van-e
+  rajta nyomtató.
+- Az upstream `master`-ből: az **EDSK lemezképek** (`.dsk`) olvasása
+  biztonságosabb, a túl hosszú sávokat a szektorok helyéből építi újra, így
+  néhány eddig hibásan betöltődő +3-as lemez is működik (#473-as hiba).
+- Az upstream `master`-ből: a DirectSound felszabadítja az objektumát, ha
+  nem sikerül elindítani. A hang képkockánál kisebb részekben csak az erre
+  felkészített kimenetekre megy; ebben a változatban a DirectSound és a
+  WASAPI köztük marad, így a hang időzítése nem változik.
 
 ## v1.10.1-hu.1 – 2026-10-30
 

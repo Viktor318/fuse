@@ -189,8 +189,8 @@ group	context	english	hungarian
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Multiface 12&8	Multiface 12&8
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Multiface &3	Multiface &3
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Stealt&h Multiface One	Rejtett Multiface &One
-2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Emulate &printers	Nyo&mtatók emulálása
-2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	&ZX Printer	&ZX Printer
+2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Serial/parallel &printer connected	Soros/párhuzamos nyo&mtató csatlakoztatva
+2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	&ZX Printer connected	&ZX Printer csatlakoztatva
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Spectrum 128 ke&ypad	&Spectrum 128 keypad
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Spectra&net	Spectra&net
 2 Beállítások (Options)	IDD_OPT_PERIPHERALS_GENERAL: AUTOCHECKBOX	Spe&ctranet disable	Spe&ctranet kikapcsolva

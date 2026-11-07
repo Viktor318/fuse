@@ -44,7 +44,7 @@
 #include "alsa_config.h"
 
 static snd_pcm_t *pcm_handle;
-static int ch;
+static int ch, input_channels;
 static const char *pcm_name = NULL;
 static int verb = 0;
 static snd_pcm_uframes_t exact_periodsize, exact_bsize;
@@ -162,6 +162,7 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   pcm_name = config.pcm_name;
   verb = config.verb;
   ch = config.ch;
+  input_channels = *stereoptr == SOUND_STEREO_AY_NONE ? 1 : 2;
   exact_periodsize = config.exact_periodsize;
   exact_bsize = config.exact_bsize;
   if( alsa_init_pacing( *freqptr, &config ) ) {
@@ -410,14 +411,26 @@ alsa_write_frames( libspectrum_signed_word *data, unsigned int remaining,
                    unsigned int *after, bool *running, bool *complete )
 {
   snd_pcm_sframes_t written;
+  libspectrum_signed_word stereo[512];
   int error;
 
   while( remaining ) {
-    written = snd_pcm_writei( pcm_handle, data, remaining );
+    const libspectrum_signed_word *output = data;
+    unsigned int frames = remaining;
+    if( input_channels == 1 && ch == 2 ) {
+      unsigned int i;
+      /* Bounded conversion scratch: admission and recovery still count
+         frames, while the source remains mono throughout synthesis. */
+      if( frames > 256 ) frames = 256;
+      for( i = 0; i < frames; i++ )
+        stereo[2 * i] = stereo[2 * i + 1] = data[i];
+      output = stereo;
+    }
+    written = snd_pcm_writei( pcm_handle, output, frames );
     if( written > 0 ) {
-      if( (snd_pcm_uframes_t)written > remaining ) return -ERANGE;
+      if( (snd_pcm_uframes_t)written > frames ) return -ERANGE;
       alsa_pacing_accept( &pacing, written );
-      data += written * ch;
+      data += written * input_channels;
       remaining -= written;
       /* Explicit start also applies to a recovered tail being prefilled. */
       error = alsa_start_after_write( after, running );
@@ -440,12 +453,12 @@ sound_lowlevel_frame( libspectrum_signed_word *data, int len )
   bool running = false, complete = true;
   int error;
   if( !pcm_handle ) return;
-  if( len <= 0 || len % ch || !pacing.reserved ||
-      (unsigned int)( len / ch ) != pacing.batch ) {
+  if( len <= 0 || len % input_channels || !pacing.reserved ||
+      (unsigned int)( len / input_channels ) != pacing.batch ) {
     alsa_fail( "publication identity", -EINVAL );
     return;
   }
-  batch = len / ch;
+  batch = len / input_channels;
   error = alsa_snapshot( &before, &running, true );
   if( error < 0 ) {
     error = alsa_recover( error );

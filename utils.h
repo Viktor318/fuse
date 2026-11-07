@@ -30,6 +30,10 @@
 
 typedef libspectrum_file utils_file;
 
+/* Read two little-endian bytes without advancing the pointer. Unaligned
+   buffers are supported; the caller must ensure two bytes are available. */
+libspectrum_word utils_read_le16( const libspectrum_byte *buffer );
+
 void utils_file_init( utils_file *file, const char *filename );
 void utils_file_move( utils_file *destination, utils_file *source );
 int utils_file_read( utils_file *file );

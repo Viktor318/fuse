@@ -72,8 +72,12 @@ sound_lowlevel_init( const char *device, int *freqptr, int *stereoptr )
   result = waveOutOpen( &hwaveout, WAVE_MAPPER,
                         &pcmwf, ( DWORD_PTR ) sound_callback, 0,
                         CALLBACK_FUNCTION );
-  if( result != MMSYSERR_NOERROR )
+  if( result != MMSYSERR_NOERROR ) {
+    settings_current.sound = 0;
+    hwaveout = NULL;
     sound_display_mmresult( "waveOutOpen", result );
+    return 1;
+  }
 
   buffers[0] = buffer1;
   buffers[1] = buffer2;
@@ -156,7 +160,7 @@ sound_lowlevel_frame( libspectrum_signed_word *data, int len )
   buffer_used[ current_buffer ] = len;
   
   /* prepare the header */
-  wavehdr[ current_buffer ].lpData = ( LPSTR ) bytes;
+  wavehdr[ current_buffer ].lpData = ( LPSTR ) buffers[ current_buffer ];
   wavehdr[ current_buffer ].dwBufferLength = len;
   wavehdr[ current_buffer ].dwLoops |= WHDR_BEGINLOOP | WHDR_ENDLOOP;
 

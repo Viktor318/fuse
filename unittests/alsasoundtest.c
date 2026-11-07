@@ -39,7 +39,16 @@ enum config_fault { CONFIG_OK, CONFIG_OPEN, CONFIG_FORMAT, CONFIG_HARDWARE,
                     CONFIG_SOFTWARE, CONFIG_QUERY };
 static enum config_fault config_fault;
 static unsigned int closes;
-static int fallback;
+static int fallback, device_channels;
+
+static int
+mock_channels( snd_pcm_t *pcm, snd_pcm_hw_params_t *params,
+               unsigned int channels )
+{
+  if( device_channels && channels != (unsigned int)device_channels )
+    return -EINVAL;
+  return snd_pcm_hw_params_set_channels( pcm, params, channels );
+}
 
 static int
 mock_open( snd_pcm_t **pcm, const char *name, snd_pcm_stream_t stream,
@@ -114,6 +123,7 @@ mock_resume( snd_pcm_t *p )
 
 #define snd_pcm_open mock_open
 #define snd_pcm_close mock_close
+#define snd_pcm_hw_params_set_channels mock_channels
 #define snd_pcm_hw_params_any mock_hw_any
 #define snd_pcm_hw_params mock_hw_install
 #define snd_pcm_sw_params_current mock_sw_current
@@ -275,6 +285,53 @@ test_configuration( void )
   puts( "ALSA options, fallback and configuration cleanup passed" );
 }
 
+static void
+test_channel_fallback( void )
+{
+  libspectrum_signed_word samples[1760];
+  int mode, transport, scenario, rate, stereo, expected;
+  unsigned int i;
+
+  for( i = 0; i < 1760; i++ ) samples[i] = i - 880;
+  for( transport = 1; transport <= 2; transport++ ) {
+    for( mode = 0; mode <= 2; mode++ ) {
+      for( scenario = 0; scenario < 3; scenario++ ) {
+        init( "null" );
+        sound_lowlevel_end();
+        device_channels = transport;
+        rate = 44100; stereo = mode;
+        CHECK( !sound_lowlevel_init( "null", &rate, &stereo ) );
+        expected = transport == 1 ? 0 : mode;
+        CHECK( stereo == expected && ch == transport );
+        CHECK( input_channels == ( expected ? 2 : 1 ) );
+        /* Force several conversion chunks, including a partial accepted
+           prefix and retry/recovery before the remainder. */
+        context = 0;
+        if( scenario ) {
+          script[0] = 30;
+          script[1] = scenario == 1 ? -EINTR : -EPIPE;
+          script[2] = 40; script[3] = -EAGAIN;
+          script[4] = 0; script[5] = 40;
+          script_count = 6;
+        }
+        CHECK( !sound_lowlevel_reserve( 880 ) );
+        sound_lowlevel_frame( samples, 880 * input_channels );
+        if( errors || !settings_current.sound || pacing.reserved )
+          fprintf( stderr, "channels=%d mode=%d scenario=%d errors=%u\n",
+                   transport, mode, scenario, errors );
+        CHECK( !errors && settings_current.sound && !pacing.reserved );
+        CHECK( captured == 880 * (unsigned int)transport );
+        for( i = 0; i < captured; i++ )
+          CHECK( capture[i] == samples[input_channels == ch ? i : i / 2] );
+        CHECK( prepares == ( scenario == 2 ) );
+        device_channels = 0;
+      }
+    }
+  }
+  sound_lowlevel_end();
+  puts( "ALSA AY modes, channel fallback and mono duplication passed" );
+}
+
 int
 main( void )
 {
@@ -283,6 +340,7 @@ main( void )
   test_machine.timings.tstates_per_frame = 69888;
   for( i = 0; i < 1920; i++ ) samples[i] = i;
   test_configuration();
+  test_channel_fallback();
   init( "null" );
   CHECK( exact_periodsize <= pacing.controller.allowance );
   CHECK( exact_bsize >= 2 * pacing.startup_bound );

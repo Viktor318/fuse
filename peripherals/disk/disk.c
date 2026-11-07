@@ -1479,7 +1479,7 @@ fdi_data_offset( const buffer_t *buffer, size_t data_offset,
                  size_t track_offset, const libspectrum_byte *sector,
                  size_t *offset )
 {
-  size_t sector_offset = sector[5] + 256 * sector[6];
+  size_t sector_offset = utils_read_le16( sector + 5 );
   size_t length = (size_t) 0x80 << sector[3];
 
   if( data_offset > buffer->file.length ||
@@ -1502,11 +1502,11 @@ open_fdi( buffer_t *buffer, disk_t *d, int preindex )
   if( buffer->file.length < 14 ) return d->status = DISK_OPEN;
 
   d->wrprot = buff[0x03] == 1 ? 1 : 0;
-  d->sides = buff[0x06] + 256 * buff[0x07];
-  d->cylinders = buff[0x04] + 256 * buff[0x05];
+  d->sides = utils_read_le16( buff + 0x06 );
+  d->cylinders = utils_read_le16( buff + 0x04 );
   GEOM_CHECK;
-  data_offset = buff[0x0a] + 256 * buff[0x0b];
-  h = 0x0e + buff[0x0c] + 256 * buff[0x0d];		/* save head start */
+  data_offset = utils_read_le16( buff + 0x0a );
+  h = 0x0e + utils_read_le16( buff + 0x0c ); /* save head start */
   head_offset = h;
 
   /* first determine the longest track */
@@ -1643,6 +1643,158 @@ extern int fuse_exiting;		/* Shall we exit now? */
 /* track38 512 256 512 256 512 256 ... (9x) */
 #define CPC_ISSUE_5 5
 
+/* Validated on-disk track bounds, independent of the rendered track size. */
+typedef struct cpc_track_t {
+  size_t start, size, header_size;
+  const unsigned char *offsets;
+  int length, positioned;
+} cpc_track_t;
+
+/* Optional offsets refer to the FE byte, not the preceding sync bytes.
+   Validate the complete table before exposing any of it to the renderer. */
+static void
+cpc_offsets( buffer_t *buffer, cpc_track_t *tracks, int count, size_t end )
+{
+  const unsigned char *p, *table;
+  size_t available;
+  int i, j, sectors, length, offset, previous;
+
+  if( end > buffer->file.length || buffer->file.length - end < 15 ) return;
+  table = buffer->file.buffer + end;
+  if( memcmp( table, "Offset-Info\r\n", 14 ) || table[14] ) return;
+  p = table + 15;
+  available = buffer->file.length - end - 15;
+  for( i = 0; i < count; i++ ) {
+    sectors = tracks[i].size ? buffer->file.buffer[tracks[i].start + 0x15] : 0;
+    if( available < 2 + 2 * (size_t) sectors ) return;
+    length = utils_read_le16( p );
+    previous = -1;
+    for( j = 0; j < sectors; j++ ) {
+      offset = utils_read_le16( p + 2 + 2 * j );
+      if( !length || offset >= length || offset <= previous ) return;
+      previous = offset;
+    }
+    p += 2 + 2 * sectors;
+    available -= 2 + 2 * sectors;
+  }
+  p = table + 15;
+  for( i = 0; i < count; i++ ) {
+    sectors = tracks[i].size ? buffer->file.buffer[tracks[i].start + 0x15] : 0;
+    tracks[i].length = utils_read_le16( p );
+    tracks[i].offsets = p + 2;
+    p += 2 + 2 * sectors;
+  }
+}
+
+/* Initially support only DD MFM tracks whose IDs leave room for the usual
+   gap2 and sync fields. Do not guess positions when the table is absent. */
+static int
+cpc_can_position( const unsigned char *header, const cpc_track_t *track )
+{
+  int j, offset, next, sectors = header[0x15];
+
+  if( !track->offsets || !sectors || header[0x13] != 2 ||
+      header[0x12] > 1 || track->length < 3125 || track->length > 6500 )
+    return 0;
+  for( j = 0; j < sectors; j++ ) {
+    offset = utils_read_le16( track->offsets + 2 * j );
+    next = j + 1 < sectors ? utils_read_le16( track->offsets + 2 * j + 2 ) :
+                            track->length + utils_read_le16( track->offsets );
+    /* FE + CHRN + CRC, gap2, DAM sync/mark, next ID sync. */
+    if( next - offset < 62 ) return 0;
+    /* Extra copies or gap data need their own reconstruction, not clipping. */
+    if( utils_read_le16( header + 0x1e + 8 * j ) >
+        ( 128 << ( header[0x1b + 8 * j] > 8 ? 8 : header[0x1b + 8 * j] ) ) )
+      return 0;
+  }
+  return 1;
+}
+
+/* Circular byte writes are needed when a data field straddles index. */
+static void
+cpc_position_byte( disk_t *d, int *position, unsigned char value, int clock )
+{
+  int pos = *position % d->c_bpt;
+  if( pos < 0 ) pos += d->c_bpt;
+  d->track[pos] = value;
+  if( clock ) bitmap_set( d->clocks, pos );
+  *position = pos + 1;
+}
+
+static libspectrum_word
+cpc_position_mark( disk_t *d, int *position, unsigned char mark )
+{
+  libspectrum_word crc = 0xffff;
+  int j;
+
+  for( j = 0; j < 12; j++ ) cpc_position_byte( d, position, 0, 0 );
+  for( j = 0; j < 3; j++ ) {
+    cpc_position_byte( d, position, 0xa1, 1 );
+    crc = crc_fdc( crc, 0xa1 );
+  }
+  cpc_position_byte( d, position, mark, 0 );
+  return crc_fdc( crc, mark );
+}
+
+/* Render only the prefix before the next ID sync. Oversized N describes an
+   overlapping read, not additional physical space. Never fabricate a CRC at
+   the end of a clipped prefix, or borrow bytes from the next stored record. */
+static void
+cpc_position_track( buffer_t *buffer, disk_t *d, const cpc_track_t *track )
+{
+  const unsigned char *header = buffer->file.buffer + track->start;
+  const unsigned char *data = header + track->header_size;
+  int j, k, offset, next, pos, stored, nominal, space, length, bad_crc;
+  const unsigned char *sector;
+  libspectrum_word crc;
+
+  d->track[-3] = track->length & 0xff;
+  d->track[-2] = track->length >> 8;
+  DISK_SET_TRACK_IDX( d, header[0x10] * d->sides + header[0x11] );
+  memset( d->track, 0x4e, d->c_bpt );
+  memset( d->clocks, 0, 3 * DISK_CLEN( d->c_bpt ) );
+  for( j = 0; j < header[0x15]; j++ ) {
+    sector = header + 0x18 + 8 * j;
+    stored = utils_read_le16( sector + 6 );
+    nominal = 128 << ( sector[3] > 8 ? 8 : sector[3] );
+    offset = utils_read_le16( track->offsets + 2 * j );
+    next = j + 1 < header[0x15] ?
+      utils_read_le16( track->offsets + 2 * j + 2 ) :
+      track->length + utils_read_le16( track->offsets );
+    pos = offset - 15;
+    crc = cpc_position_mark( d, &pos, 0xfe );
+    for( k = 0; k < 4; k++ ) {
+      cpc_position_byte( d, &pos, sector[k], 0 );
+      crc = crc_fdc( crc, sector[k] );
+    }
+    if( ( sector[4] & 0x20 ) && !( sector[5] & 0x20 ) ) crc ^= 1;
+    cpc_position_byte( d, &pos, crc >> 8, 0 );
+    cpc_position_byte( d, &pos, crc & 0xff, 0 );
+    /* Bad ID CRC or missing data mark: keep the ID, but no reachable data. */
+    if( ( ( sector[4] & 0x20 ) && !( sector[5] & 0x20 ) ) ||
+        ( sector[5] & 1 ) ) {
+      data += stored;
+      continue;
+    }
+    pos = offset + 7 + 22;
+    crc = cpc_position_mark( d, &pos, sector[5] & 0x40 ? 0xf8 : 0xfb );
+    space = next - offset - 60;
+    length = nominal < space ? nominal : space;
+    for( k = 0; k < length; k++ ) {
+      unsigned char value = k < stored ? data[k] : header[0x17];
+      cpc_position_byte( d, &pos, value, 0 );
+      crc = crc_fdc( crc, value );
+    }
+    if( nominal + 2 <= space ) {
+      bad_crc = ( sector[5] & 0x20 ) || stored < nominal;
+      if( bad_crc ) crc ^= 1;
+      cpc_position_byte( d, &pos, crc >> 8, 0 );
+      cpc_position_byte( d, &pos, crc & 0xff, 0 );
+    }
+    data += stored;
+  }
+}
+
 static int
 open_cpc( buffer_t *buffer, disk_t *d, int preindex )
 {
@@ -1650,34 +1802,53 @@ open_cpc( buffer_t *buffer, disk_t *d, int preindex )
   int bpt, max_bpt = 0, trlen;
   int cpc_fix;
   unsigned char *hdrb, *tltbl=NULL;
+  cpc_track_t tracks[170];
+  size_t end, size, used;
+  int count, header_size;
 #ifdef CPC_DEBUG
   int cpc_fix_fix = 0;
 #endif
 
+  if( buffavail( buffer ) < 256 ) return d->status = DISK_OPEN;
+  memset( tracks, 0, sizeof( tracks ) );
   d->sides = buff[0x31];
   d->cylinders = buff[0x30];			/* maximum number of tracks */
   GEOM_CHECK;
 /* first scan for the longest track */
   if( d->type != DISK_ECPC ) {
     /* All track sizes in the standard disk image must be the same */
-    trlen = buff[0x32] + 256 * buff[0x33];
+    trlen = utils_read_le16( buff + 0x32 );
   } else {
     trlen = -1;
     tltbl = &buff[0x34]; /* track size table */
   }
-  idx = 256;
-  for( i = 0; i < d->sides * d->cylinders; i++ ) {
-    if( buff[ idx + 0x13 ] == 0 ) /* we now assume MFM */
-      buff[ idx + 0x13 ] = 2;
-    idx += d->type == DISK_ECPC ? tltbl[i] * 256 : trlen;
+  /* Validate complete track blocks and stored ranges before either pass.
+     In particular, an unformatted track has no header to inspect or alter. */
+  end = 256;
+  count = d->sides * d->cylinders;
+  for( i = 0; i < count; i++ ) {
+    size = d->type == DISK_ECPC ? tltbl[i] * 256 : trlen;
+    tracks[i].start = end;
+    tracks[i].size = size;
+    if( !size ) continue;
+    if( end > buffer->file.length || size > buffer->file.length - end ||
+        size < 256 ) return d->status = DISK_OPEN;
+    hdrb = buffer->file.buffer + end;
+    if( memcmp( hdrb, "Track-Info", 10 ) ) return d->status = DISK_OPEN;
+    header_size = ( 24 + 8 * hdrb[0x15] + 255 ) & ~255;
+    if( (size_t) header_size > size ) return d->status = DISK_OPEN;
+    tracks[i].header_size = header_size;
+    used = header_size;
+    for( j = 0; j < hdrb[0x15]; j++ ) {
+      seclen = d->type == DISK_ECPC ? utils_read_le16( hdrb + 0x1e + 8 * j ) :
+               128 << ( hdrb[0x1b + 8 * j] > 8 ? 8 : hdrb[0x1b + 8 * j] );
+      if( (size_t) seclen > size - used ) return d->status = DISK_OPEN;
+      used += seclen;
+    }
+    if( !hdrb[0x13] ) hdrb[0x13] = 2; /* unspecified encoding: MFM */
+    end += size;
   }
-  buffer->index = idx;
-/* later we try to use Offset-Info block to determine gap lengths...
-  if( buffavail( buffer ) >= 13 && !memcmp( buff, "Offset-Info\r\n", 13 ) )
-    offinf = buff;
-  else
-    offinf = NULL;
-*/
+  if( d->type == DISK_ECPC ) cpc_offsets( buffer, tracks, count, end );
   buffer->index = 256;
 #ifdef CPC_DEBUG
 fprintf( stderr, "%ds/%dc\n", d->sides, d->cylinders );
@@ -1699,8 +1870,7 @@ fprintf( stderr, "%ds/%dc\n", d->sides, d->cylinders );
     if( buffavail( buffer ) < 256 ||
 	memcmp( buff, "Track-Info", 10 ) )		/* check track header */
       return d->status = DISK_OPEN;
-    j = 24 + 8 * buff[ 0x15 ];				/* sector info block(s) */
-    j += 0x100 - ( j % 0x100 );				/* round up to next 0x100 */
+    j = ( 24 + 8 * buff[ 0x15 ] + 255 ) & ~255; /* sector info blocks */
     if( buff[ 0x15 ] > 29 && buffavail( buffer ) < j ) { /* https://simonowen.com/misc/extextdsk.txt */
       return d->status = DISK_OPEN;                      /* Sector count space check */
     }
@@ -1726,9 +1896,8 @@ fprintf( stderr, "%ds/%dc\n", d->sides, d->cylinders );
 fprintf( stderr, "%d:: %d/%d.%d [%d] %d", i, buff[ 0x15 ], gap, buff[0x13], buffer->index, bpt );
 #endif
     for( j = 0; j < buff[ 0x15 ]; j++ ) {			/* each sector */
-      seclen = d->type == DISK_ECPC ? buff[ 0x1e + 8 * j ] +
-				      256 * buff[ 0x1f + 8 * j ]
-				    : 0x80 << buff[ 0x1b + 8 * j ];
+      seclen = d->type == DISK_ECPC ? utils_read_le16( buff + 0x1e + 8 * j )
+				    : 0x80 << ( buff[ 0x1b + 8 * j ] > 8 ? 8 : buff[ 0x1b + 8 * j ] );
       idlen = 0x80 << ( buff[ 0x1b + 8 * j ] > 7 ? 8 : buff[ 0x1b + 8 * j ] );
 					/* sector length from ID if N >= 8 -> N = 8 */
       if( d->type != DISK_ECPC && (
@@ -1771,9 +1940,18 @@ fprintf( stderr, " (%d/%d) %d", seclen, idlen, bpt );
 	  cpc_fix = CPC_ISSUE_NONE;
       }
     }
+    /* Opt in only when legacy reconstruction cannot fit even minimal gaps.
+       Existing workarounds and ordinary tracks retain their original layout. */
+    if( cpc_fix == CPC_ISSUE_NONE &&
+        bpt - buff[0x15] * gaps[gap].len[3] > 6250 &&
+        cpc_can_position( buff, &tracks[i] ) ) {
+      tracks[i].positioned = 1;
+      bpt = tracks[i].length;
+    }
     buff[0x00] = cpc_fix;		/* we use "Track-Info..." T to store "FIX" */
     /* bpt := bpt(0) + NxGAP3 */
-    if( bpt > 6250 / ( buff[0x13] == 2 ? 1 : 2 ) ) { /* DD first try to align gap3 */
+    if( !tracks[i].positioned &&
+        bpt > 6250 / ( buff[0x13] == 2 ? 1 : 2 ) ) { /* DD first try to align gap3 */
       if( cpc_fix == CPC_ISSUE_NONE && 
           bpt - buff[ 0x15 ] * gaps[gap].len[3] <= 
             6250 / ( buff[0x13] == 2 ? 1 : 2 ) - buff[ 0x15 ] * 8 ) {
@@ -1824,7 +2002,7 @@ if( cpc_fix_fix ) {
     if( d->type == DISK_ECPC && tltbl[i] == 0 ) continue; /* skip unformatted tracks */
     hdrb = buff;
     idx_save = buffer->index;
-    buffer->index += 256;		/* skip to data */
+    buffer->index += tracks[i].header_size; /* skip all sector info blocks */
 /*
     gap = (unsigned char)hdrb[0x16] == 0xff ? GAP_MINIMAL_FM : GAP_MINIMAL_MFM;
 */
@@ -1849,6 +2027,11 @@ if( cpc_fix_fix ) {
     }
 
     DISK_SET_TRACK_IDX( d, i );
+    if( tracks[i].positioned ) {
+      cpc_position_track( buffer, d, &tracks[i] );
+      buffer->index = tracks[i].start + tracks[i].size;
+      continue;
+    }
     if( d->c_bpt == 6500 ) { /* DD+ */
       if( cpc_fix != CPC_ISSUE_1 ) { /* only + tracks use 6500 bpt */
         d->track[-3] = 6250 % 256;
@@ -1863,12 +2046,14 @@ if( cpc_fix_fix ) {
     postindex_add( d, gap );
 
     for( j = 0; j < hdrb[0x15]; j++ ) {			/* each sector */
-      seclen = d->type == DISK_ECPC ? hdrb[ 0x1e + 8 * j ] +	/* data length in sector */
-				      256 * hdrb[ 0x1f + 8 * j ]
-				    : 0x80 << hdrb[ 0x1b + 8 * j ];
+      buffer_t record;
+      size_t sector_end;
+      seclen = d->type == DISK_ECPC ? utils_read_le16( hdrb + 0x1e + 8 * j )
+				    : 0x80 << ( hdrb[ 0x1b + 8 * j ] > 8 ? 8 : hdrb[ 0x1b + 8 * j ] );
       idlen = 0x80 << ( hdrb[ 0x1b + 8 * j ] > 7 ? 8 : hdrb[ 0x1b + 8 * j ] );
-					/* sector length from ID if N >= 8 -> N = 8
-					https://simonowen.com/misc/extextdsk.txt */
+      sector_end = buffer->index + seclen;
+      record = *buffer;
+      record.file.length = sector_end; /* no borrowing from following records */
 
       if( hdrb[ 0x00 ] == CPC_ISSUE_2 && j == 0 ) {	/* repositionate the dummy sector (?)  */
         d->i = 8;
@@ -1878,42 +2063,44 @@ if( cpc_fix_fix ) {
                  hdrb[ 0x1c + 8 * j ] & 0x20 && !( hdrb[ 0x1d + 8 * j ] & 0x20 ) ? 
                  CRC_ERROR : CRC_OK );
       if( cpc_fix == CPC_ISSUE_1 && j == 0 ) {	/* 6144 or 8192 */
-        data_add( d, buffer, NULL, seclen > 6144 ? 6384 : seclen,
+        data_add( d, &record, NULL, seclen > 6144 ? 6384 : seclen,
 		hdrb[ 0x1d + 8 * j ] & 0x40 ? DDAM : NO_DDAM, gap, 
 		hdrb[ 0x1c + 8 * j ] & 0x20 && hdrb[ 0x1d + 8 * j ] & 0x20 ?
 		CRC_ERROR : CRC_OK, 0x00, NULL );
-	if( seclen > 6144 )
-          buffer->index += seclen - 6384;
+        /* Input advancement is determined by the stored range below. */
       } else if( cpc_fix == CPC_ISSUE_2 && j == 0 ) {	/* 6144, 10x512 */
         datamark_add( d, hdrb[ 0x1d + 8 * j ] & 0x40 ? DDAM : NO_DDAM, gap );
         gap_add( d, 2, gap );
         buffer->index += seclen;
       } else if( cpc_fix == CPC_ISSUE_3 ) {	/* (128,) 256, 512, ... 4096k */
-        data_add( d, buffer, NULL, 128,
-		hdrb[ 0x1d + 8 * j ] & 0x40 ? DDAM : NO_DDAM, gap, 
+        data_add( d, &record, NULL, 128,
+		hdrb[ 0x1d + 8 * j ] & 0x40 ? DDAM : NO_DDAM, gap,
 		hdrb[ 0x1c + 8 * j ] & 0x20 && hdrb[ 0x1d + 8 * j ] & 0x20 ?
 		CRC_ERROR : CRC_OK, 0x00, NULL );
-        buffer->index += seclen - 128;
       } else if( cpc_fix == CPC_ISSUE_5 ) {	/* 9x512 */
       /* 512 256 512 256 512 256 512 256 512 */
         if( idlen == 256 ) {
-          data_add( d, NULL, buff, 512,
+          unsigned char payload[512];
+          memset( payload, hdrb[0x17], sizeof( payload ) );
+          memcpy( payload, buff, seclen < 512 ? seclen : 512 );
+          data_add( d, NULL, payload, 512,
 		hdrb[ 0x1d + 8 * j ] & 0x40 ? DDAM : NO_DDAM, gap,
 		hdrb[ 0x1c + 8 * j ] & 0x20 && hdrb[ 0x1d + 8 * j ] & 0x20 ?
 		CRC_ERROR : CRC_OK, 0x00, NULL );
 	  buffer->index += idlen;
         } else {
-          data_add( d, buffer, NULL, idlen,
+          data_add( d, &record, NULL, idlen,
 		hdrb[ 0x1d + 8 * j ] & 0x40 ? DDAM : NO_DDAM, gap,
 		hdrb[ 0x1c + 8 * j ] & 0x20 && hdrb[ 0x1d + 8 * j ] & 0x20 ?
 		CRC_ERROR : CRC_OK, 0x00, NULL );
 	}
       } else {
-        if( data_add( d, buffer, NULL, seclen > idlen ? idlen : seclen,
+        if( data_add( d, &record, NULL, seclen > idlen ? idlen : seclen,
 		hdrb[ 0x1d + 8 * j ] & 0x40 ? DDAM : NO_DDAM, gap,
 		hdrb[ 0x1c + 8 * j ] & 0x20 && hdrb[ 0x1d + 8 * j ] & 0x20 ?
 		CRC_ERROR : CRC_OK, 0x00, &idx ) )
-	  buffer->index += seclen; /* if cannot add data, we have to advance buffer->index! */
+          return d->status = DISK_UNSUP;
+        buffer->index = record.index;
         if( seclen > idlen && seclen % idlen ) { /* data in gap ??? */
           int k, save_index;
 
@@ -1934,6 +2121,7 @@ if( cpc_fix_fix ) {
 					/* ( ( N * len ) / len - 1 ) * len */
         }
       }
+      buffer->index = sector_end;
     }
     gap4_add( d, gap );
 /* extended DSK image uses track size table */
@@ -2333,8 +2521,10 @@ fprintf( stderr, "\n::::%s:::: ", filename );
     return d->status = DISK_OPEN;
   }
   if( d->status != DISK_OK ) {
-    if( d->data != NULL )
+    if( d->data != NULL ) {
       libspectrum_free( d->data );
+      d->data = NULL;
+    }
 #ifdef CPC_DEBUG
 fprintf( stderr, "\n!!!!error opening: %s!!!!\n", filename );
 #ifdef CPC_DEBUG_EXIT

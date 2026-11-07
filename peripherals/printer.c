@@ -268,7 +268,9 @@ static void printer_zxp_update_header(void)
 {
 long pos;
 
-if(!printer_graphics_enabled || !zxpheight) return;
+/* Finalise rows already written even if the printer was disconnected. */
+if(!printer_graphics_enabled || !zxpheight)
+  return;
 
 if(!printer_graphics_file && !printer_zxp_open_file())
   return;
@@ -392,6 +394,7 @@ static void printer_zxp_output_line(void)
 unsigned char *ptr;
 int i,j,d;
 
+if(!settings_current.zxprinter) return;
 if(!printer_graphics_enabled) return;
 
 if(!printer_graphics_file && !printer_zxp_open_file())
@@ -442,10 +445,7 @@ frames++;
 static libspectrum_byte printer_zxp_read(libspectrum_word port GCC_UNUSED,
 				         libspectrum_byte *attached)
 {
-if(!settings_current.printer)
-  return(0xff);
-if(!printer_graphics_enabled)
-  return(0xff);
+/* Connection is controlled by the ZX Printer peripheral option. */
 if(plusd_available)
   return(0xff);
 
@@ -493,8 +493,6 @@ else
 static void printer_zxp_write(libspectrum_word port GCC_UNUSED,
                               libspectrum_byte b)
 {
-if(!settings_current.printer)
-  return;
 if(plusd_available)
   return;
 if(!zxpspeed)
@@ -600,8 +598,6 @@ void printer_serial_write(libspectrum_byte b)
 {
 static int reading=0,bits_to_get=0,ser_byte=0;
 int high=(b&8);
-if(!settings_current.printer)
-  return;
 if(!reading)
   {
   if(!high)
@@ -619,7 +615,8 @@ else /* reading */
     bits_to_get--;
     if(!bits_to_get)
       {
-      if(ser_byte&0x100)	/* check stop bit is valid */
+      if((ser_byte&0x100) && settings_current.printer)
+        /* Check stop bit and serial printer connection. */
         printer_text_output_char(ser_byte&0xff);
       reading=0;
       }
@@ -649,8 +646,6 @@ static libspectrum_dword last_tstates=0;
 static unsigned char last_data=0;
 libspectrum_dword diff;
 
-if(!settings_current.printer)
-  return;
 if((old_on && !on) || (!old_on && on))
   {
   /* got an edge */
@@ -673,7 +668,10 @@ if((old_on && !on) || (!old_on && on))
     diff-=last_tstates;
 
     if(diff<=PARALLEL_STROBE_MAX_CYCLES)
-      printer_text_output_char(last_data);
+      {
+      if(settings_current.printer)
+        printer_text_output_char(last_data);
+      }
     else
       {
       /* too long ago, treat it as first edge */
@@ -693,22 +691,18 @@ old_on=on;
 static libspectrum_byte printer_parallel_read(libspectrum_word port GCC_UNUSED,
 				              libspectrum_byte *attached)
 {
-if(!settings_current.printer)
-  return(0xff);
+/* Only BUSY is driven; the remaining bits retain the machine bus value. */
+*attached = 0x01;
 
-*attached = 0xff; /* TODO: check this */
+/* bit 0 = busy */
 
-/* bit 0 = busy. other bits high? */
-
-return(0xfe);	/* never busy */
+return settings_current.printer ? 0xfe : 0xff; /* disconnected = busy */
 }
 
 
 void printer_parallel_write(libspectrum_word port GCC_UNUSED,
 			    libspectrum_byte b)
 {
-if(!settings_current.printer)
-  return;
 parallel_data=b;
 }
 

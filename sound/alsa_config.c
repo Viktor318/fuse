@@ -212,7 +212,9 @@ alsa_configure_format( struct alsa_configuration *config,
       settings_current.sound = 0;
       return 1;
     }
-    *stereoptr = *stereoptr ? 0 : 1;            /* write back */
+    /* A stereo-only device can carry mono without changing AY separation.
+       Retain the existing mono synthesis fallback for a mono-only device. */
+    if( config->ch == 1 ) *stereoptr = SOUND_STEREO_AY_NONE;
   }
 
   /* Set sample rate. If the exact rate is not supported */

@@ -116,8 +116,18 @@ EXTRA_DIST += unittests/audio-frame-equivalence.py \
               unittests/wasapitoolchaintest.c unittests/win32audiowaittest.c \
               hacking/wasapi-toolchain-check.sh
 
-check-sound-scheduler: unittests/soundpartitiontest$(EXEEXT)
+noinst_PROGRAMS += unittests/soundframecadencetest unittests/soundsubframecadencetest
+unittests_soundframecadencetest_SOURCES = $(unittests_soundpartitiontest_SOURCES)
+unittests_soundframecadencetest_CPPFLAGS = $(AM_CPPFLAGS) -DSOUND_TEST_BACKEND_CADENCE=0
+unittests_soundframecadencetest_LDADD = $(unittests_soundpartitiontest_LDADD)
+unittests_soundsubframecadencetest_SOURCES = $(unittests_soundpartitiontest_SOURCES)
+unittests_soundsubframecadencetest_CPPFLAGS = $(AM_CPPFLAGS) -DSOUND_TEST_BACKEND_CADENCE=1
+unittests_soundsubframecadencetest_LDADD = $(unittests_soundpartitiontest_LDADD)
+
+check-sound-scheduler: unittests/soundpartitiontest$(EXEEXT) unittests/soundframecadencetest$(EXEEXT) unittests/soundsubframecadencetest$(EXEEXT)
 	$(top_builddir)/unittests/soundpartitiontest$(EXEEXT) 48000 --scheduler-only
+	$(top_builddir)/unittests/soundframecadencetest$(EXEEXT)
+	$(top_builddir)/unittests/soundsubframecadencetest$(EXEEXT)
 
 # Focused scheduler, discontinuity and physical admission regressions.
 check-sound-renderer: unittests/soundpartitiontest$(EXEEXT)

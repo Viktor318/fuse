@@ -6,6 +6,19 @@ Ennek a változatnak a módosításai a Fuse 1.10.1-hez képest (a
 v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
+## Kiadatlan
+
+### Pillanatképek
+
+- Ha a pillanatkép olyan formátumba kerül, amely nem tud mindent tárolni
+  (`.sna`, `.z80`), a mentés után a Fuse megmondja, mi maradt ki: „A
+  SpecDrum és a Beta 128 állapota nem menthető .z80 fájlba.”, vagy „A gép
+  típusa (Spectrum 128K) nem menthető .sna fájlba: betöltéskor Pentagon
+  128K gépként indul.”, majd „Ha mindent meg akarsz őrizni, ments SZX
+  formátumban.” Korábban azt írta, hogy a pillanatkép valószínűleg nem fog
+  működni, mintha a fájl hibás lenne. A gyakorlatban jelentéktelen apró
+  eltérésekről (a T-állapotok száma, HALT) már nem szól.
+
 ## v1.10.1-hu.2 – 2026-11-07
 
 ### ROM-ok

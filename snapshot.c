@@ -24,9 +24,14 @@
 
 #include "config.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "libspectrum.h"
 
+#include "compat.h"
 #include "fuse.h"
+#include "i18n.h"
 #include "keyboard.h"
 #include "machine.h"
 #include "memory_pages.h"
@@ -213,6 +218,178 @@ snapshot_copy_from( libspectrum_snap *snap )
   return 0;
 }
 
+/* The devices whose state a snapshot format can't keep (the losses that
+   libspectrum counts as major), by their names */
+typedef struct snapshot_loss {
+  int ( *active )( libspectrum_snap *snap );
+  const char *name;
+  int sna, z80;			/* lost in .sna / .z80 */
+} snapshot_loss;
+
+static int
+custom_rom_active( libspectrum_snap *snap )
+{
+  return libspectrum_snap_custom_rom( snap );
+}
+
+static const snapshot_loss snapshot_losses[] = {
+  { libspectrum_snap_interface2_active, "Interface 2", 1, 1 },
+  { libspectrum_snap_dock_active, "Timex Dock", 1, 1 },
+  { custom_rom_active, NULL, 1, 1 },	/* the custom ROM, named below */
+  { libspectrum_snap_fuller_box_active, "Fuller Box", 1, 0 },
+  { libspectrum_snap_melodik_active, "Melodik", 1, 0 },
+  { libspectrum_snap_specdrum_active, "SpecDrum", 1, 1 },
+  { libspectrum_snap_covox_active, "Covox", 1, 1 },
+  { libspectrum_snap_uspeech_active, "uSpeech", 1, 1 },
+  { libspectrum_snap_ulaplus_active, "ULAplus", 0, 1 },
+  { libspectrum_snap_plusd_active, "+D", 1, 0 },
+  { libspectrum_snap_disciple_active, "DISCiPLE", 1, 1 },
+  { libspectrum_snap_beta_active, "Beta 128", 1, 1 },
+  { libspectrum_snap_opus_active, "Opus Discovery", 1, 1 },
+  { libspectrum_snap_didaktik80_active, "Didaktik 80", 1, 1 },
+  { libspectrum_snap_zxatasp_active, "ZXATASP", 1, 1 },
+  { libspectrum_snap_zxcf_active, "ZXCF", 1, 1 },
+  { libspectrum_snap_simpleide_active, "Simple IDE", 1, 1 },
+  { libspectrum_snap_divide_active, "DivIDE", 1, 1 },
+  { libspectrum_snap_divmmc_active, "DivMMC", 1, 1 },
+  { libspectrum_snap_zxmmc_active, "ZXMMC", 1, 1 },
+  { libspectrum_snap_multiface_active, "Multiface", 1, 1 },
+  { libspectrum_snap_spectranet_active, "Spectranet", 1, 1 },
+  { libspectrum_snap_usource_active, "uSource", 1, 1 },
+  { libspectrum_snap_ttx2000s_active, "TTX2000S", 1, 1 },
+};
+
+/* The Hungarian article for a name: "az" before a vowel sound */
+static const char*
+hungarian_article( const char *name )
+{
+  static const char *vowels = "AEIOUaeiou";
+  unsigned char first = (unsigned char)name[0];
+
+  /* Á É Í Ó Ö Ő Ú Ü Ű (and lower case) start with 0xc3 or 0xc5 in UTF-8 */
+  if( strchr( vowels, first ) || first == 0xc3 || first == 0xc5 ) return "az";
+  return "a";
+}
+
+/* The machine a snapshot of this machine loads as, if the format can't
+   keep it, or LIBSPECTRUM_MACHINE_UNKNOWN */
+static libspectrum_machine
+snapshot_machine_lost( libspectrum_machine machine, libspectrum_id_t type )
+{
+  if( type == LIBSPECTRUM_ID_SNAPSHOT_SNA ) {
+    switch( machine ) {
+    case LIBSPECTRUM_MACHINE_48_NTSC:
+    case LIBSPECTRUM_MACHINE_TC2048:
+    case LIBSPECTRUM_MACHINE_TC2068:
+    case LIBSPECTRUM_MACHINE_TS2068:
+      return LIBSPECTRUM_MACHINE_48;
+    case LIBSPECTRUM_MACHINE_128:
+    case LIBSPECTRUM_MACHINE_128E:
+    case LIBSPECTRUM_MACHINE_PENT512:
+    case LIBSPECTRUM_MACHINE_PENT1024:
+    case LIBSPECTRUM_MACHINE_PLUS2:
+    case LIBSPECTRUM_MACHINE_PLUS2A:
+    case LIBSPECTRUM_MACHINE_PLUS3:
+    case LIBSPECTRUM_MACHINE_PLUS3E:
+    case LIBSPECTRUM_MACHINE_SCORP:
+    case LIBSPECTRUM_MACHINE_SE:
+      return LIBSPECTRUM_MACHINE_PENT;
+    default:
+      break;
+    }
+  } else if( type == LIBSPECTRUM_ID_SNAPSHOT_Z80 ) {
+    switch( machine ) {
+    case LIBSPECTRUM_MACHINE_48_NTSC: return LIBSPECTRUM_MACHINE_48;
+    case LIBSPECTRUM_MACHINE_SE:
+    case LIBSPECTRUM_MACHINE_128E: return LIBSPECTRUM_MACHINE_128;
+    default: break;
+    }
+  }
+
+  return LIBSPECTRUM_MACHINE_UNKNOWN;
+}
+
+/* After a snapshot was written in a format which couldn't keep everything:
+   say what is missing. Minor losses (the T-state count, a HALT...) don't
+   matter in practice and are not mentioned */
+static void
+snapshot_loss_warning( libspectrum_snap *snap, libspectrum_id_t type )
+{
+  const char *extension = type == LIBSPECTRUM_ID_SNAPSHOT_SNA ? ".sna" :
+                          type == LIBSPECTRUM_ID_SNAPSHOT_Z80 ? ".z80" : NULL;
+  int hungarian = i18n_hungarian();
+  const char *names[ ARRAY_SIZE( snapshot_losses ) ];
+  size_t i, count = 0;
+  char message[ 1024 ], *end = message;
+  size_t left = sizeof( message );
+  libspectrum_machine machine, loaded_as;
+  int n;
+
+#define ADD( ... ) do { \
+    n = snprintf( end, left, __VA_ARGS__ ); \
+    if( n > 0 && (size_t)n < left ) { end += n; left -= n; } \
+  } while( 0 )
+
+  if( !extension ) {
+    ui_error( UI_ERROR_WARNING, hungarian ?
+      "A pillanatkép formátuma nem tud mindent megőrizni. Ha mindent meg akarsz őrizni, ments SZX formátumban." :
+      "This snapshot format can't keep everything. To keep everything, save in SZX format." );
+    return;
+  }
+
+  for( i = 0; i < ARRAY_SIZE( snapshot_losses ); i++ ) {
+    const snapshot_loss *loss = &snapshot_losses[i];
+    if( !( type == LIBSPECTRUM_ID_SNAPSHOT_SNA ? loss->sna : loss->z80 ) )
+      continue;
+    if( !loss->active( snap ) ) continue;
+    names[ count++ ] = loss->name ? loss->name :
+                       hungarian ? "saját ROM" : "custom ROM";
+  }
+
+  machine = libspectrum_snap_machine( snap );
+  loaded_as = snapshot_machine_lost( machine, type );
+
+  message[0] = '\0';
+
+  if( count ) {
+    for( i = 0; i < count; i++ ) {
+      const char *separator = i == 0 ? "" : i == count - 1 ?
+                              ( hungarian ? " és " : " and " ) : ", ";
+      if( hungarian ) {
+        const char *article = hungarian_article( names[i] );
+        if( i == 0 ) ADD( "%c%s %s", article[0] - 'a' + 'A', article + 1,
+                          names[i] );
+        else ADD( "%s%s %s", separator, article, names[i] );
+      } else {
+        ADD( "%s%s%s", i == 0 ? "The state of the " : separator,
+             i == 0 ? "" : "the ", names[i] );
+      }
+    }
+    ADD( hungarian ? " állapota nem menthető %s fájlba." :
+                     " can't be saved in a %s file.", extension );
+  }
+
+  if( loaded_as != LIBSPECTRUM_MACHINE_UNKNOWN ) {
+    if( count ) ADD( " " );
+    ADD( hungarian ?
+           "A gép típusa (%s) nem menthető %s fájlba: betöltéskor %s gépként indul." :
+           "The machine type (%s) can't be saved in a %s file: it loads as a %s.",
+         libspectrum_machine_name( machine ), extension,
+         libspectrum_machine_name( loaded_as ) );
+  }
+
+  if( !count && loaded_as == LIBSPECTRUM_MACHINE_UNKNOWN )
+    ADD( hungarian ? "A %s formátum nem tud mindent megőrizni." :
+                     "The %s format can't keep everything.", extension );
+
+  ADD( hungarian ? "\n\nHa mindent meg akarsz őrizni, ments SZX formátumban." :
+                   "\n\nTo keep everything, save in SZX format." );
+
+#undef ADD
+
+  ui_error( UI_ERROR_WARNING, "%s", message );
+}
+
 int snapshot_write( const char *filename )
 {
   libspectrum_id_t type;
@@ -244,25 +421,16 @@ int snapshot_write( const char *filename )
 				  fuse_creator, 0 );
   if( error ) { libspectrum_snap_free( snap ); return error; }
 
-  if( flags & LIBSPECTRUM_FLAG_SNAPSHOT_MAJOR_INFO_LOSS ) {
-    ui_error(
-      UI_ERROR_WARNING,
-      "A large amount of information has been lost in conversion; the snapshot probably won't work"
-    );
-  } else if( flags & LIBSPECTRUM_FLAG_SNAPSHOT_MINOR_INFO_LOSS ) {
-    ui_error(
-      UI_ERROR_WARNING,
-      "Some information has been lost in conversion; the snapshot may not work"
-    );
-  }
+  error = utils_write_file( filename, buffer, length );
+  libspectrum_free( buffer );
+  if( error ) { libspectrum_snap_free( snap ); return error; }
+
+  /* Saved; what the format couldn't keep */
+  if( flags & LIBSPECTRUM_FLAG_SNAPSHOT_MAJOR_INFO_LOSS )
+    snapshot_loss_warning( snap, type );
 
   error = libspectrum_snap_free( snap );
-  if( error ) { libspectrum_free( buffer ); return 1; }
-
-  error = utils_write_file( filename, buffer, length );
-  if( error ) { libspectrum_free( buffer ); return error; }
-
-  libspectrum_free( buffer );
+  if( error ) return 1;
 
   return 0;
 

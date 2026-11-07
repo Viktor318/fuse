@@ -5,6 +5,19 @@
 Changes of this fork on top of Fuse 1.10.1 (until v1.10.0-hu.1: 1.10.0).
 The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
+## Unreleased
+
+### Snapshots
+
+- Saving a snapshot in a format that can't keep everything (`.sna`,
+  `.z80`) now says what is missing, after the file was saved: "The state
+  of the SpecDrum and the Beta 128 can't be saved in a .z80 file.", or "The
+  machine type (Spectrum 128K) can't be saved in a .sna file: it loads as a
+  Pentagon 128K.", then "To keep everything, save in SZX format." It used
+  to say that the snapshot probably won't work, as if the file were bad.
+  Small losses that don't matter in practice (the T-state count, a HALT)
+  are no longer mentioned.
+
 ## v1.10.1-hu.2 – 2026-11-07
 
 ### ROMs

@@ -58,7 +58,7 @@ A csomagban két program van, közös beállításokkal:
   bekapcsolva): a képkocka futása közben lenyomott billentyűk a Spectrum
   program következő billentyűzet-olvasásakor odaérnek, nem csak a következő
   képkocka elején (ahogy az upstream Fuse SDL 2-es változatában).
-- **Spectrum 128 keypad (számbillentyűzet)** (Beállítások > Perifériák >
+- **Spectrum 128 keypad** (Beállítások > Perifériák >
   Általános, alapból kikapcsolva): a Spectrum 128 csatlakoztatott keypadje.
   A 128 BASIC szerkesztőjének egyes szerkesztési funkciói csak a keypaden
   voltak; ezeket a PC szerkesztőbillentyűi adják a 128-on és a +2-n (a

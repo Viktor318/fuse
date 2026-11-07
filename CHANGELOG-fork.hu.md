@@ -22,7 +22,7 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   továbbra is a következő képkocka elején, sorrendben kerülnek sorra.
   Kikapcsolva a billentyűzetet a program képkockánként egyszer olvassa,
   mint eddig.
-- **Spectrum 128 keypad (számbillentyűzet)** (*Beállítások > Perifériák >
+- **Spectrum 128 keypad** (*Beállítások > Perifériák >
   Általános*, alapból kikapcsolva), a 128-on és a +2-n: a PC
   szerkesztőbillentyűi adják a 128 BASIC szerkesztőjének azokat a
   funkcióit, amelyek csak a keypaden voltak. Home / End: a sor eleje /
@@ -32,7 +32,8 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   Options menü (CMND). A keypad protokollja az EightyOne emulációját
   követi, hosszabb várakozással a bitek között (a ROM-ot ott megszakíthatja
   a képkocka-megszakítás). Amíg csatlakoztatva van, az Insert és a Delete
-  csak RZX felvétel közben gyorsbillentyűje az RZX menüpontoknak.
+  csak RZX felvétel közben gyorsbillentyűje az RZX menüpontoknak. A többi
+  gépen a beállítás szürke.
 
 ### AY keverő
 

@@ -44,6 +44,7 @@
 #include "keypad128.h"
 #include "machine.h"
 #include "module.h"
+#include "periph.h"
 #include "settings.h"
 #include "spectrum.h"
 
@@ -135,10 +136,21 @@ keypad128_reset( int hard_reset GCC_UNUSED )
   protocol_reset();
 }
 
+/* No ports of its own: it is on the I/O port of the AY chip. The machines
+   with the KEYPAD socket (the 128 and the +2) make it optional, so the
+   option is greyed out on the others */
+static const periph_t keypad128_periph = {
+  /* .option = */ &settings_current.keypad128,
+  /* .ports = */ NULL,
+  /* .hard_reset = */ 0,
+  /* .activate = */ NULL,
+};
+
 static int
 keypad128_init( void *context GCC_UNUSED )
 {
   module_register( &keypad128_module_info );
+  periph_register( PERIPH_TYPE_KEYPAD128, &keypad128_periph );
   protocol_reset();
   return 0;
 }
@@ -153,13 +165,11 @@ keypad128_register_startup( void )
 }
 
 /* Only the 128 and the +2 have the KEYPAD socket and a ROM which polls the
-   keypad (the +2A and +3 ROMs do not) */
+   keypad (the +2A and +3 ROMs do not): they make the peripheral optional */
 int
 keypad128_active( void )
 {
-  return settings_current.keypad128 && machine_current &&
-         ( machine_current->machine == LIBSPECTRUM_MACHINE_128 ||
-           machine_current->machine == LIBSPECTRUM_MACHINE_PLUS2 );
+  return periph_is_active( PERIPH_TYPE_KEYPAD128 );
 }
 
 /* The four keys of the row being sent, as the keypad sends them (bit 3 is

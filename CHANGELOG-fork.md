@@ -28,7 +28,8 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   the line; Insert: the Options menu (CMND). The keypad protocol follows
   EightyOne's emulation, with longer timeouts between bits (the ROM may be
   interrupted there). While it is plugged in, Insert and Delete are
-  shortcuts for the RZX menu items only during RZX recording.
+  shortcuts for the RZX menu items only during RZX recording. On the other
+  machines the option is greyed out.
 
 ### AY mixer
 

@@ -79,6 +79,8 @@ specplus2_reset( int hard_reset, libspectrum_snap *snap )
 
   periph_clear();
   machines_periph_128();
+  /* The KEYPAD socket; the +2A and +3 have none */
+  periph_set_present( PERIPH_TYPE_KEYPAD128, PERIPH_PRESENT_OPTIONAL );
   periph_update();
 
   beta_builtin = 0;

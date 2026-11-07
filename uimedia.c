@@ -181,6 +181,8 @@ ui_media_drive_writeprotect( int controller, int which, int wrprot )
 }
 
 
+const char *ui_media_save_suggestion = NULL;
+
 static int
 drive_disk_write( const ui_media_drive_info_t *drive, const char *filename )
 {
@@ -240,7 +242,9 @@ drive_save( const ui_media_drive_info_t *drive, int saveas )
 
   snprintf( title, sizeof( title ), "Fuse - Write %s", drive->name );
   if( saveas ) {
+    ui_media_save_suggestion = drive->fdd->disk.filename;
     filename = ui_get_save_filename( title );
+    ui_media_save_suggestion = NULL;
     if( !filename ) {
       fuse_emulation_unpause();
       return 1;

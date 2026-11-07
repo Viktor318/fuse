@@ -59,6 +59,10 @@ int ui_media_drive_register( ui_media_drive_info_t *drive );
 void ui_media_drive_end( void );
 ui_media_drive_info_t *ui_media_drive_find( int controller, int drive );
 
+/* While a save dialog is open for a disk: the file the disk came from (or
+   NULL), so the dialog can suggest its type */
+extern const char *ui_media_save_suggestion;
+
 #define UI_MEDIA_DRIVE_UPDATE_ALL	(~0)
 #define UI_MEDIA_DRIVE_UPDATE_TOP	(1 << 0)
 #define UI_MEDIA_DRIVE_UPDATE_EJECT	(1 << 1)

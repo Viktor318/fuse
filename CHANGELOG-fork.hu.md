@@ -8,6 +8,26 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 
 ## Kiadatlan
 
+### Fájl-ablakok
+
+- A mentés-ablakok csak azokat a típusokat sorolják fel, egyenként,
+  amelyeket írni tudnak, és a kiterjesztés nélkül (vagy másféle fájl
+  kiterjesztésével) beírt név megkapja a választott típus vagy az
+  alapértelmezett kiterjesztését: pillanatkép `.szx` (még `.z80`, `.sna`),
+  kazetta `.tzx` (még `.tap`, `.pzx`, `.csw`), lemez a meghajtó típusa
+  szerint (+3 `.dsk`, Beta `.trd`, +D és DISCiPLE `.mgt`, Opus `.opd`,
+  Didaktik `.d80`, mindegyik még `.udi`; az újra mentett lemezt a saját
+  típusában ajánlja), Microdrive `.mdr`, képernyőkép `.scr`, `.mlt`, `.png`,
+  `.svg`, RZX `.rzx`, film `.fmf`, AY napló `.psg`, profiladat `.txt`, BASIC
+  szöveg `.bas` (vagy `.txt`). A *Minden fájl* a lista végén megmarad; a
+  bináris adat a beírt néven mentődik.
+- A megnyitás-ablakok a művelethez illő típust választják ki előre:
+  kazetta, pillanatkép, RZX felvétel, lemez, Microdrive, Dock (`.dck`),
+  Interface 2 és ROM (`.rom`, új típus a listában), merevlemez (`.hdf`),
+  képernyőkép. A *Fájl > Megnyitás* továbbra is minden támogatott fájlt
+  mutat.
+- Minden ablak megjegyzi a legutóbb választott típust (amíg a Fuse fut).
+
 ### Billentyűzet
 
 - **Billentyűzet beolvasása, amikor a program olvassa** (*Beállítások >

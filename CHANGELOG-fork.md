@@ -7,6 +7,24 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
 ## Unreleased
 
+### File dialogs
+
+- The save dialogs list only the types they can write, one by one, and a
+  name typed without an extension (or with one of another kind of file)
+  gets the extension of the type chosen, or the default one: snapshots
+  `.szx` (also `.z80`, `.sna`), tapes `.tzx` (also `.tap`, `.pzx`, `.csw`),
+  disks the type of the drive (+3 `.dsk`, Beta `.trd`, +D and DISCiPLE
+  `.mgt`, Opus `.opd`, Didaktik `.d80`, all also `.udi`; a disk saved again
+  is offered in its own type), Microdrive `.mdr`, screenshots `.scr`,
+  `.mlt`, `.png`, `.svg`, RZX `.rzx`, movies `.fmf`, AY logs `.psg`,
+  profile data `.txt`, BASIC text `.bas` (or `.txt`). *All Files* stays at
+  the end of the list; binary data is saved as named.
+- The open dialogs preselect the type that fits: tapes, snapshots, RZX
+  recordings, disks, Microdrive cartridges, Dock (`.dck`), Interface 2 and
+  ROMs (`.rom`, a new type in the list), hard disks (`.hdf`), screenshots.
+  *File > Open* shows every supported file, as before.
+- Each dialog remembers the type chosen last (while Fuse runs).
+
 ### Keyboard
 
 - **Read the keyboard when the program does** (*Options > General*, on by

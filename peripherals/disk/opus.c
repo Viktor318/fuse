@@ -74,6 +74,7 @@ static libspectrum_byte data_reg_a, data_dir_a, control_a;
 static libspectrum_byte data_reg_b, data_dir_b, control_b;
 
 static void opus_reset( int hard_reset );
+static void opus_motoron( fdd_t *d GCC_UNUSED, int on );
 static void opus_memory_map( void );
 static void opus_enabled_snapshot( libspectrum_snap *snap );
 static void opus_from_snapshot( libspectrum_snap *snap );
@@ -144,6 +145,7 @@ opus_init( void *context )
   fdd_t *d;
 
   opus_fdc = wd_fdc_alloc_fdc( WD1770, 0, WD_FLAG_DRQ );
+  opus_fdc->fdd_motoron = &opus_motoron;
 
   for( i = 0; i < OPUS_NUM_DRIVES; i++ ) {
     d = &opus_drives[ i ];
@@ -266,6 +268,18 @@ opus_activate( void )
 }
 
 /*
+The FDC motor output is shared by both drives, independent of drive select.
+*/
+static void
+opus_motoron( fdd_t *d GCC_UNUSED, int on )
+{
+  int i;
+
+  for( i = 0; i < OPUS_NUM_DRIVES; i++ )
+    fdd_motoron( &opus_drives[ i ], on );
+}
+
+/*
  * opus_6821_access( reg, data, dir )
  *
  * reg - register to access:
@@ -303,10 +317,6 @@ opus_6821_access( libspectrum_byte reg, libspectrum_byte data,
         fdd_select( &opus_drives[ drive ], 1 );
 
         if( opus_fdc->current_drive != &opus_drives[ drive ] ) {
-          if( opus_fdc->current_drive->motoron ) {        /* swap motoron */
-            fdd_motoron( &opus_drives[ (!drive) ], 0 );
-            fdd_motoron( &opus_drives[ drive ], 1 );
-          }
           opus_fdc->current_drive = &opus_drives[ drive ];
         }
       } else {

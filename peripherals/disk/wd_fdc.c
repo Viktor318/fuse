@@ -63,12 +63,20 @@ wd_fdc_master_reset( wd_fdc *f )
 {
   fdd_t *d = f->current_drive;
 
+  /* Events are shared between WD controllers; reset only this instance. */
+  event_remove_type_user_data( fdc_event, f );
+  event_remove_type_user_data( motor_off_event, f );
+  event_remove_type_user_data( timeout_event, f );
+
   f->spin_cycles = 0;
   f->direction = 0;
   f->head_load = 0;
   if( d ) {
+    if( f->type == WD1770 || f->type == WD1772 )
+      f->fdd_motoron( d, 0 );
+
     if( f->flags & WD_FLAG_BETA128 )
-      fdd_motoron( d, 0 );
+      f->fdd_motoron( d, 0 );
     else
       fdd_head_load( d, 0 );
   }
@@ -122,6 +130,7 @@ wd_fdc_alloc_fdc( wd_type_t type, int hlt_time, unsigned int flags )
   fdc->current_drive = NULL;
   fdc->hlt_time = hlt_time;
   fdc->flags = flags;			/* Beta128 connect HLD out to READY in and MOTOR ON */
+  fdc->fdd_motoron = &fdd_motoron;	/* by default we use fdd motoron function */
   wd_fdc_master_reset( fdc );
   return fdc;
 }
@@ -515,7 +524,7 @@ type_i_verify:
       f->head_load = 1;
       event_remove_type( motor_off_event );
       if( f->flags & WD_FLAG_BETA128 )
-        fdd_motoron( d, 1 );
+        f->fdd_motoron( d, 1 );
       else
         fdd_head_load( d, 1 );
       event_remove_type( fdc_event );
@@ -529,7 +538,7 @@ type_i_verify:
     if( ( f->type == WD1770 || f->type == WD1772 ) &&
 	!( f->status_register & WD_FDC_SR_MOTORON ) ) {
       f->status_register |= WD_FDC_SR_MOTORON;
-      fdd_motoron( f->current_drive, 1 );
+      f->fdd_motoron( f->current_drive, 1 );
       event_remove_type( fdc_event );
       event_add_with_data( tstates + 12 * 		/* 6 revolution 6 * 200 / 1000 */
 		    machine_current->timings.processor_speed / 10,
@@ -780,11 +789,11 @@ wd_fdc_event( libspectrum_dword last_tstates GCC_UNUSED, int event,
   if( event == motor_off_event ) {
     if( f->type == WD1770 || f->type == WD1772 ) {
       f->status_register &= ~WD_FDC_SR_MOTORON;
-      fdd_motoron( d, 0 );
+      f->fdd_motoron( d, 0 );
     } else {						/* WD1773/FD1973 */
       f->head_load = 0;
       if( f->flags & WD_FLAG_BETA128 )
-        fdd_motoron( d, 0 );
+        f->fdd_motoron( d, 0 );
       else
         fdd_head_load( d, 0 );
     }
@@ -874,7 +883,7 @@ wd_fdc_spinup( wd_fdc *f, libspectrum_byte b )
 
     if( !( f->status_register & WD_FDC_SR_MOTORON ) ) {
       f->status_register |= WD_FDC_SR_MOTORON;
-      fdd_motoron( d, 1 );
+      f->fdd_motoron( d, 1 );
       if( !( b & 0x08 ) )
         delay += 6 * 200;
     }
@@ -884,14 +893,14 @@ wd_fdc_spinup( wd_fdc *f, libspectrum_byte b )
       if( b & 0x08 ) {
 	f->head_load = 1;
         if( f->flags & WD_FLAG_BETA128 )
-          fdd_motoron( d, 1 );
+          f->fdd_motoron( d, 1 );
         else
 	  fdd_head_load( d, 1 );
       } else if( !( b & 0x04 ) ) {	/* HLD reset only if V flag == 0 too */
 	f->head_load = 0;
         if( !( f->flags & WD_FLAG_NOHLT ) && f->hlt_time > 0 ) f->hlt = 0;		/* reset the trigger */
         if( f->flags & WD_FLAG_BETA128 )
-          fdd_motoron( d, 0 );
+          f->fdd_motoron( d, 0 );
         else
 	  fdd_head_load( d, 0 );
       }
@@ -899,7 +908,7 @@ wd_fdc_spinup( wd_fdc *f, libspectrum_byte b )
     } else {
       f->head_load = 1;
       if( f->flags & WD_FLAG_BETA128 )
-        fdd_motoron( d, 1 );
+        f->fdd_motoron( d, 1 );
       else
         fdd_head_load( d, 1 );
       if( f->hlt_time > 0 )

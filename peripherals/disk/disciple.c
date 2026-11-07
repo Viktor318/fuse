@@ -78,6 +78,7 @@ static libspectrum_byte *disciple_ram;
 static int memory_allocated = 0;
 
 static void disciple_reset( int hard_reset );
+static void disciple_motoron( fdd_t *d, int on );
 static void disciple_memory_map( void );
 static void disciple_activate( void );
 static void disciple_enabled_snapshot( libspectrum_snap *snap );
@@ -289,6 +290,7 @@ disciple_init( void *context )
   disciple_fdc->reset_intrq = NULL;
   disciple_fdc->set_datarq = NULL;
   disciple_fdc->reset_datarq = NULL;
+  disciple_fdc->fdd_motoron = &disciple_motoron;
 
   module_register( &disciple_module_info );
 
@@ -417,6 +419,16 @@ disciple_reset_guard_event( libspectrum_dword event_tstates GCC_UNUSED,
   disciple_reset_guard = 0;
 }
 
+static void
+disciple_motoron( fdd_t *d GCC_UNUSED, int on )
+{
+  int i;
+
+  for( i = 0; i < DISCIPLE_NUM_DRIVES; i++ ) {
+    fdd_motoron( &disciple_drives[ i ], on );
+  }
+}
+
 void
 disciple_inhibit_update( void )
 {
@@ -488,13 +500,22 @@ disciple_joy_read( libspectrum_word port GCC_UNUSED, libspectrum_byte *attached 
   return 0xff;   /* never busy */
 }
 
+/*
+  Control register write
+  D0 (0x01) -> DS2 / notDS1
+  D1 (0x02) -> /SS
+  D2 (0x04) -> /DDEN
+  D3 (0x08) -> ROM A13
+  D4 (0x10) -> inhibit switch
+  D5 (0x20) -> EXT_A30
+  D6 (0x40) -> Printer /STROBE (port pin 1)
+  D7 (0x80) -> T1 related to NET
+*/
 static void
 disciple_cn_write( libspectrum_word port GCC_UNUSED, libspectrum_byte b )
 {
   int drive, side;
   int i;
-
-  disciple_control_register = b;
 
   drive = ( b & 0x01 ) ? 0 : 1;
   side = ( b & 0x02 ) ? 1 : 0;
@@ -504,16 +525,12 @@ disciple_cn_write( libspectrum_word port GCC_UNUSED, libspectrum_byte b )
     fdd_select( &disciple_drives[ i ], drive == i );
   }
 
-  if( disciple_fdc->current_drive != &disciple_drives[ drive ] ) {
-    if( disciple_fdc->current_drive->motoron ) {
-      for (i = 0; i < DISCIPLE_NUM_DRIVES; i++ ) {
-        fdd_motoron( &disciple_drives[ i ], drive == i );
-      }
-    }
-    disciple_fdc->current_drive = &disciple_drives[ drive ];
-  }
+  disciple_fdc->dden = b & 0x04 ? 0 : 1;
+  disciple_fdc->current_drive = &disciple_drives[ drive ];
 
   printer_parallel_strobe_write( b & 0x40 );
+
+  disciple_control_register = b;
 
   /* We only support the use of an 8 KiB ROM. */
   /* disciple_rombank = ( b & 0x08 ) ? 1 : 0; */

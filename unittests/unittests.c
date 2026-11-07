@@ -55,6 +55,7 @@
 #include "peripherals/disk/opus.h"
 #include "peripherals/disk/plusd.h"
 #include "peripherals/disk/upd_fdc.h"
+#include "peripherals/disk/wd_fdc.h"
 #include "peripherals/dck.h"
 #include "peripherals/ide/divide.h"
 #include "peripherals/ide/divmmc.h"
@@ -3946,6 +3947,171 @@ utils_open_loaded_microdrive_test( void )
   return r;
 }
 
+/* Inspect only events owned by the test drive, without disturbing the
+   emulator's other controllers. */
+typedef struct fdd_test_events {
+  void *drive;
+  int index_count;
+  int controller_count;
+  int cleanup;
+} fdd_test_events;
+
+static void
+fdd_test_event( gpointer data, gpointer user_data )
+{
+  event_t *event = data;
+  fdd_test_events *test = user_data;
+
+  if( event->user_data != test->drive ) return;
+  if( !strcmp( event_name( event->type ), "FDD index" ) )
+    test->index_count++;
+  if( !strcmp( event_name( event->type ), "WD FDC event" ) )
+    test->controller_count++;
+  if( test->cleanup )
+    event_remove_type_user_data( event->type, test->drive );
+}
+
+static int
+fdd_motor_media_test( void )
+{
+  fdd_t d;
+  fdd_test_events events;
+  wd_fdc *f, *other;
+  int r = 0;
+
+  memset( &d, 0, sizeof( d ) );
+  fdd_init( &d, FDD_SHUGART, NULL, 0 );
+  events.drive = &d;
+  events.index_count = events.controller_count = events.cleanup = 0;
+
+  fdd_motoron( &d, 1 );
+  if( !d.motoron || d.ready ) r++;
+  fdd_motoron( &d, 1 );
+  if( !d.motoron || d.ready ) r++;
+
+  if( disk_new( &d.disk, 2, 80, DISK_DENS_AUTO, DISK_UDI ) != DISK_OK ) {
+    r++;
+  } else {
+    if( fdd_load( &d, 0 ) != FDD_OK || !d.ready ) r++;
+    event_foreach( fdd_test_event, &events );
+    if( events.index_count != 1 ) r++;
+
+    /* Replace media before its first pending index pulse fires. */
+    fdd_unload( &d );
+    if( !d.motoron || d.ready ) r++;
+    if( fdd_load( &d, 0 ) != FDD_OK ) r++;
+    events.index_count = 0;
+    event_foreach( fdd_test_event, &events );
+    if( events.index_count != 1 ) r++;
+    fdd_motoron( &d, 0 );
+    fdd_motoron( &d, 1 );
+    events.index_count = 0;
+    event_foreach( fdd_test_event, &events );
+    if( events.index_count != 1 ) r++;
+    fdd_unload( &d );
+    disk_close( &d.disk );
+  }
+
+  /* Reset must turn off an empty drive too. */
+  f = wd_fdc_alloc_fdc( WD1770, 0, 0 );
+  f->current_drive = &d;
+  other = wd_fdc_alloc_fdc( WD1770, 0, 0 );
+  other->current_drive = &d;
+  wd_fdc_cr_write( other, 0 );
+  wd_fdc_master_reset( f );
+  if( d.motoron || d.ready ) r++;
+  events.drive = other;
+  event_foreach( fdd_test_event, &events );
+  if( events.controller_count != 1 ) r++;
+  wd_fdc_master_reset( other );
+  libspectrum_free( other );
+  libspectrum_free( f );
+  events.drive = &d;
+
+  /* Motor-off schedules a delayed ready update; never leave a stack pointer
+     in the event queue after this test returns. */
+  events.cleanup = 1;
+  event_foreach( fdd_test_event, &events );
+  if( r ) printf( "fdd_motor_media_test failed: %d\n", r );
+  return r;
+}
+
+/* The +3 uses a uPD765, but its 1FFD motor output reaches the same FDD
+   mechanics as the WD interfaces. Exercise the real port decoding too. */
+static int
+specplus3_motor_media_test( void )
+{
+  libspectrum_machine saved_machine = machine_current->machine;
+  fdd_t *drives[ SPECPLUS3_NUM_DRIVES ];
+  fdd_test_events events;
+  int allocated[ SPECPLUS3_NUM_DRIVES ] = { 0, 0 };
+  int i, r = 0;
+
+  if( machine_select( LIBSPECTRUM_MACHINE_PLUS3 ) ) return 1;
+  memset( &events, 0, sizeof( events ) );
+  for( i = 0; i < SPECPLUS3_NUM_DRIVES; i++ )
+    drives[ i ] = specplus3_get_fdd( i );
+
+  /* Enable an empty external drive B regardless of the user's geometry
+     setting. Machine selection below restores the configured geometry. */
+  for( i = 0; i < SPECPLUS3_NUM_DRIVES; i++ ) {
+    if( drives[ i ]->loaded ) {
+      r++;
+      goto cleanup;
+    }
+  }
+  fdd_init( drives[ 1 ], FDD_SHUGART, NULL, 0 );
+
+  writeport_internal( 0x1ffd, 0x08 );
+  for( i = 0; i < SPECPLUS3_NUM_DRIVES; i++ )
+    if( !drives[ i ]->motoron || drives[ i ]->ready ) r++;
+
+  for( i = 0; i < SPECPLUS3_NUM_DRIVES; i++ ) {
+    fdd_t *d = drives[ i ];
+    events.drive = d;
+    if( disk_new( &d->disk, 1, 40, DISK_DENS_AUTO, DISK_UDI ) != DISK_OK ) {
+      r++;
+      goto cleanup;
+    }
+    allocated[ i ] = 1;
+    if( fdd_load( d, 0 ) != FDD_OK || !d->motoron || !d->ready ) r++;
+    events.index_count = 0;
+    event_foreach( fdd_test_event, &events );
+    if( events.index_count != 1 ) r++;
+
+    fdd_unload( d );
+    events.index_count = 0;
+    event_foreach( fdd_test_event, &events );
+    if( !d->motoron || d->ready || events.index_count ) r++;
+
+    /* Reinsert before a pending pulse could fire, then toggle the motor
+       line without advancing time. Neither should duplicate index events. */
+    if( fdd_load( d, 0 ) != FDD_OK ) r++;
+    writeport_internal( 0x1ffd, 0 );
+    if( drives[ 0 ]->motoron || drives[ 1 ]->motoron ) r++;
+    writeport_internal( 0x1ffd, 0x08 );
+    if( !drives[ 0 ]->motoron || !drives[ 1 ]->motoron ) r++;
+    events.index_count = 0;
+    event_foreach( fdd_test_event, &events );
+    if( events.index_count != 1 ) r++;
+  }
+
+cleanup:
+  writeport_internal( 0x1ffd, 0 );
+  for( i = 0; i < SPECPLUS3_NUM_DRIVES; i++ ) {
+    if( allocated[ i ] ) {
+      fdd_unload( drives[ i ] );
+      disk_close( &drives[ i ]->disk );
+    }
+    events.drive = drives[ i ];
+    events.cleanup = 1;
+    event_foreach( fdd_test_event, &events );
+  }
+  if( machine_select( saved_machine ) ) r++;
+  if( r ) printf( "specplus3_motor_media_test failed: %d\n", r );
+  return r;
+}
+
 static int
 utils_open_loaded_disk_test( void )
 {
@@ -5309,6 +5475,8 @@ unittests_run( void )
   r += dck_malformed_test();
   r += dck_home_rom_ram_slots_test();
   r += utils_open_loaded_microdrive_test();
+  r += fdd_motor_media_test();
+  r += specplus3_motor_media_test();
   r += utils_open_loaded_disk_test();
   r += utils_open_loaded_compressed_disk_test();
   r += utils_open_loaded_disk_merge_test();

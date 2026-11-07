@@ -67,6 +67,7 @@ static libspectrum_byte *plusd_ram;
 static int memory_allocated = 0;
 
 static void plusd_reset( int hard_reset );
+static void plusd_motoron( fdd_t *d, int on );
 static void plusd_memory_map( void );
 static void plusd_enabled_snapshot( libspectrum_snap *snap );
 static void plusd_from_snapshot( libspectrum_snap *snap );
@@ -185,6 +186,7 @@ plusd_init( void *context )
   plusd_fdc->reset_intrq = NULL;
   plusd_fdc->set_datarq = NULL;
   plusd_fdc->reset_datarq = NULL;
+  plusd_fdc->fdd_motoron = &plusd_motoron;
 
   module_register( &plusd_module_info );
 
@@ -259,6 +261,7 @@ plusd_reset( int hard_reset )
 
   plusd_available = 1;
   plusd_active = 1;
+  plusd_control_register = 0;
 
   if( hard_reset )
     memset( plusd_ram, 0, RAM_SIZE );
@@ -274,6 +277,16 @@ plusd_reset( int hard_reset )
   fdd_select( &plusd_drives[ 0 ], 1 );
   machine_current->memory_map();
 
+}
+
+static void
+plusd_motoron( fdd_t *d GCC_UNUSED, int on )
+{
+  int i;
+
+  for( i = 0; i < PLUSD_NUM_DRIVES; i++ ) {
+    fdd_motoron( &plusd_drives[ i ], on );
+  }
 }
 
 static libspectrum_byte
@@ -328,13 +341,18 @@ plusd_dr_write( libspectrum_word port GCC_UNUSED, libspectrum_byte b )
   wd_fdc_dr_write( plusd_fdc, b );
 }
 
+/*
+  Control register write
+  D0 (0x01) -> DS1
+  D1 (0x02) -> DS2
+  D6 (0x40) -> Printer /STROBE (port pin 1)
+  D7 (0x80) -> /SS
+*/
 static void
 plusd_cn_write( libspectrum_word port GCC_UNUSED, libspectrum_byte b )
 {
   int drive, side;
   int i;
-
-  plusd_control_register = b;
 
   drive = ( b & 0x03 ) == 2 ? 1 : 0;
   side = ( b & 0x80 ) ? 1 : 0;
@@ -345,16 +363,11 @@ plusd_cn_write( libspectrum_word port GCC_UNUSED, libspectrum_byte b )
   }
   fdd_select( &plusd_drives[ (!drive) ], 0 );
   fdd_select( &plusd_drives[ drive ], 1 );
-
-  if( plusd_fdc->current_drive != &plusd_drives[ drive ] ) {
-    if( plusd_fdc->current_drive->motoron ) {            /* swap motoron */
-      fdd_motoron( &plusd_drives[ (!drive) ], 0 );
-      fdd_motoron( &plusd_drives[ drive ], 1 );
-    }
-    plusd_fdc->current_drive = &plusd_drives[ drive ];
-  }
+  plusd_fdc->current_drive = &plusd_drives[ drive ];
 
   printer_parallel_strobe_write( b & 0x40 );
+
+  plusd_control_register = b;
 }
 
 static libspectrum_byte
@@ -506,6 +519,38 @@ plusd_activate( void )
   }
 }
 
+/* Exercise the actual +D control-register and FDC motor callback paths.
+   This is a wiring regression, not a DOS-level sector-transfer test. */
+static int
+plusd_motor_unittest( void )
+{
+  fdd_t *first = &plusd_drives[ 0 ];
+  fdd_t *second = &plusd_drives[ 1 ];
+  int r = 0;
+
+  wd_fdc_master_reset( plusd_fdc );
+  plusd_cn_write( 0, 2 );
+  if( second->loaded ) return 1;
+
+  /* Start a restore on the empty second drive, with spin-up wait disabled. */
+  plusd_cr_write( 0, 0x08 );
+  if( !second->motoron || !first->motoron || second->ready ) r++;
+  plusd_cn_write( 0, 1 );
+  if( plusd_fdc->current_drive != first ||
+      !first->motoron || !second->motoron ) r++;
+  plusd_cn_write( 0, 2 );
+  plusd_cn_write( 0, 1 );
+  if( !first->motoron || !second->motoron ) r++;
+
+  /* A reset from either selection must deassert the shared motor output. */
+  wd_fdc_master_reset( plusd_fdc );
+  if( first->motoron || second->motoron ) r++;
+  plusd_cn_write( 0, 1 );
+
+  if( r ) fprintf( stderr, "+D motor wiring regression failed: %d\n", r );
+  return r;
+}
+
 int
 plusd_unittest( void )
 {
@@ -561,6 +606,7 @@ plusd_unittest( void )
   }
 
   r += unittests_paging_test_48( 2 );
+  r += plusd_motor_unittest();
 
   return r;
 }

@@ -17,7 +17,7 @@ The changes of this fork are listed in [CHANGELOG-fork.md](CHANGELOG-fork.md).
 
 ## Download
 
-Download `Fuse-1.10.1-hu.1-windows.zip` from the
+Download `Fuse-1.10.1-hu.2-windows.zip` from the
 [Releases](https://github.com/Viktor318/fuse/releases) page, unpack it into a
 folder of your choice and start `fuse.exe`. Nothing has to be installed.
 

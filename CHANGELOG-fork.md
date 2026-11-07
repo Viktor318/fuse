@@ -5,7 +5,7 @@
 Changes of this fork on top of Fuse 1.10.1 (until v1.10.0-hu.1: 1.10.0).
 The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
-## Unreleased
+## v1.10.1-hu.2 – 2026-11-07
 
 ### ROMs
 

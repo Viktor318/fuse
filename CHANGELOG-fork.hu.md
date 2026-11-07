@@ -6,7 +6,7 @@ Ennek a változatnak a módosításai a Fuse 1.10.1-hez képest (a
 v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
-## Kiadatlan
+## v1.10.1-hu.2 – 2026-11-07
 
 ### ROM-ok
 

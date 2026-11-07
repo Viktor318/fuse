@@ -54,6 +54,7 @@
 #include "peripherals/disk/disciple.h"
 #include "peripherals/disk/opus.h"
 #include "peripherals/disk/plusd.h"
+#include "peripherals/disk/upd_fdc.h"
 #include "peripherals/dck.h"
 #include "peripherals/ide/divide.h"
 #include "peripherals/ide/divmmc.h"
@@ -1939,6 +1940,25 @@ keyboard_shifted_arrows_release_all_test( void )
 
   keyboard_release_all();
   settings_current.keyboard_arrows_shifted = old_shifted;
+  return 0;
+}
+
+static int
+utils_read_le16_test( void )
+{
+  libspectrum_word aligned[2];
+  libspectrum_byte *bytes = (libspectrum_byte *) aligned;
+  unsigned value;
+
+  /* Check every value, both at an aligned address and one byte beyond it. */
+  for( value = 0; value < 65536; value++ ) {
+    bytes[0] = value & 0xff;
+    bytes[1] = value >> 8;
+    TEST_ASSERT( utils_read_le16( bytes ) == value );
+    bytes[1] = value & 0xff;
+    bytes[2] = value >> 8;
+    TEST_ASSERT( utils_read_le16( bytes + 1 ) == value );
+  }
   return 0;
 }
 
@@ -4398,6 +4418,353 @@ disk_open_fdi_semantics_test( void )
   return r;
 }
 
+/* Synthetic EDSK records use different patterns so reading across a stored
+   boundary cannot accidentally pass. Positions name the clock-qualified FE. */
+static int
+disk_open_ecpc_positions_test( void )
+{
+  libspectrum_byte image[256 + 16896 + 25], *header, *table, *data;
+  static const int positions[] = { 100, 2100, 6200 };
+  static const int codes[] = { 255, 0, 9 };
+  utils_file file;
+  disk_t disk;
+  libspectrum_word crc;
+  int test, j, k, pos, ids, marks, status, r = 0;
+
+  for( test = 0; test < 10; test++ ) {
+    memset( image, 0, sizeof( image ) );
+    memcpy( image, "EXTENDED", 8 );
+    image[0x30] = 2; /* track zero is unformatted, but has an offset entry */
+    image[0x31] = 1;
+    image[0x35] = 66;
+    header = image + 256;
+    memcpy( header, "Track-Info", 10 );
+    header[0x10] = 1;
+    header[0x13] = 2;
+    header[0x15] = 3;
+    header[0x17] = 0xe5;
+    data = header + 256;
+    for( j = 0; j < 3; j++ ) {
+      libspectrum_byte *sector = header + 0x18 + 8 * j;
+      int stored = j == 1 ? ( test == 1 ? 0 : 128 ) : 8192;
+      sector[0] = 20 + j;
+      sector[1] = 30 + j;
+      sector[2] = 40 + j;
+      sector[3] = codes[j];
+      sector[4] = sector[5] = 0x20;
+      sector[6] = stored & 0xff;
+      sector[7] = stored >> 8;
+      memset( data, 0x11 * ( j + 1 ), stored );
+      data += stored;
+    }
+    table = header + 16896;
+    memcpy( table, "Offset-Info\r\n", 14 );
+    /* zero length for the unformatted track, then length 6416 */
+    table[17] = 6416 & 0xff;
+    table[18] = 6416 >> 8;
+    for( j = 0; j < 3; j++ ) {
+      table[19 + 2 * j] = positions[j] & 0xff;
+      table[20 + 2 * j] = positions[j] >> 8;
+    }
+    utils_file_init( &file, "positions.dsk" );
+    file.buffer = image;
+    file.length = sizeof( image );
+    file.type = LIBSPECTRUM_ID_DISK_ECPC;
+    /* All-or-nothing optional offsets; malformed tables fall back safely. */
+    if( test == 2 ) file.length--;
+    if( test == 3 ) table[14] = 1;
+    if( test == 4 ) table[22] = 255; /* out of range */
+    if( test == 5 ) table[21] = table[22] = 0; /* out of order */
+    if( test == 6 ) table[0] = 0;
+    /* Stored range must fit its own block, even with trailing bytes. */
+    if( test == 7 ) header[0x1f] = 255;
+    if( test == 8 ) image[0x35] = 65;
+    if( test == 9 ) file.length = 255;
+    memset( &disk, 0, sizeof( disk ) );
+    disk.flag = DISK_FLAG_PLUS3_CPC;
+    status = disk_open_loaded( &disk, &file, 0, 0 );
+    if( test >= 2 ) {
+      if( status == DISK_OK ) r++;
+      disk_close( &disk );
+      continue;
+    }
+    if( status != DISK_OK ) { r++; disk_close( &disk ); continue; }
+    DISK_SET_TRACK_IDX( ( &disk ), 1 );
+    if( disk.c_bpt != 6416 ) r++;
+    ids = marks = 0;
+    for( j = 3; j < disk.c_bpt; j++ ) {
+      if( !bitmap_test( disk.clocks, j - 1 ) ) continue;
+      if( disk.track[j] == 0xfe ) ids++;
+      if( disk.track[j] == 0xfb ) marks++;
+    }
+    if( ids != 3 || marks != 3 ) r++;
+    for( j = 0; j < 3; j++ ) {
+      pos = positions[j];
+      if( disk.track[pos] != 0xfe || disk.track[pos + 1] != 20 + j ||
+          disk.track[pos + 2] != 30 + j || disk.track[pos + 3] != 40 + j ||
+          disk.track[pos + 4] != codes[j] ) r++;
+      crc = 0xffff;
+      for( k = pos - 3; k < pos + 7; k++ )
+        crc = crc_fdc( crc, disk.track[k] );
+      if( crc ) r++;
+      if( disk.track[( pos + 44 ) % disk.c_bpt] != 0xfb ) r++;
+      for( k = 0; k < ( j == 1 ? 128 : 256 ); k++ ) {
+        int expected = test == 1 && j == 1 ? 0xe5 : 0x11 * ( j + 1 );
+        if( disk.track[( pos + 45 + k ) % disk.c_bpt] != expected ) {
+          r++; break;
+        }
+      }
+    }
+    /* Last field crosses index; neither its prefix nor its clock map may
+       overwrite the first ID sync at byte 85. */
+    if( disk.track[0] != 0x33 || disk.track[84] != 0x33 ||
+        disk.track[85] != 0 || !bitmap_test( disk.clocks, 97 ) ) r++;
+    disk_close( &disk );
+  }
+  if( r ) printf( "disk_open_ecpc_positions_test failed: %d\n", r );
+  return r;
+}
+
+static int
+disk_open_ecpc_headers_test( void )
+{
+  libspectrum_byte image[256 + 512 + 32 * 128], *header;
+  utils_file file;
+  disk_t disk;
+  int test, j, k, pos, ids, r = 0;
+
+  /* 29 fits the old header, 30 needs a second block, and 61 makes the
+     unrounded header exactly 512. Empty data fields test header sizing. */
+  for( test = 0; test < 3; test++ ) {
+    int sectors = test == 0 ? 30 : test == 1 ? 61 : 29;
+    int header_size = ( 24 + sectors * 8 + 255 ) & ~255;
+    memset( image, 0, sizeof( image ) );
+    memcpy( image, "EXTENDED", 8 );
+    image[0x30] = image[0x31] = 1;
+    image[0x34] = ( header_size + 32 * 128 ) / 256;
+    header = image + 256;
+    memcpy( header, "Track-Info", 10 );
+    header[0x13] = 2;
+    header[0x15] = sectors;
+    for( j = 0; j < sectors; j++ ) {
+      header[0x18 + 8 * j] = 20;
+      header[0x1a + 8 * j] = j + 1;
+      if( test == 0 ) {
+        header[0x1e + 8 * j] = 128;
+        memset( header + header_size + 128 * j, j + 1, 128 );
+      }
+    }
+    utils_file_init( &file, "headers.dsk" );
+    file.buffer = image;
+    file.length = 256 + header_size + 32 * 128;
+    file.type = LIBSPECTRUM_ID_DISK_ECPC;
+    memset( &disk, 0, sizeof( disk ) );
+    if( disk_open_loaded( &disk, &file, 0, 0 ) != DISK_OK ) {
+      r++; disk_close( &disk ); continue;
+    }
+    DISK_SET_TRACK_IDX( ( &disk ), 0 );
+    ids = 0;
+    for( pos = 3; pos < disk.c_bpt; pos++ ) {
+      if( !bitmap_test( disk.clocks, pos - 1 ) ) continue;
+      if( disk.track[pos] == 0xfe ) ids++;
+      if( test == 0 && disk.track[pos] == 0xfb ) {
+        for( k = 0; k < 128; k++ )
+          if( disk.track[pos + 1 + k] != ids ) { r++; break; }
+      }
+    }
+    if( ids != sectors ) r++;
+    disk_close( &disk );
+  }
+  if( r ) printf( "disk_open_ecpc_headers_test failed: %d\n", r );
+  return r;
+}
+
+static int
+disk_open_ecpc_stored_sizes_test( void )
+{
+  libspectrum_byte image[1536], *header, *data;
+  utils_file file;
+  disk_t disk;
+  int test, j, k, pos, ids, marks, first, second, stored, r = 0;
+
+  for( test = 0; test < 5; test++ ) {
+    /* Extra gap data, two weak copies, a short sector, and zero-length
+       records (ordinary and legacy workaround). All have a distinct neighbor. */
+    stored = test == 0 ? 606 : test == 1 ? 512 : test == 2 ? 128 : 0;
+    memset( image, 0, sizeof( image ) );
+    memcpy( image, "EXTENDED", 8 );
+    image[0x30] = image[0x31] = 1;
+    image[0x34] = 5;
+    header = image + 256;
+    memcpy( header, "Track-Info", 10 );
+    header[0x13] = 2;
+    header[0x15] = 2;
+    for( j = 0; j < 2; j++ ) {
+      header[0x18 + 8 * j] = 20;
+      header[0x1a + 8 * j] = j + 1;
+      header[0x1b + 8 * j] = 1;
+    }
+    header[0x1e] = stored & 0xff;
+    header[0x1f] = stored >> 8;
+    header[0x27] = 1; /* second record stores 256 bytes */
+    if( test == 4 ) { /* CPC_ISSUE_3 used to borrow 128 bytes from record 2 */
+      memset( header + 0x18, 0, 4 );
+      memset( header + 0x20, 1, 4 );
+      header[0x1c] = header[0x1d] = 0x20;
+    }
+    data = header + 256;
+    memset( data, 0x11, stored );
+    if( test == 0 ) memset( data + 256, 0x77, stored - 256 );
+    if( test == 1 ) {
+      memset( data + 256, 0x22, 256 );
+      header[0x1c] = header[0x1d] = 0x20;
+    }
+    memset( data + stored, 0x55, 256 );
+    utils_file_init( &file, "stored.dsk" );
+    file.buffer = image;
+    file.length = sizeof( image );
+    file.type = LIBSPECTRUM_ID_DISK_ECPC;
+    memset( &disk, 0, sizeof( disk ) );
+    if( test == 4 ) disk.flag = DISK_FLAG_PLUS3_CPC;
+    if( disk_open_loaded( &disk, &file, 0, 0 ) != DISK_OK ) {
+      r++; disk_close( &disk ); continue;
+    }
+    DISK_SET_TRACK_IDX( ( &disk ), 0 );
+    ids = marks = 0;
+    first = second = -1;
+    for( pos = 3; pos < disk.c_bpt; pos++ ) {
+      if( !bitmap_test( disk.clocks, pos - 1 ) ) continue;
+      if( disk.track[pos] == 0xfe ) ids++;
+      if( disk.track[pos] == 0xfb ) {
+        if( !marks++ ) first = pos + 1;
+        else second = pos + 1;
+      }
+    }
+    if( ids != 2 || marks != 2 || first < 0 || second < 0 ) r++;
+    else {
+      for( k = 0; k < ( test == 4 ? 128 : 256 ); k++ )
+        if( disk.track[second + k] != 0x55 ) { r++; break; }
+      for( k = 0; k < ( stored < 256 ? stored : 256 ); k++ )
+        if( disk.track[first + k] != 0x11 ) { r++; break; }
+      if( test == 0 ) {
+        /* CRC and initial gap bytes come from the explicit extended record. */
+        for( k = 256; k < 266; k++ )
+          if( disk.track[first + k] != 0x77 ) { r++; break; }
+      }
+      if( test == 1 ) {
+        for( k = 0; k < 256; k++ )
+          if( !bitmap_test( disk.weak, first + k ) ) { r++; break; }
+        if( bitmap_test( disk.weak, second ) ) r++;
+      }
+      if( test == 4 )
+        for( k = 0; k < 128; k++ )
+          if( disk.track[first + k] != 0 ) { r++; break; }
+    }
+    disk_close( &disk );
+  }
+  if( r ) printf( "disk_open_ecpc_stored_sizes_test failed: %d\n", r );
+  return r;
+}
+
+typedef struct upd_test_events_t {
+  upd_fdc *fdc;
+  int types[3], count;
+} upd_test_events_t;
+
+static void
+upd_test_collect_events( gpointer item, gpointer user_data )
+{
+  event_t *event = item;
+  upd_test_events_t *pending = user_data;
+  if( event->user_data == pending->fdc && pending->count < 3 )
+    pending->types[pending->count++] = event->type;
+}
+
+static int
+upd_raw_size_code_test( void )
+{
+  libspectrum_byte image[768], *header, results[7];
+  static const int codes[] = { 8, 9, 255 };
+  utils_file file;
+  fdd_t drive;
+  upd_fdc *fdc;
+  upd_test_events_t pending;
+  int test, j, id, r = 0;
+
+  for( test = 0; test < 3; test++ ) {
+    memset( image, 0, sizeof( image ) );
+    memcpy( image, "EXTENDED", 8 );
+    image[0x30] = image[0x31] = 1;
+    image[0x34] = 2;
+    header = image + 256;
+    memcpy( header, "Track-Info", 10 );
+    header[0x13] = 2;
+    header[0x15] = 1;
+    header[0x18] = 20;
+    header[0x1a] = 7;
+    header[0x1b] = codes[test];
+    header[0x1c] = header[0x1d] = 0x20;
+    header[0x1e] = 128;
+    memset( header + 256, 0x5a, 128 );
+    utils_file_init( &file, "raw-n.dsk" );
+    file.buffer = image;
+    file.length = sizeof( image );
+    file.type = LIBSPECTRUM_ID_DISK_ECPC;
+    memset( &drive, 0, sizeof( drive ) );
+    if( disk_open_loaded( &drive.disk, &file, 0, 0 ) != DISK_OK ) {
+      r++; disk_close( &drive.disk ); continue;
+    }
+    DISK_SET_TRACK_IDX( ( &drive.disk ), 0 );
+    id = -1;
+    for( j = 3; j < drive.disk.c_bpt; j++ )
+      if( drive.disk.track[j] == 0xfe && bitmap_test( drive.disk.clocks, j - 1 ) ) {
+        id = j; break;
+      }
+    if( id < 0 ) { r++; disk_close( &drive.disk ); continue; }
+    drive.ready = drive.selected = drive.loaded = drive.motoron = drive.loadhead = 1;
+    fdc = upd_fdc_alloc_fdc( UPD765A, UPD_CLOCK_4MHZ );
+    fdc->drive[0] = fdc->current_drive = &drive;
+    fdc->head_load = 1;
+    drive.disk.i = id - 3; /* short search: completes without a seek event */
+    upd_fdc_write_data( fdc, 0x4a );
+    upd_fdc_write_data( fdc, 0 );
+    if( fdc->state != UPD_FDC_STATE_RES || fdc->sector_length != 32768 ) r++;
+    for( j = 0; j < 7; j++ ) results[j] = upd_fdc_read_data( fdc );
+    if( results[0] || results[1] || results[2] || results[3] != 20 ||
+        results[4] || results[5] != 7 || results[6] != codes[test] ) r++;
+    /* Match the same raw N in READ DATA; the effective request remains 32K.
+       The short physical field must yield a bounded transfer and CRC error. */
+    drive.disk.i = id - 3;
+    for( j = 0; j < 9; j++ ) {
+      static const unsigned char command[] = { 0x46, 0, 20, 0, 7, 0, 7, 0x2a, 0xff };
+      upd_fdc_write_data( fdc, j == 5 ? codes[test] : command[j] );
+    }
+    if( fdc->rlen != 32768 || fdc->id_length != codes[test] ||
+        fdc->state != UPD_FDC_STATE_EXE || fdc->read_id ||
+        !( upd_fdc_read_status( fdc ) & 0x80 ) ||
+        ( fdc->status_register[1] & 4 ) ) r++;
+    else {
+      for( j = 0; j < 32768 && fdc->state == UPD_FDC_STATE_EXE; j++ ) {
+        int value = upd_fdc_read_data( fdc );
+        if( j < 128 && value != 0x5a ) r++;
+      }
+      if( j != 32768 || fdc->state != UPD_FDC_STATE_RES ) r++;
+      for( j = 0; j < 7; j++ ) results[j] = upd_fdc_read_data( fdc );
+      if( !( results[1] & 0x20 ) || !( results[2] & 0x20 ) ||
+          results[6] != codes[test] ) r++;
+    }
+    pending.fdc = fdc;
+    pending.count = 0;
+    event_foreach( upd_test_collect_events, &pending );
+    for( j = 0; j < pending.count; j++ )
+      event_remove_type_user_data( pending.types[j], fdc );
+    libspectrum_free( fdc );
+    disk_close( &drive.disk );
+  }
+  if( r ) printf( "upd_raw_size_code_test failed: %d\n", r );
+  return r;
+}
+
 static FILE compat_file_test_file;
 static int compat_file_test_calls[ 7 ];
 
@@ -4913,6 +5280,7 @@ unittests_run( void )
   r += keyboard_simulate_keypress_test();
   r += keyboard_shifted_arrows_test();
   r += keyboard_shifted_arrows_release_all_test();
+  r += utils_read_le16_test();
   r += utils_safe_strdup_test();
   r += bitmap_ops_test();
   r += mempool_test();
@@ -4950,6 +5318,10 @@ unittests_run( void )
   r += disk_open_fdi_bounds_test();
   r += disk_open_fdi_semantics_test();
   r += disk_open_fdi_recovery_test();
+  r += disk_open_ecpc_positions_test();
+  r += disk_open_ecpc_headers_test();
+  r += disk_open_ecpc_stored_sizes_test();
+  r += upd_raw_size_code_test();
   r += screenshot_scr_roundtrip_test();
   r += event_queue_test();
   r += printer_connection_test();

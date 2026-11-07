@@ -68,6 +68,12 @@ static void init_path_context( path_context *ctx, utils_aux_type type );
 
 static int networking_init_count = 0;
 
+libspectrum_word
+utils_read_le16( const libspectrum_byte *buffer )
+{
+  return buffer[0] | ( buffer[1] << 8 );
+}
+
 #ifdef ENABLE_AUTOMATION
 static const char *
 automation_disk_controller_name( ui_media_controller controller )

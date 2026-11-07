@@ -75,7 +75,11 @@ typedef enum keypad_substate {
 static keypad_state state;
 static keypad_substate substate;
 static int row;
-static int line_out;		/* bit 0 of register 14 last written */
+/* Bit 0 of register 14 last written: the line to the keypad, high when
+   idle. The ROM asks for a poll by taking it low; starting from low, its
+   first write (0xff) would look like the end of a poll the keypad never
+   answered, and the ROM would only try again some 3 seconds later */
+static int line_out = 1;
 static libspectrum_byte line_in;
 static int bits_to_send, key_bits_to_send;
 static int row_bits[5];		/* the rows as last sent */
@@ -133,6 +137,7 @@ check_timeout( void )
 static void
 keypad128_reset( int hard_reset GCC_UNUSED )
 {
+  line_out = 1;
   protocol_reset();
 }
 

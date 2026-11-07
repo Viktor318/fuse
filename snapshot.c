@@ -163,13 +163,19 @@ snapshot_read_buffer( const unsigned char *buffer, size_t length,
 int
 snapshot_copy_from( libspectrum_snap *snap )
 {
-  int error;
+  int error, keypad128;
   libspectrum_machine machine;
 
   /* Restored source state/time is not a continuation of consumed audio. */
   sound_suspend_subframe();
+  keypad128 = settings_current.keypad128;
   specplus3_bus_invalidate();
   periph_disable_optional();
+
+  /* No snapshot format records the Spectrum 128 keypad: it stays plugged
+     in, as it was */
+  settings_current.keypad128 = keypad128;
+
   module_snapshot_enabled( snap );
 
   machine = libspectrum_snap_machine( snap );

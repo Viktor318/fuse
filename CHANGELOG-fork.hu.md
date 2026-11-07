@@ -33,7 +33,8 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   követi, hosszabb várakozással a bitek között (a ROM-ot ott megszakíthatja
   a képkocka-megszakítás). Amíg csatlakoztatva van, az Insert és a Delete
   csak RZX felvétel közben gyorsbillentyűje az RZX menüpontoknak. A többi
-  gépen a beállítás szürke.
+  gépen a beállítás szürke. A beállításokkal együtt mentődik, és
+  pillanatkép betöltése (amely nem tudja tárolni) nem kapcsolja ki.
 
 ### AY keverő
 

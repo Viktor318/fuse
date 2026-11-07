@@ -29,7 +29,8 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   EightyOne's emulation, with longer timeouts between bits (the ROM may be
   interrupted there). While it is plugged in, Insert and Delete are
   shortcuts for the RZX menu items only during RZX recording. On the other
-  machines the option is greyed out.
+  machines the option is greyed out. It is saved with the settings, and
+  loading a snapshot (which can't record it) leaves it plugged in.
 
 ### AY mixer
 

@@ -509,6 +509,7 @@ ayplaylist_play( ayplaylist *list, int index )
   }
   player_owner = list;
   list->current = index;
+  ayplayer_set_turbosound( list->turbosound );
   return ayplayer_play( e->song );
 }
 

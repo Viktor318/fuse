@@ -28,6 +28,7 @@
 #include "libspectrum.h"
 
 #include "aymix.h"
+#include "tsmix.h"
 #include "basic_text.h"
 #include "event.h"
 #include "fuse.h"
@@ -37,6 +38,7 @@
 void win32_ayplayer_show( void );
 void win32_tsplayer_show( void );
 void win32_aymixer_show( void );
+void win32_tsmixer_show( void );
 #endif
 #include "movie.h"
 #include "machines/specplus3.h"
@@ -400,15 +402,26 @@ MENU_CALLBACK( menu_options_aymixer )
 #endif
 }
 
+/* The TurboSound mixer: the settings the TurboSound player's songs are
+   heard with */
+MENU_CALLBACK( menu_options_tsmixer )
+{
+  ui_widget_finish();
+#ifdef UI_WIN32
+  win32_tsmixer_show();
+#endif
+}
+
 MENU_CALLBACK( menu_options_save )
 {
   settings_info settings;
 
   ui_widget_finish();
-  /* The AY mixer settings of the user, not those of a song's .mix file */
+  /* The mixer settings of the user, not those of a song's .mix file */
   memset( &settings, 0, sizeof( settings ) );
   settings_copy( &settings, &settings_current );
   aymix_user_settings( &settings );
+  tsmix_user_settings( &settings );
   settings_write_config( &settings );
   settings_free( &settings );
 }

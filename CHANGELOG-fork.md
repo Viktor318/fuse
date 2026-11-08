@@ -7,6 +7,34 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
 ## Unreleased
 
+### TurboSound (step 3)
+
+- **TurboSound mixer**: the *Mixer...* button of the TurboSound player
+  now opens a mixer of its own (also *Options > TurboSound mixer...*): a
+  master volume, one stereo mode for all the chips, and a group for each
+  AY chip with a column for each channel – its panorama, its letter, a tick
+  box to switch it off, its level meter (green, yellow, red) beside its
+  volume, and the volume in percent. It shows as many chips as the song
+  has (two or three), getting narrower or wider on the right; the title
+  names the song, the bottom line the settings in use ("Settings:
+  Song.mix", or "Default"). A stereo mode other than *Custom* puts the
+  channels A, B and C of every chip where it puts them in the AY mixer;
+  in *Custom* the nine panoramas stay where they are, each to be set on
+  its own. *Load...*, *Save...* and *Reset* are for `.mix` files and the
+  default values. It is minimized and closed with the TurboSound player,
+  remembers its place, and opens again with *Resume last session*.
+- The songs of the TurboSound player are heard with these settings only
+  (kept in `fuse.cfg` apart from those of the AY mixer): the AY mixer, the
+  AY player's volume and its channel tick boxes no longer act on them, and
+  the TurboSound mixer does not act on the AY player's songs or on games.
+- **`.mix` files of the TurboSound mixer** keep the master volume and every
+  channel of the three chips (whether it is heard, its volume and
+  panorama); the keys of the first chip are those of the AY mixer, which
+  reads them (with the stereo mode) and leaves the rest. A `.mix` file of
+  the AY mixer gives its A, B and C to every chip. With *Load the mixer
+  settings of the songs automatically*, a TurboSound song is played with
+  its `.mix` file, found as for the AY player.
+
 ### TurboSound (step 2)
 
 - **TurboSound player**: a player window of its own for music on two or

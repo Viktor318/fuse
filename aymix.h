@@ -61,5 +61,9 @@ void aymix_user_settings( settings_info *settings );
    folder of Fuse when that one cannot be written) */
 void aymix_default_path( const char *path, char *buffer, size_t length );
 int aymix_save( const char *filename );
+/* The .mix file of a song (of song `song' of `songs', then of the file;
+   next to it, then in the mix folder of Fuse): 1 if there is one */
+int aymix_find( const char *path, int song, int songs, char *found,
+                size_t length );
 
 #endif			/* #ifndef FUSE_AYMIX_H */

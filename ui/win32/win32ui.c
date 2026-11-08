@@ -1342,7 +1342,7 @@ ui_widgets_reset( void )
   return 0;
 }
 
-/* The AY and TurboSound players, their playlists, the AY mixer and the
+/* The AY and TurboSound players, their playlists and mixers, and the
    keyboard picture: open or not as Fuse exits, opened again at the next
    start if the last session is resumed. Their places are kept all the time
    by the windows */
@@ -1356,6 +1356,7 @@ win32ui_remember_open_windows( void )
   winstate_set( "tsplaylist", "open",
                 fuse_hTSWnd != NULL && win32_ayplaylist_is_open( 1 ) );
   winstate_set( "aymixer", "open", win32_aymixer_is_open() );
+  winstate_set( "tsmixer", "open", win32_tsmixer_is_open() );
   winstate_set( "keyboard", "open", win32ui_picture_is_open() );
   winstate_set( "playlist", "current", ayplaylist_current( ayplaylist_ay() ) );
   winstate_set( "tsplaylist", "current",
@@ -1381,13 +1382,11 @@ win32ui_reopen_windows( void )
     win32_ayplayer_reopen( 1, list, song );
   }
 
-  /* After the players, so that it goes with the one it was open with */
-  if( winstate_get( "aymixer", "open", &open ) && open ) {
-    if( fuse_hTSWnd && win32_ayplayer_remembered_mixer( 1 ) )
-      win32_aymixer_show_for( fuse_hTSWnd );
-    else
-      win32_aymixer_show_for( fuse_hAYWnd ? fuse_hAYWnd : fuse_hWnd );
-  }
+  /* After the players, so that they go with them */
+  if( winstate_get( "aymixer", "open", &open ) && open )
+    win32_aymixer_show();
+  if( winstate_get( "tsmixer", "open", &open ) && open )
+    win32_tsmixer_show();
 
   if( winstate_get( "keyboard", "open", &open ) && open )
     menu_help_keyboard( 0 );
@@ -2082,7 +2081,7 @@ win32ui_process_messages( int process_queue_once )
 {
   MSG msg;
   int i, processMsg;
-  HWND hModelessDlgs[8];
+  HWND hModelessDlgs[9];
 
   while( 1 ) {
     while( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) ) {
@@ -2095,6 +2094,7 @@ win32ui_process_messages( int process_queue_once )
       hModelessDlgs[5] = fuse_hAYMixWnd;
       hModelessDlgs[6] = fuse_hTSWnd;
       hModelessDlgs[7] = fuse_hTSListWnd;
+      hModelessDlgs[8] = fuse_hTSMixWnd;
 
       /* FIXME: rethink this loop, IsDialogMessage in particular */
       processMsg = TRUE;

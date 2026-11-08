@@ -73,6 +73,14 @@ void ayplayer_close( void );
    emulated machine (ayplay.c), which goes on with what it was doing */
 int ayplayer_play( int song );
 void ayplayer_stop( void );
+
+/* The song is played for the TurboSound player (1) or the AY player (0):
+   with the settings of its mixer */
+void ayplayer_set_turbosound( int turbosound );
+int ayplayer_turbosound( void );
+/* The .mix file of the song playing, if they are loaded automatically
+   (settings_current.ayplayer_mix_auto), else the settings of the user */
+void ayplayer_song_mix( void );
 void ayplayer_set_paused( int paused );
 int ayplayer_paused( void );
 

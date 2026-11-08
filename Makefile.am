@@ -55,6 +55,7 @@ fuse_SOURCES = display.c \
 	ayplay.c \
 	aymeasure.c \
 	aymix.c \
+	tsmix.c \
 	ascplayer.c \
 	aymodule.c \
 	aytables.c \
@@ -190,6 +191,7 @@ noinst_HEADERS = bitmap.h \
 	ayplay.h \
 	aymeasure.h \
 	aymix.h \
+	tsmix.h \
 	ascplayer.h \
 	aymodule.h \
 	aytables.h \

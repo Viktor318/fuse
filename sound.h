@@ -121,6 +121,9 @@ extern int sound_framesiz;
 /* The stereo mode set in settings_current.stereo_ay (the names of the
    combo box, in any case; "None" is the old name of "Mono") */
 int sound_ay_stereo_setting( void );
+/* The same for any such name (the TurboSound mixer has a mode of its own);
+   NULL or not known: Mono */
+int sound_ay_stereo_from_name( const char *value );
 
 /* Where each AY channel is heard in a stereo mode */
 #define SOUND_AY_LEFT	0

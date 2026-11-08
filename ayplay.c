@@ -37,6 +37,7 @@
 #include "sound.h"
 #include "sound/blipbuffer.h"
 #include "sound/dc_filter.h"
+#include "tsmix.h"
 
 #ifdef HAVE_PTHREAD
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -97,28 +98,39 @@ static dc_filter_t dc[ 2 ];
 static blip_sample_t pending[ 2 ][ PENDING ];
 static long pending_count = 0, pending_position = 0;
 
-/* How it is heard: set from the settings by ayplay_update_mix() */
+/* How it is heard: set from the settings by ayplay_update_mix(). A song
+   of the AY player has the settings of the AY mixer, each chip as the
+   first one; a song of the TurboSound player those of the TurboSound
+   mixer, each channel of each chip its own */
+static int turbosound_mix = 0;
 static int mix_volume = 100;
-static int mix_channel_volume[ CHANNELS ] = { 100, 100, 100 };
+static int mix_channel_volume[ CHIPS ][ CHANNELS ];
+/* Channels switched off: in the AY player (by letter), and in the
+   TurboSound mixer */
 static int mix_muted[ CHANNELS ];
+static int mix_off[ CHIPS ][ CHANNELS ];
 /* How loud each channel is on the left and the right side, in percent
    (from its panorama) */
-static int mix_sides[ CHANNELS ][ 2 ] =
-  { { 100, 100 }, { 100, 100 }, { 100, 100 } };
+static int mix_sides[ CHIPS ][ CHANNELS ][ 2 ];
 
+/* The highest level of each channel since it was last asked: of the
+   loudest chip (the AY player's meters), and of each chip (the TurboSound
+   mixer's) */
 static volatile int peak[ CHANNELS ];
+static volatile int chip_peak[ CHIPS ][ CHANNELS ];
 
 /* ------------------------------------------------------------------------
    The sound generator (as sound/ay_engine.c)
    ------------------------------------------------------------------------ */
 
+static const int measured_levels[ ENV_STEPS ] = {
+  0x0000, 0x0385, 0x053D, 0x0770, 0x0AD7, 0x0FD5, 0x15B0, 0x230C,
+  0x2B4C, 0x43C1, 0x5A4B, 0x732F, 0x9204, 0xAFF1, 0xD921, 0xFFFF
+};
+
 static void
 levels_init( void )
 {
-  static const int measured_levels[ ENV_STEPS ] = {
-    0x0000, 0x0385, 0x053D, 0x0770, 0x0AD7, 0x0FD5, 0x15B0, 0x230C,
-    0x2B4C, 0x43C1, 0x5A4B, 0x732F, 0x9204, 0xAFF1, 0xD921, 0xFFFF
-  };
   int i;
 
   for( i = 0; i < ENV_STEPS; i++ )
@@ -230,7 +242,7 @@ clock_noise( chip *c, int count )
 }
 
 static int
-channel_output( chip *c, int channel, int envelope_level,
+channel_output( chip *c, int n, int channel, int envelope_level,
                 unsigned int tone_count )
 {
   int volume = c->registers[ 8 + channel ];
@@ -246,9 +258,10 @@ channel_output( chip *c, int channel, int envelope_level,
     if( !c->tone_high[ channel ] ) output = 0;
   }
   if( !( mixer & ( 0x08 << channel ) ) && c->noise_toggle ) output = 0;
-  if( mix_muted[ channel ] ) return 0;
+  if( turbosound_mix ? mix_off[ n ][ channel ] : mix_muted[ channel ] )
+    return 0;
   return output * mix_volume * fade / 10000 *
-         mix_channel_volume[ channel ] / 100;
+         mix_channel_volume[ n ][ channel ] / 100;
 }
 
 /* With more chips each is quieter, so that the sum stays in range: 1, 2/3
@@ -375,7 +388,8 @@ render_frame( void )
         int volume = c->registers[ 8 + channel ];
         int level = volume & 16 ? c->env_counter : volume & 15;
         int output = chips_output(
-          channel_output( c, channel, envelope_level, tone_count ), chips );
+          channel_output( c, n, channel, envelope_level, tone_count ),
+          chips );
 
         if( ( ( c->registers[7] >> channel ) & 9 ) == 9 ) {
           if( level < dc_low[ n ][ channel ] ) dc_low[ n ][ channel ] = level;
@@ -383,11 +397,14 @@ render_frame( void )
             dc_high[ n ][ channel ] = level;
           level = 0;
         }
-        /* The meters show the loudest chip of each channel */
+        /* The meters show the loudest chip of each channel, or each
+           chip */
         if( level > peak[ channel ] ) peak[ channel ] = level;
+        if( level > chip_peak[ n ][ channel ] )
+          chip_peak[ n ][ channel ] = level;
 
         for( side = 0; side < 2; side++ ) {
-          int heard = output * mix_sides[ channel ][ side ] / 100;
+          int heard = output * mix_sides[ n ][ channel ][ side ] / 100;
           if( heard != c->previous[ channel ][ side ] ) {
             blip_synth_update( synths[ n ][ channel ][ side ], f, heard );
             c->previous[ channel ][ side ] = heard;
@@ -410,9 +427,12 @@ render_frame( void )
   /* A level that keeps changing without tone or noise is heard (digital
      music), one that stays is not: the meters see how much it changed */
   for( n = 0; n < chips; n++ )
-    for( channel = 0; channel < CHANNELS; channel++ )
-      if( dc_high[ n ][ channel ] - dc_low[ n ][ channel ] > peak[ channel ] )
-        peak[ channel ] = dc_high[ n ][ channel ] - dc_low[ n ][ channel ];
+    for( channel = 0; channel < CHANNELS; channel++ ) {
+      int change = dc_high[ n ][ channel ] - dc_low[ n ][ channel ];
+      if( change > peak[ channel ] ) peak[ channel ] = change;
+      if( change > chip_peak[ n ][ channel ] )
+        chip_peak[ n ][ channel ] = change;
+    }
 
   for( side = 0; side < 2; side++ )
     blip_buffer_end_frame( buffers[ side ], AYSOURCE_FRAME_TSTATES );
@@ -508,6 +528,8 @@ ayplay_silent_frame( void )
         if( dc_high[ n ][ channel ] - dc_low[ n ][ channel ] > level )
           level = dc_high[ n ][ channel ] - dc_low[ n ][ channel ];
         if( level > peak[ channel ] ) peak[ channel ] = level;
+        if( level > chip_peak[ n ][ channel ] )
+          chip_peak[ n ][ channel ] = level;
       }
     song_frame();
     pending_count = pending_position = 0;
@@ -519,34 +541,58 @@ ayplay_silent_frame( void )
    Controlling it
    ------------------------------------------------------------------------ */
 
+static int
+percent( int value )
+{
+  return value < 0 ? 0 : value > 100 ? 100 : value;
+}
+
 void
 ayplay_update_mix( void )
 {
-  int pan[ CHANNELS ], channel;
-  int stereo = sound_ay_stereo_setting();
-  int volume[ CHANNELS ];
+  int pan[ CHIPS ][ CHANNELS ], volume[ CHIPS ][ CHANNELS ];
+  int off[ CHIPS ][ CHANNELS ], master, channel, n;
 
-  volume[0] = settings_current.volume_ay_a;
-  volume[1] = settings_current.volume_ay_b;
-  volume[2] = settings_current.volume_ay_c;
-  for( channel = 0; channel < CHANNELS; channel++ )
-    pan[ channel ] = sound_ay_channel_pan( stereo, channel );
+  if( turbosound_mix ) {
+    master = tsmix_master();
+    for( n = 0; n < CHIPS; n++ )
+      for( channel = 0; channel < CHANNELS; channel++ ) {
+        volume[ n ][ channel ] = tsmix_volume( n, channel );
+        pan[ n ][ channel ] = tsmix_pan( n, channel );
+        off[ n ][ channel ] = !tsmix_on( n, channel );
+      }
+  } else {
+    int stereo = sound_ay_stereo_setting();
+    master = settings_current.volume_ay;
+    for( n = 0; n < CHIPS; n++ )
+      for( channel = 0; channel < CHANNELS; channel++ ) {
+        volume[ n ][ channel ] = channel == 0 ? settings_current.volume_ay_a :
+                                 channel == 1 ? settings_current.volume_ay_b :
+                                                settings_current.volume_ay_c;
+        pan[ n ][ channel ] = sound_ay_channel_pan( stereo, channel );
+        off[ n ][ channel ] = 0;
+      }
+  }
 
   LOCK();
-  mix_volume = settings_current.volume_ay < 0 ? 0 :
-               settings_current.volume_ay > 100 ? 100 :
-               settings_current.volume_ay;
-  for( channel = 0; channel < CHANNELS; channel++ ) {
-    mix_channel_volume[ channel ] = volume[ channel ] < 0 ? 0 :
-                                    volume[ channel ] > 100 ? 100 :
-                                    volume[ channel ];
-    /* The side away from the panorama gets quieter */
-    mix_sides[ channel ][0] = pan[ channel ] <= 0 ? 100 :
-                              100 - pan[ channel ];
-    mix_sides[ channel ][1] = pan[ channel ] >= 0 ? 100 :
-                              100 + pan[ channel ];
-  }
+  mix_volume = percent( master );
+  for( n = 0; n < CHIPS; n++ )
+    for( channel = 0; channel < CHANNELS; channel++ ) {
+      int p = pan[ n ][ channel ];
+      mix_channel_volume[ n ][ channel ] = percent( volume[ n ][ channel ] );
+      mix_off[ n ][ channel ] = off[ n ][ channel ];
+      /* The side away from the panorama gets quieter */
+      mix_sides[ n ][ channel ][0] = p <= 0 ? 100 : 100 - p;
+      mix_sides[ n ][ channel ][1] = p >= 0 ? 100 : 100 + p;
+    }
   UNLOCK();
+}
+
+void
+ayplay_set_turbosound( int on )
+{
+  turbosound_mix = on ? 1 : 0;
+  ayplay_update_mix();
 }
 
 static void
@@ -592,7 +638,11 @@ ayplay_start( const unsigned char *data, size_t length, int song,
   for( channel = 0; channel < CHIPS; channel++ ) chip_reset( &ay[ channel ] );
   next_tick = 0;
   pending_count = pending_position = 0;
-  for( channel = 0; channel < CHANNELS; channel++ ) peak[ channel ] = 0;
+  for( channel = 0; channel < CHANNELS; channel++ ) {
+    int n;
+    peak[ channel ] = 0;
+    for( n = 0; n < CHIPS; n++ ) chip_peak[ n ][ channel ] = 0;
+  }
   /* New buffers at the first samples: nothing of the last song is left */
   buffers_free();
   active = 1;
@@ -723,6 +773,35 @@ int
 ayplay_muted( int channel )
 {
   return channel >= 0 && channel < CHANNELS && mix_muted[ channel ];
+}
+
+int
+ayplay_chip_peak( int chip, int channel )
+{
+  int level;
+
+  if( chip < 0 || chip >= CHIPS || channel < 0 || channel >= CHANNELS )
+    return 0;
+  level = chip_peak[ chip ][ channel ];
+  chip_peak[ chip ][ channel ] = 0;
+  return level;
+}
+
+int
+ayplay_level_heard( int level, int volume )
+{
+  unsigned int amplitude;
+  int heard;
+
+  if( level <= 0 || volume <= 0 ) return 0;
+  if( level > ENV_STEPS - 1 ) level = ENV_STEPS - 1;
+  if( volume >= 100 ) return level;
+
+  amplitude = measured_levels[ level ] * volume / 100;
+  for( heard = level; heard > 0 && (unsigned int)measured_levels[ heard ] >
+                                   amplitude; heard-- )
+    ;
+  return heard;
 }
 
 int

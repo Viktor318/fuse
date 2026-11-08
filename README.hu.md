@@ -118,6 +118,13 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   maradnak. Mindkét lista mutatja a dalok csatornaszámát (*Csat.*: 6 vagy
   9; az AY listában 3, vagy 6, ha egy `.ay` dalról a méréskor kiderül, hogy
   a második AY-t is használja).
+- **TurboSound keverő** (a TurboSound lejátszó *Keverő...* gombja, vagy
+  *Beállítások > TurboSound keverő...*): fő hangerő, közös sztereó mód, és
+  minden chip minden csatornájához panoráma, ki-be kapcsoló, szintjelző és
+  hangerő; két vagy három chipcsoport, ahogy a dal. A beállításai sajátok
+  (az AY keverő nem hat a TurboSound dalokra), a `.mix` fájljai mind a
+  kilenc csatornát tárolják; az AY keverő `.mix` fájljának A, B és C
+  értékei minden chipre érvényesek.
 - **Az emulált gépet nem érinti**: a futó program megy tovább, és a hangja a
   zenével együtt hallatszik.
 - **Lejátszási lista ablak**: akárhány fájl dalai; Hozzáadás (egyszerre több

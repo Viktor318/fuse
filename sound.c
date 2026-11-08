@@ -295,6 +295,12 @@ sound_ay_stereo_changed( void )
 int
 sound_ay_stereo_setting( void )
 {
+  return sound_ay_stereo_from_name( settings_current.stereo_ay );
+}
+
+int
+sound_ay_stereo_from_name( const char *value )
+{
   static const struct { const char *name; int mode; } modes[] = {
     { "Mono", SOUND_STEREO_AY_NONE }, { "None", SOUND_STEREO_AY_NONE },
     { "ABC", SOUND_STEREO_AY_ABC }, { "ACB", SOUND_STEREO_AY_ACB },
@@ -302,7 +308,6 @@ sound_ay_stereo_setting( void )
     { "CBA", SOUND_STEREO_AY_CBA }, { "CAB", SOUND_STEREO_AY_CAB },
     { "Custom", SOUND_STEREO_AY_CUSTOM },
   };
-  const char *value = settings_current.stereo_ay;
   size_t i, j;
 
   if( !value ) return SOUND_STEREO_AY_NONE;

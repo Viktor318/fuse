@@ -206,7 +206,6 @@ restore_position( void )
 {
   POINT title;
   RECT player;
-  HWND list = fuse_hAYListWnd, owner = fuse_hAYWnd;
   long x, y;
 
   if( winstate_get( "aymixer", "x", &x ) &&
@@ -221,16 +220,12 @@ restore_position( void )
     }
   }
 
-  /* The first time: under the playlist window, or beside the player it
-     goes with */
-  if( win32_aymixer_owner() == fuse_hTSWnd && fuse_hTSWnd ) {
-    list = fuse_hTSListWnd;
-    owner = fuse_hTSWnd;
-  }
-  if( list && IsWindowVisible( list ) && GetWindowRect( list, &player ) )
+  /* The first time: under the playlist window, or beside the AY player */
+  if( fuse_hAYListWnd && IsWindowVisible( fuse_hAYListWnd ) &&
+      GetWindowRect( fuse_hAYListWnd, &player ) )
     SetWindowPos( fuse_hAYMixWnd, NULL, player.left, player.bottom + 4, 0, 0,
                   SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
-  else if( owner && GetWindowRect( owner, &player ) )
+  else if( fuse_hAYWnd && GetWindowRect( fuse_hAYWnd, &player ) )
     SetWindowPos( fuse_hAYMixWnd, NULL, player.right + 4, player.top, 0, 0,
                   SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
   else
@@ -421,16 +416,13 @@ win32_aymixer_show_for( HWND owner )
   SetForegroundWindow( fuse_hAYMixWnd );
 }
 
-/* Options > AY mixer: an open mixer stays with its owner; a new one goes
-   with the AY player if it is open, else with the TurboSound player, else
-   with the main window */
+/* Options > AY mixer: with the AY player if it is open, else with the main
+   window (an open mixer stays with its owner) */
 void
 win32_aymixer_show( void )
 {
-  HWND owner = fuse_hAYWnd ? fuse_hAYWnd :
-               fuse_hTSWnd ? fuse_hTSWnd : fuse_hWnd;
-
-  win32_aymixer_show_for( fuse_hAYMixWnd ? win32_aymixer_owner() : owner );
+  win32_aymixer_show_for( fuse_hAYMixWnd ? win32_aymixer_owner() :
+                          fuse_hAYWnd ? fuse_hAYWnd : fuse_hWnd );
 }
 
 /* The Mixer button of a player: a mixer open with this player is closed
@@ -446,19 +438,12 @@ win32_aymixer_toggle( HWND player )
     win32_aymixer_show_for( player );
 }
 
-/* A player was opened: a mixer open with the main window goes with it from
-   now on (one open with the other player stays with that) */
+/* The AY player was opened: from now on the mixer goes with it */
 void
 win32_aymixer_adopt( HWND player )
 {
-  HWND owner;
-
-  if( !fuse_hAYMixWnd ) return;
-  owner = win32_aymixer_owner();
-  if( owner && ( owner == fuse_hAYWnd || owner == fuse_hTSWnd ) &&
-      owner != player )
-    return;
-  SetWindowLongPtr( fuse_hAYMixWnd, GWLP_HWNDPARENT, (LONG_PTR)player );
+  if( fuse_hAYMixWnd )
+    SetWindowLongPtr( fuse_hAYMixWnd, GWLP_HWNDPARENT, (LONG_PTR)player );
 }
 
 /* The window the mixer goes with (NULL: not open) */

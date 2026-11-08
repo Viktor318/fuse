@@ -58,7 +58,18 @@ int ayplay_seek( long frame );
    of the channel */
 int ayplay_channel_peak( int channel );
 
-/* Silence a channel (0=A, 1=B, 2=C) of the music */
+/* The highest level (0-15) of a channel (0=A, 1=B, 2=C) of a chip since
+   the last call, before the volume */
+int ayplay_chip_peak( int chip, int channel );
+/* A level (0-15) after a volume (0-100%): the level heard as loud */
+int ayplay_level_heard( int level, int volume );
+
+/* A song of the TurboSound player: heard with the settings of the
+   TurboSound mixer (tsmix.c), not those of the AY mixer and the AY
+   player's channel switches */
+void ayplay_set_turbosound( int on );
+
+/* Silence a channel (0=A, 1=B, 2=C) of the music (the AY player) */
 void ayplay_set_muted( int channel, int muted );
 int ayplay_muted( int channel );
 

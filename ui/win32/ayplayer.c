@@ -636,6 +636,8 @@ update_all( player *p )
   update_pause_button( p );
   update_time( p );
   if( p == AY ) sync_sound_settings();
+  /* The TurboSound mixer shows as many chips as the song has */
+  else win32_tsmixer_song_changed();
   win32_ayplaylist_update( p->turbosound );
 }
 
@@ -865,8 +867,12 @@ close_window( player *p )
   win32_ayplayer_remember_companions( p->turbosound );
   win32_ayplaylist_close( p->turbosound );
   /* The mixer goes with the player that opened it, like the list */
-  if( win32_aymixer_is_open() && win32_aymixer_owner() == wnd( p ) )
+  if( p->turbosound ) {
+    if( win32_tsmixer_is_open() && win32_tsmixer_owner() == wnd( p ) )
+      win32_tsmixer_close();
+  } else if( win32_aymixer_is_open() && win32_aymixer_owner() == wnd( p ) ) {
     win32_aymixer_close();
+  }
   DestroyWindow( wnd( p ) );
   *p->window = NULL;
   if( p->song_font ) {
@@ -947,21 +953,19 @@ command( player *p, WORD id, WORD code )
 
   case IDC_AY_MIXER:
     /* Opens the mixer, brings it back if minimized, or closes it */
-    if( code == BN_CLICKED ) win32_aymixer_toggle( wnd( p ) );
+    if( code == BN_CLICKED ) {
+      /* The TurboSound player has a mixer of its own */
+      if( p->turbosound ) win32_tsmixer_toggle( wnd( p ) );
+      else win32_aymixer_toggle( wnd( p ) );
+    }
     break;
 
   case IDC_AY_MIX_AUTO:
     if( code == BN_CLICKED ) {
       settings_current.ayplayer_mix_auto =
         IsDlgButtonChecked( wnd( p ), IDC_AY_MIX_AUTO ) == BST_CHECKED;
-      /* At once for the song playing too */
-      if( ayplayer_current_song() >= 0 )
-        aymix_song_started( ayplayer_path(), ayplayer_current_song(),
-                            ayplayer_song_count(),
-                            settings_current.ayplayer_mix_auto,
-                            ayplayer_file_stereo() );
-      else if( !settings_current.ayplayer_mix_auto )
-        aymix_restore_user();
+      /* At once for the song playing too (with the mixer of its player) */
+      ayplayer_song_mix();
       /* The other window shows the same setting */
       if( wnd( other( p ) ) )
         CheckDlgButton( wnd( other( p ) ), IDC_AY_MIX_AUTO,
@@ -1061,6 +1065,7 @@ tick_all( void )
   }
 
   for( i = 0; i < 2; i++ ) tick( &players[i] );
+  win32_tsmixer_tick();
 }
 
 /* Play one song or the whole list, repeat it or not: kept in the settings */
@@ -1356,8 +1361,9 @@ win32_ayplayer_remember_companions( int turbosound )
   if( !wnd( p ) ) return;
   winstate_set( p->key, "with_list",
                 win32_ayplaylist_is_open( p->turbosound ) );
-  winstate_set( p->key, "with_mixer", win32_aymixer_is_open() &&
-                                      win32_aymixer_owner() == wnd( p ) );
+  winstate_set( p->key, "with_mixer", p->turbosound ?
+                win32_tsmixer_is_open() && win32_tsmixer_owner() == wnd( p ) :
+                win32_aymixer_is_open() && win32_aymixer_owner() == wnd( p ) );
 }
 
 static int
@@ -1366,12 +1372,6 @@ remembered( const player *p, const char *key, int otherwise )
   long value;
 
   return winstate_get( p->key, key, &value ) ? value != 0 : otherwise;
-}
-
-int
-win32_ayplayer_remembered_mixer( int turbosound )
-{
-  return remembered( &players[ turbosound ? 1 : 0 ], "with_mixer", 0 );
 }
 
 /* `with_list', `with_mixer': 1 open, 0 not, -1 as they were the last time
@@ -1391,9 +1391,10 @@ open_window( player *p, int with_list, int with_mixer, int activate )
     /* After the texts were translated */
     layout_play_row( p );
     restore_position( p );
-    /* A mixer already open (not with the other player) goes with the
+    /* Its mixer, if already open (with the main window), goes with the
        player from now on */
-    win32_aymixer_adopt( wnd( p ) );
+    if( p->turbosound ) win32_tsmixer_adopt( wnd( p ) );
+    else win32_aymixer_adopt( wnd( p ) );
 
     if( with_list < 0 ) with_list = remembered( p, "with_list", 1 );
     if( with_mixer < 0 ) with_mixer = remembered( p, "with_mixer", 0 );
@@ -1407,7 +1408,10 @@ open_window( player *p, int with_list, int with_mixer, int activate )
   resume_if_paused();
   if( with_list ) win32_ayplaylist_show( p->turbosound );
   /* Owned by the player, as it exists by now */
-  if( with_mixer ) win32_aymixer_show_for( wnd( p ) );
+  if( with_mixer ) {
+    if( p->turbosound ) win32_tsmixer_show_for( wnd( p ) );
+    else win32_aymixer_show_for( wnd( p ) );
+  }
   update_all( p );
   if( IsIconic( wnd( p ) ) ) ShowWindow( wnd( p ), SW_RESTORE );
   ShowWindow( wnd( p ), activate ? SW_SHOW : SW_SHOWNOACTIVATE );

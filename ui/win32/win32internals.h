@@ -81,6 +81,19 @@ int win32_aymixer_is_open( void );
 void win32_aymixer_update( void );
 /* The AY mixer settings changed: every window shows them */
 void win32_aymix_changed( void );
+/* TurboSound mixer window (tsmixer.c) */
+extern HWND fuse_hTSMixWnd;
+void win32_tsmixer_show( void );
+void win32_tsmixer_show_for( HWND owner );
+void win32_tsmixer_close( void );
+void win32_tsmixer_toggle( HWND player );
+void win32_tsmixer_adopt( HWND player );
+HWND win32_tsmixer_owner( void );
+int win32_tsmixer_is_open( void );
+void win32_tsmixer_update( void );
+/* The TurboSound player's song changed; called every frame */
+void win32_tsmixer_song_changed( void );
+void win32_tsmixer_tick( void );
 
 /* Both player windows and their playlist windows */
 void win32_ayplayer_update( void );
@@ -108,8 +121,6 @@ void win32_tsplayer_show( void );
 void win32_ayplayer_show_for( int turbosound );
 void win32_ayplayer_reopen( int turbosound, int with_list, int song );
 void win32_ayplayer_remember_companions( int turbosound );
-/* The mixer was open with the player when it was closed last */
-int win32_ayplayer_remembered_mixer( int turbosound );
 int win32ui_picture_is_open( void );
 void menu_help_keyboard( int action );
 int win32ui_machine_paused( void );

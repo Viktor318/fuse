@@ -82,6 +82,7 @@ Options/_General..., Item, F4
 Options/_Media..., Item
 Options/_Sound..., Item
 Options/_AY mixer..., Item,, menu_options_aymixer
+Options/_TurboSound mixer..., Item,, menu_options_tsmixer
 
 Options/_Peripherals, Branch
 Options/Peripherals/_General..., Item

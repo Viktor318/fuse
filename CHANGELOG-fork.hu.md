@@ -8,6 +8,37 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 
 ## Kiadatlan
 
+### TurboSound (3. lépés)
+
+- **TurboSound keverő**: a TurboSound lejátszó *Keverő...* gombja mostantól
+  saját keverőt nyit meg (a *Beállítások > TurboSound keverő...*
+  menüpont is): fő hangerő, egy közös sztereó mód az összes chipre, és
+  minden AY chiphez egy csoport, csatornánként egy oszloppal – a
+  panoráma, a csatorna betűje, kikapcsoló jelölőnégyzet, a szintjelző
+  (zöld, sárga, piros) a hangerő mellett, alatta a hangerő százalékban.
+  Annyi chipet mutat, ahányat a dal használ (kettőt vagy hármat), és
+  ehhez jobbra keskenyebb vagy szélesebb lesz; a címsorban a dal, alul a
+  használt beállítások látszanak („Beállítások: Dal.mix”, vagy
+  „Alapértelmezett”). Az *Egyéni*-n kívüli sztereó módok minden chip A, B
+  és C csatornáját oda teszik, ahová az AY keverő; *Egyéni* módban a
+  kilenc panoráma a helyén marad, és egyenként állítható. A *Betöltés...*,
+  *Mentés...* és *Alaphelyzet* gomb a `.mix` fájlokhoz és az
+  alapértékekhez való. A TurboSound lejátszóval együtt kicsinyül és
+  záródik, megjegyzi a helyét, és a *Folytatás ott, ahol abbahagytam*
+  beállítással újra megnyílik.
+- A TurboSound lejátszó dalai csak ezekkel a beállításokkal szólnak (a
+  `fuse.cfg`-ben az AY keverőétől külön): az AY keverő, az AY lejátszó
+  hangereje és csatornakapcsolói már nem hatnak rájuk, a TurboSound
+  keverő pedig nem hat az AY lejátszó dalaira és a játékokra.
+- **A TurboSound keverő `.mix` fájljai** a fő hangerőt és a három chip
+  minden csatornáját tárolják (szól-e, hangerő, panoráma); az első chip
+  kulcsai az AY keverőéi, így az AY keverő ezeket (és a sztereó módot)
+  beolvassa, a többit kihagyja. Az AY keverő `.mix` fájljának A, B és C
+  értékei minden chipre érvényesek. A *Keverőbeállítások automatikus
+  betöltése a dalokhoz* beállítással a TurboSound dal a saját `.mix`
+  fájljával szól, amelyet a program az AY lejátszóéval azonos módon keres
+  meg.
+
 ### TurboSound (2. lépés)
 
 - **TurboSound lejátszó**: saját lejátszóablak a két vagy három AY chipes

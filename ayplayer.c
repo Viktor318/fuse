@@ -42,6 +42,7 @@
 #include "aymodule.h"
 #include "compat.h"
 #include "sound.h"
+#include "tsmix.h"
 #include "ui/ui.h"
 #include "utils.h"
 
@@ -113,6 +114,10 @@ static int measure_song;
 
 /* Full path of the loaded file */
 static char ay_path[ 1024 ] = "";
+
+/* Played for the TurboSound player: its mixer (tsmix.c), not the AY
+   mixer */
+static int ay_turbosound = 0;
 
 /* ------------------------------------------------------------------------
    Reading the file
@@ -741,6 +746,7 @@ ayplayer_close( void )
   ayplayer_stop();
   /* The settings of the user, not those of a .mix file, are kept */
   aymix_restore_user();
+  tsmix_restore_user();
   aymeasure_stop();
   measure_busy = 0;
   free_file();
@@ -857,6 +863,8 @@ ayplayer_measure( const char *filename, int song )
    Playing a song
    ------------------------------------------------------------------------ */
 
+static void song_mix( int song );
+
 int
 ayplayer_play( int song )
 {
@@ -889,10 +897,10 @@ ayplayer_play( int song )
     if( ay_song_loop >= ay_song_frames ) ay_song_loop = 0;
   }
 
-  /* The .mix file of the song, if it is to be loaded */
-  aymix_song_started( ay_path, song, ay_songs,
-                      settings_current.ayplayer_mix_auto,
-                      ayplayer_file_stereo() );
+  /* The mixer of the player, and the .mix file of the song, if it is to
+     be loaded */
+  ayplay_set_turbosound( ay_turbosound );
+  song_mix( song );
 
   if( ayplay_start( ay_data, ay_length, song, ay_song_frames, ay_song_loop,
                     ay_length_default ) ) {
@@ -915,6 +923,51 @@ ayplayer_play( int song )
       measure_start( ay_data, ay_length, ay_file_checksum, song );
   }
   return 0;
+}
+
+void
+ayplayer_set_turbosound( int turbosound )
+{
+  ay_turbosound = turbosound ? 1 : 0;
+}
+
+static void
+song_mix( int song )
+{
+  int automatic = settings_current.ayplayer_mix_auto;
+
+  if( song < 0 || !ay_data ) {
+    /* Nothing playing: the settings of the user, if .mix files are not
+       loaded */
+    if( !automatic ) {
+      aymix_restore_user();
+      tsmix_restore_user();
+    }
+    return;
+  }
+
+  /* The mixer of the other player has the user's settings meanwhile */
+  if( ay_turbosound ) {
+    aymix_restore_user();
+    tsmix_song_started( ay_path, song, ay_songs, automatic,
+                        ayplayer_file_stereo() );
+  } else {
+    tsmix_restore_user();
+    aymix_song_started( ay_path, song, ay_songs, automatic,
+                        ayplayer_file_stereo() );
+  }
+}
+
+void
+ayplayer_song_mix( void )
+{
+  song_mix( ay_current );
+}
+
+int
+ayplayer_turbosound( void )
+{
+  return ay_turbosound;
 }
 
 void

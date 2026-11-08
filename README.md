@@ -109,6 +109,13 @@ AY sound generator of its own, apart from the emulated machine.
   files always stay in the AY player. Both playlists show the channels of
   each song (*Ch.*: 6 or 9; in the AY list 3, or 6 for an `.ay` song that
   turns out to use a second AY when it is measured).
+- **TurboSound mixer** (*Mixer...* in the TurboSound player, or *Options >
+  TurboSound mixer...*): master volume, one stereo mode for all chips, and
+  for each channel of each chip a panorama, an on/off tick box, a level
+  meter and a volume; two or three chip groups, as the song has. Its
+  settings are its own (the AY mixer does not act on TurboSound songs),
+  and its `.mix` files keep all nine channels; an AY mixer `.mix` file
+  gives its A, B and C to every chip.
 - **The emulated machine is left alone**: the program that was running goes
   on, and its sound is heard together with the music.
 - **Playlist window**: songs of any number of files; Add (several files at

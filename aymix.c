@@ -339,8 +339,9 @@ load( const char *filename, mix *m )
 
 /* The .mix file of a song: of the song itself, then of the file; next to
    the song, then in the mix folder of Fuse */
-static int
-find( const char *path, int song, int songs, char *found, size_t length )
+int
+aymix_find( const char *path, int song, int songs, char *found,
+            size_t length )
 {
   char folder[ 1024 ], base[ 256 ], mixes[ 1024 ];
   const char *folders[ 2 ];
@@ -407,7 +408,7 @@ aymix_song_started( const char *path, int song, int songs, int automatic,
   mix m;
 
   if( !automatic || !path || !*path ||
-      !find( path, song, songs, filename, sizeof( filename ) ) ) {
+      !aymix_find( path, song, songs, filename, sizeof( filename ) ) ) {
     /* No .mix file: the stereo mode of the music file, if it has one */
     if( automatic && path && *path && file_stereo && *file_stereo )
       use_file_stereo( path, file_stereo );

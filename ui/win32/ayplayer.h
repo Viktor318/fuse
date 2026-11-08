@@ -106,3 +106,26 @@
 #define IDC_AYL_SAVE        4260
 #define IDC_AYL_MEASURE     4261
 #define IDC_AYL_REMEASURE   4262
+
+/* The TurboSound mixer window. The controls of the channels (nine of each
+   kind: chip 1 A, B, C, chip 2 A...) are made by the code */
+#define IDD_TSMIXER          4400
+#define IDC_TSM_LOAD         4401
+#define IDC_TSM_SAVE         4402
+#define IDC_TSM_RESET        4403
+#define IDC_TSM_STEREO_LABEL 4404
+#define IDC_TSM_STEREO       4405
+#define IDC_TSM_MASTER_GROUP 4406
+#define IDC_TSM_MASTER       4407
+#define IDC_TSM_MASTER_TEXT  4408
+#define IDC_TSM_LINE         4409
+#define IDC_TSM_STATUS       4410
+#define IDC_TSM_GROUP1       4411
+#define IDC_TSM_GROUP2       4412
+#define IDC_TSM_GROUP3       4413
+#define IDC_TSM_PAN1         4420
+#define IDC_TSM_LETTER1      4429
+#define IDC_TSM_ON1          4438
+#define IDC_TSM_METER1       4447
+#define IDC_TSM_VOLUME1      4456
+#define IDC_TSM_VOLUME_TEXT1 4465

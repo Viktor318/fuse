@@ -85,12 +85,13 @@ static volatile int active = 0, paused = 0, ended = 0;
 static long frames_played = 0, song_frames = 0, song_loop = -1;
 static int length_default = 0, repeat = 0, fade = 100;
 
-/* The sound */
-static chip ay;
+/* The sound: an AY chip, or up to three (TurboSound) */
+#define CHIPS AYSOURCE_CHIPS
+static chip ay[ CHIPS ];
 static unsigned int levels[ ENV_STEPS ];
 static unsigned int next_tick;
 static Blip_Buffer *buffers[ 2 ] = { NULL, NULL };
-static Blip_Synth *synths[ CHANNELS ][ 2 ];
+static Blip_Synth *synths[ CHIPS ][ CHANNELS ][ 2 ];
 static int buffer_rate = 0;
 static dc_filter_t dc[ 2 ];
 static blip_sample_t pending[ 2 ][ PENDING ];
@@ -250,6 +251,14 @@ channel_output( chip *c, int channel, int envelope_level,
          mix_channel_volume[ channel ] / 100;
 }
 
+/* With more chips each is quieter, so that the sum stays in range: 1, 2/3
+   or 1/2 of the level for one, two or three chips */
+static int
+chips_output( int output, int chips )
+{
+  return chips > 1 ? output * 2 / ( chips + 1 ) : output;
+}
+
 /* ------------------------------------------------------------------------
    Producing the samples
    ------------------------------------------------------------------------ */
@@ -257,12 +266,13 @@ channel_output( chip *c, int channel, int envelope_level,
 static void
 buffers_free( void )
 {
-  int channel, side;
+  int n, channel, side;
 
-  for( channel = 0; channel < CHANNELS; channel++ )
-    for( side = 0; side < 2; side++ )
-      if( synths[ channel ][ side ] )
-        delete_Blip_Synth( &synths[ channel ][ side ] );
+  for( n = 0; n < CHIPS; n++ )
+    for( channel = 0; channel < CHANNELS; channel++ )
+      for( side = 0; side < 2; side++ )
+        if( synths[ n ][ channel ][ side ] )
+          delete_Blip_Synth( &synths[ n ][ channel ][ side ] );
   for( side = 0; side < 2; side++ )
     if( buffers[ side ] ) delete_Blip_Buffer( &buffers[ side ] );
   buffer_rate = 0;
@@ -271,7 +281,7 @@ buffers_free( void )
 static int
 buffers_new( int rate )
 {
-  int channel, side;
+  int n, channel, side;
 
   buffers_free();
   for( side = 0; side < 2; side++ ) {
@@ -283,18 +293,20 @@ buffers_new( int rate )
     dc_filter_configure( &dc[ side ], rate );
     dc_filter_reset( &dc[ side ] );
   }
-  for( channel = 0; channel < CHANNELS; channel++ )
-    for( side = 0; side < 2; side++ ) {
-      Blip_Synth *synth = new_Blip_Synth();
-      if( !synth ) return 1;
-      blip_synth_set_volume( synth, 1.0 );
-      blip_synth_set_treble_eq( synth, 0.0 );
-      blip_synth_set_output( synth, buffers[ side ] );
-      synths[ channel ][ side ] = synth;
-    }
+  for( n = 0; n < CHIPS; n++ )
+    for( channel = 0; channel < CHANNELS; channel++ )
+      for( side = 0; side < 2; side++ ) {
+        Blip_Synth *synth = new_Blip_Synth();
+        if( !synth ) return 1;
+        blip_synth_set_volume( synth, 1.0 );
+        blip_synth_set_treble_eq( synth, 0.0 );
+        blip_synth_set_output( synth, buffers[ side ] );
+        synths[ n ][ channel ][ side ] = synth;
+      }
   buffer_rate = rate;
   pending_count = pending_position = 0;
-  memset( ay.previous, 0, sizeof( ay.previous ) );
+  for( n = 0; n < CHIPS; n++ )
+    memset( ay[ n ].previous, 0, sizeof( ay[ n ].previous ) );
   next_tick = 0;
   return 0;
 }
@@ -324,73 +336,83 @@ song_frame( void )
 static void
 render_frame( void )
 {
-  int count, position = 0, channel, side;
+  int count, position = 0, channel, side, n, chips;
   unsigned int f;
-  chip *c = &ay;
   long avail, n0, n1;
   /* Channels with tone and noise off: the lowest and highest level in the
-     frame (digital music changes it all the time) */
-  int dc_low[ CHANNELS ], dc_high[ CHANNELS ];
+     frame (digital music changes it all the time), per chip */
+  int dc_low[ CHIPS ][ CHANNELS ], dc_high[ CHIPS ][ CHANNELS ];
 
-  for( channel = 0; channel < CHANNELS; channel++ ) {
-    dc_low[ channel ] = 16;
-    dc_high[ channel ] = -1;
-  }
+  for( n = 0; n < CHIPS; n++ )
+    for( channel = 0; channel < CHANNELS; channel++ ) {
+      dc_low[ n ][ channel ] = 16;
+      dc_high[ n ][ channel ] = -1;
+    }
 
   count = aysource_frame( source, writes, MAX_WRITES );
+  chips = aysource_chips( source );
   song_frame();
 
   for( f = next_tick; f < AYSOURCE_FRAME_TSTATES; f += AY_STEP ) {
-    int envelope_level, noise_count;
-    unsigned int tone_count;
-
     while( position < count && writes[ position ].tstates <= f ) {
-      chip_write( c, writes[ position ].reg, writes[ position ].value );
+      chip_write( &ay[ writes[ position ].chip ], writes[ position ].reg,
+                  writes[ position ].value );
       position++;
     }
 
-    envelope_level = levels[ c->env_counter ];
-    noise_count = clock_envelope( c, c->registers[13] );
-    c->tone_cycles += 16;
-    tone_count = c->tone_cycles >> 3;
-    c->tone_cycles &= 7;
+    for( n = 0; n < chips; n++ ) {
+      chip *c = &ay[ n ];
+      int envelope_level, noise_count;
+      unsigned int tone_count;
 
-    for( channel = 0; channel < CHANNELS; channel++ ) {
-      int volume = c->registers[ 8 + channel ];
-      int level = volume & 16 ? c->env_counter : volume & 15;
-      int output = channel_output( c, channel, envelope_level, tone_count );
+      envelope_level = levels[ c->env_counter ];
+      noise_count = clock_envelope( c, c->registers[13] );
+      c->tone_cycles += 16;
+      tone_count = c->tone_cycles >> 3;
+      c->tone_cycles &= 7;
 
-      if( ( ( c->registers[7] >> channel ) & 9 ) == 9 ) {
-        if( level < dc_low[ channel ] ) dc_low[ channel ] = level;
-        if( level > dc_high[ channel ] ) dc_high[ channel ] = level;
-        level = 0;
-      }
-      if( level > peak[ channel ] ) peak[ channel ] = level;
+      for( channel = 0; channel < CHANNELS; channel++ ) {
+        int volume = c->registers[ 8 + channel ];
+        int level = volume & 16 ? c->env_counter : volume & 15;
+        int output = chips_output(
+          channel_output( c, channel, envelope_level, tone_count ), chips );
 
-      for( side = 0; side < 2; side++ ) {
-        int heard = output * mix_sides[ channel ][ side ] / 100;
-        if( heard != c->previous[ channel ][ side ] ) {
-          blip_synth_update( synths[ channel ][ side ], f, heard );
-          c->previous[ channel ][ side ] = heard;
+        if( ( ( c->registers[7] >> channel ) & 9 ) == 9 ) {
+          if( level < dc_low[ n ][ channel ] ) dc_low[ n ][ channel ] = level;
+          if( level > dc_high[ n ][ channel ] )
+            dc_high[ n ][ channel ] = level;
+          level = 0;
+        }
+        /* The meters show the loudest chip of each channel */
+        if( level > peak[ channel ] ) peak[ channel ] = level;
+
+        for( side = 0; side < 2; side++ ) {
+          int heard = output * mix_sides[ channel ][ side ] / 100;
+          if( heard != c->previous[ channel ][ side ] ) {
+            blip_synth_update( synths[ n ][ channel ][ side ], f, heard );
+            c->previous[ channel ][ side ] = heard;
+          }
         }
       }
-    }
 
-    clock_noise( c, noise_count );
+      clock_noise( c, noise_count );
+    }
   }
 
   /* Writes after the last step */
   while( position < count ) {
-    chip_write( c, writes[ position ].reg, writes[ position ].value );
+    chip_write( &ay[ writes[ position ].chip ], writes[ position ].reg,
+                writes[ position ].value );
     position++;
   }
   next_tick = f - AYSOURCE_FRAME_TSTATES;
 
   /* A level that keeps changing without tone or noise is heard (digital
      music), one that stays is not: the meters see how much it changed */
-  for( channel = 0; channel < CHANNELS; channel++ )
-    if( dc_high[ channel ] - dc_low[ channel ] > peak[ channel ] )
-      peak[ channel ] = dc_high[ channel ] - dc_low[ channel ];
+  for( n = 0; n < chips; n++ )
+    for( channel = 0; channel < CHANNELS; channel++ )
+      if( dc_high[ n ][ channel ] - dc_low[ n ][ channel ] > peak[ channel ] )
+        peak[ channel ] = dc_high[ n ][ channel ] - dc_low[ n ][ channel ];
 
   for( side = 0; side < 2; side++ )
     blip_buffer_end_frame( buffers[ side ], AYSOURCE_FRAME_TSTATES );
@@ -453,35 +475,40 @@ ayplay_silent_frame( void )
   if( !active || paused ) return;
   LOCK();
   if( active && !paused && source ) {
-    int count = aysource_frame( source, writes, MAX_WRITES ), i, channel;
-    int dc_low[ CHANNELS ], dc_high[ CHANNELS ];
+    int count = aysource_frame( source, writes, MAX_WRITES ), i, channel, n;
+    int chips = aysource_chips( source );
+    int dc_low[ CHIPS ][ CHANNELS ], dc_high[ CHIPS ][ CHANNELS ];
 
-    for( channel = 0; channel < CHANNELS; channel++ ) {
-      dc_low[ channel ] = 16;
-      dc_high[ channel ] = -1;
-    }
+    for( n = 0; n < CHIPS; n++ )
+      for( channel = 0; channel < CHANNELS; channel++ ) {
+        dc_low[ n ][ channel ] = 16;
+        dc_high[ n ][ channel ] = -1;
+      }
     for( i = 0; i < count; i++ ) {
-      chip_write( &ay, writes[i].reg, writes[i].value );
+      chip *c = &ay[ writes[i].chip ];
+      n = writes[i].chip;
+      chip_write( c, writes[i].reg, writes[i].value );
       /* Without tone and noise: how much the level changes (digital
          music), as when it is played */
       channel = writes[i].reg - 8;
       if( channel >= 0 && channel < CHANNELS &&
-          ( ( ay.registers[7] >> channel ) & 9 ) == 9 ) {
-        int volume = ay.registers[ 8 + channel ];
+          ( ( c->registers[7] >> channel ) & 9 ) == 9 ) {
+        int volume = c->registers[ 8 + channel ];
         int level = volume & 16 ? 15 : volume & 15;
-        if( level < dc_low[ channel ] ) dc_low[ channel ] = level;
-        if( level > dc_high[ channel ] ) dc_high[ channel ] = level;
+        if( level < dc_low[ n ][ channel ] ) dc_low[ n ][ channel ] = level;
+        if( level > dc_high[ n ][ channel ] ) dc_high[ n ][ channel ] = level;
       }
     }
-    /* The meters see the levels set */
-    for( channel = 0; channel < CHANNELS; channel++ ) {
-      int volume = ay.registers[ 8 + channel ];
-      int level = volume & 16 ? 15 : volume & 15;
-      if( ( ( ay.registers[7] >> channel ) & 9 ) == 9 ) level = 0;
-      if( dc_high[ channel ] - dc_low[ channel ] > level )
-        level = dc_high[ channel ] - dc_low[ channel ];
-      if( level > peak[ channel ] ) peak[ channel ] = level;
-    }
+    /* The meters see the levels set (of the loudest chip) */
+    for( n = 0; n < chips; n++ )
+      for( channel = 0; channel < CHANNELS; channel++ ) {
+        int volume = ay[ n ].registers[ 8 + channel ];
+        int level = volume & 16 ? 15 : volume & 15;
+        if( ( ( ay[ n ].registers[7] >> channel ) & 9 ) == 9 ) level = 0;
+        if( dc_high[ n ][ channel ] - dc_low[ n ][ channel ] > level )
+          level = dc_high[ n ][ channel ] - dc_low[ n ][ channel ];
+        if( level > peak[ channel ] ) peak[ channel ] = level;
+      }
     song_frame();
     pending_count = pending_position = 0;
   }
@@ -562,7 +589,7 @@ ayplay_start( const unsigned char *data, size_t length, int song,
   ended = 0;
   paused = 0;
   levels_init();
-  chip_reset( &ay );
+  for( channel = 0; channel < CHIPS; channel++ ) chip_reset( &ay[ channel ] );
   next_tick = 0;
   pending_count = pending_position = 0;
   for( channel = 0; channel < CHANNELS; channel++ ) peak[ channel ] = 0;
@@ -639,7 +666,7 @@ ayplay_seek( long frame )
   const unsigned char *registers;
   unsigned char *data;
   size_t length;
-  int song, reg;
+  int song, reg, n;
   long i;
 
   if( !active ) return 1;
@@ -673,9 +700,13 @@ ayplay_seek( long frame )
   ended = 0;
   fade = 100;
   /* The sound generator from the registers the song has there */
-  chip_reset( &ay );
-  registers = aysource_registers( source );
-  for( reg = 0; reg < 14; reg++ ) chip_write( &ay, reg, registers[ reg ] );
+  for( n = 0; n < CHIPS; n++ ) {
+    chip_reset( &ay[ n ] );
+    if( n >= aysource_chips( source ) ) continue;
+    registers = aysource_registers( source, n );
+    for( reg = 0; reg < 14; reg++ )
+      chip_write( &ay[ n ], reg, registers[ reg ] );
+  }
   pending_count = pending_position = 0;
   UNLOCK();
   return 0;

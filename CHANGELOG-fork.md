@@ -7,6 +7,24 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
 ## Unreleased
 
+### TurboSound (step 1)
+
+- **TurboSound music** plays on all its chips in the AY player: `.ts` files
+  (two or three modules of any tracker with a `02TS` / `03TS` footer, as
+  made by Vortex Tracker, ZXTune and, with three chips and 9 channels, for
+  the ZX Spectrum Next), Pro Tracker 3 modules with TurboSound in one file
+  (the second AY plays the mirrored patterns, as in ZXTune), Vortex
+  Tracker text files with two modules, and `.ay` files that select the
+  second AY (FEh on port FFFDh). Only the first AY was heard before. The
+  player shows "TurboSound (2 AY)" (or 3) in the *Misc* line. The chips
+  share the stereo mode, volumes and panoramas of the mixer, channel by
+  channel, and the level meters show the loudest chip of each channel; a
+  TurboSound player and mixer of their own come next. With two chips each
+  is at 2/3, with three at 1/2 of the level, so the sum stays in range.
+- The texts of the modules are shown once if they agree, else joined with
+  "/". The length and loop are those of the first module, as in ZXTune.
+- `*.ts` is in the AY music file filters.
+
 ### Snapshots
 
 - Saving a snapshot in a format that can't keep everything (`.sna`,

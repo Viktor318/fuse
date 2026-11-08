@@ -215,21 +215,27 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
     const unsigned char *r;
     unsigned int h = 2166136261U;
     long sum[3] = { 0, 0, 0 }, count[3] = { 0, 0, 0 };
-    int written, channel;
+    int written, channel, chip;
 
     if( cancel && *cancel ) break;
 
     written = aysource_frame( source, writes, MAX_WRITES );
-    r = aysource_registers( source );
-    for( i = 0; i < 14; i++ ) {
-      h ^= r[i];
-      h *= 16777619U;
+    /* The registers of every chip (TurboSound) */
+    for( chip = 0; chip < aysource_chips( source ); chip++ ) {
+      r = aysource_registers( source, chip );
+      for( i = 0; i < 14; i++ ) {
+        h ^= r[i];
+        h *= 16777619U;
+      }
     }
+    r = aysource_registers( source, 0 );
     hash[ frames ] = h;
 
-    /* The levels the volume writes set (an envelope counts as full) */
+    /* The levels the volume writes of the first chip set (an envelope
+       counts as full) */
     for( i = 0; i < written; i++ ) {
       int reg = writes[i].reg;
+      if( writes[i].chip ) continue;
       if( reg >= 8 && reg <= 10 ) {
         int value = writes[i].value & 0x1f;
         sum[ reg - 8 ] += value & 16 ? 15 : value;
@@ -245,6 +251,14 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
       if( ( r[ 8 + channel ] & 0x1f ) &&
           ( !tone_and_noise_off || count[ channel ] ) )
         silent[ frames ] = 0;
+    }
+    /* The other chips: heard with a volume and tone or noise */
+    for( chip = 1; chip < aysource_chips( source ); chip++ ) {
+      const unsigned char *o = aysource_registers( source, chip );
+      for( channel = 0; channel < 3; channel++ )
+        if( ( o[ 8 + channel ] & 0x1f ) &&
+            ( ( o[7] >> channel ) & 9 ) != 9 )
+          silent[ frames ] = 0;
     }
 
     if( frames < DIGITAL_MAX_FRAMES ) {

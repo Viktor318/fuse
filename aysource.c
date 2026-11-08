@@ -63,10 +63,12 @@ struct aysource {
   z80_t cpu;
   uint64_t pins;
   unsigned char mem[ 0x10000 ];
-  int selected, chip;
+  int selected[ AYSOURCE_CHIPS ], chip;
   /* Trackers and register dumps: the module, which gives the registers */
   aymodule *module;
-  unsigned char registers[ 16 ];
+  /* Of each chip; the chips used */
+  unsigned char registers[ AYSOURCE_CHIPS ][ 16 ];
+  int chips;
 };
 
 typedef struct file {
@@ -235,6 +237,7 @@ aysource_new( const unsigned char *data, size_t length, int song )
       free( s );
       return NULL;
     }
+    s->chips = 1;
     return s;
   }
 
@@ -242,6 +245,8 @@ aysource_new( const unsigned char *data, size_t length, int song )
     free( s );
     return NULL;
   }
+  s->chips = aymodule_chips( s->module );
+  if( s->chips > AYSOURCE_CHIPS ) s->chips = AYSOURCE_CHIPS;
   return s;
 }
 
@@ -254,9 +259,15 @@ aysource_free( aysource *source )
 }
 
 const unsigned char *
-aysource_registers( const aysource *source )
+aysource_registers( const aysource *source, int chip )
 {
-  return source->registers;
+  return source->registers[ chip >= 0 && chip < AYSOURCE_CHIPS ? chip : 0 ];
+}
+
+int
+aysource_chips( const aysource *source )
+{
+  return source->chips;
 }
 
 long
@@ -268,30 +279,36 @@ aysource_exact_length( const aysource *source, long *loop )
 
 static int
 keep( aysource_write *writes, int max, int count, unsigned int tstates,
-      int reg, int value )
+      int chip, int reg, int value )
 {
   if( !writes || count >= max ) return count;
   writes[ count ].tstates = tstates;
+  writes[ count ].chip = chip;
   writes[ count ].reg = reg;
   writes[ count ].value = value;
   return count + 1;
 }
 
-/* A module: the registers it writes */
+/* A module: the registers it writes, chip by chip */
 static int
 frame_module( aysource *s, aysource_write *writes, int max )
 {
-  unsigned char registers[ AYMODULE_REGISTERS ];
-  unsigned int mask;
-  int reg, count = 0;
+  unsigned char registers[ AYSOURCE_CHIPS ][ AYMODULE_REGISTERS ];
+  unsigned int mask[ AYSOURCE_CHIPS ];
+  int chip, reg, count = 0;
 
-  memcpy( registers, s->registers, AYMODULE_REGISTERS );
-  aymodule_frame( s->module, registers, &mask );
-  for( reg = 0; reg < AYMODULE_REGISTERS; reg++ ) {
-    if( !( mask & ( 1u << reg ) ) ) continue;
-    s->registers[ reg ] = registers[ reg ];
-    count = keep( writes, max, count, 0, reg, registers[ reg ] );
+  for( chip = 0; chip < s->chips; chip++ ) {
+    memcpy( registers[ chip ], s->registers[ chip ], AYMODULE_REGISTERS );
+    mask[ chip ] = 0;
   }
+  aymodule_frame( s->module, registers, mask );
+  for( chip = 0; chip < s->chips; chip++ )
+    for( reg = 0; reg < AYMODULE_REGISTERS; reg++ ) {
+      if( !( mask[ chip ] & ( 1u << reg ) ) ) continue;
+      s->registers[ chip ][ reg ] = registers[ chip ][ reg ];
+      count = keep( writes, max, count, 0, chip, reg,
+                    registers[ chip ][ reg ] );
+    }
   return count;
 }
 
@@ -328,22 +345,29 @@ aysource_frame( aysource *s, aysource_write *writes, int max )
         uint8_t value = Z80_GET_DATA( pins );
         if( ( port & 0xc002 ) == 0xc000 ) {
           /* Register select; TurboSound: FFh the first chip, FEh the
-             second (only the first one is played). Any other value of 16
-             or more selects no register, as on the AY itself: digital
-             music writes its samples with OUT (FDh),A, whose port is
-             FFFDh-like for values from C0h */
-          if( value == 0xff || value == 0xfe ) s->chip = value == 0xff ? 0 : 1;
-          else s->selected = value < 16 ? value : -1;
-        } else if( ( port & 0xc002 ) == 0x8000 && !s->chip &&
-                   s->selected >= 0 ) {
-          s->registers[ s->selected ] = value;
-          if( s->selected < 14 )
-            count = keep( writes, max, count, t, s->selected, value );
+             second (the registers selected stay with each chip, as on the
+             TurboSound). Any other value of 16 or more selects no
+             register, as on the AY itself: digital music writes its
+             samples with OUT (FDh),A, whose port is FFFDh-like for values
+             from C0h (so FDh does not select a third chip here) */
+          if( value == 0xff || value == 0xfe ) {
+            s->chip = value == 0xff ? 0 : 1;
+          } else {
+            s->selected[ s->chip ] = value < 16 ? value : -1;
+          }
+        } else if( ( port & 0xc002 ) == 0x8000 &&
+                   s->selected[ s->chip ] >= 0 ) {
+          int reg = s->selected[ s->chip ];
+          s->registers[ s->chip ][ reg ] = value;
+          if( s->chip >= s->chips ) s->chips = s->chip + 1;
+          if( reg < 14 )
+            count = keep( writes, max, count, t, s->chip, reg, value );
         }
       } else if( pins & Z80_RD ) {
         /* The selected register can be read back, as on the 128K */
-        if( ( port & 0xc002 ) == 0xc000 && !s->chip && s->selected >= 0 ) {
-          Z80_SET_DATA( pins, s->registers[ s->selected ] );
+        if( ( port & 0xc002 ) == 0xc000 && s->selected[ s->chip ] >= 0 ) {
+          Z80_SET_DATA( pins,
+                        s->registers[ s->chip ][ s->selected[ s->chip ] ] );
         } else {
           Z80_SET_DATA( pins, 0xff );
         }

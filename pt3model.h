@@ -168,6 +168,15 @@ struct pt3_module {
   struct pt3_slider envelope_slider;
   unsigned int noise_base;
   unsigned int noise_addon;
+
+  /* TurboSound in one module (the mode byte of the header is not 0x20):
+     the second AY plays pattern `ts_base' - 1 - p where the first plays
+     pattern p, with the same cursor. `mirror' is the player of the second
+     AY: a copy of this module sharing its data, with its own player state;
+     NULL for one AY */
+  unsigned int ts_base;
+  struct pt3_module *mirror;
+  int shared;			/* the data belongs to another module */
 };
 
 

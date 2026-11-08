@@ -468,11 +468,21 @@ pt3_load( const unsigned char *data, size_t length )
   }
   if( m->loop_position >= m->position_count ) m->loop_position = 0;
 
+  /* TurboSound in one module: the second AY plays the patterns from the
+     mode byte down, as ZXTune does when they fit in */
+  if( data[98] != PT3_SINGLE_AY_MODE && data[98] > max_pattern &&
+      data[98] < max_pattern * 2 && data[98] <= PT3_PATTERNS )
+    m->ts_base = data[98];
+
   table = data[103] | data[104] << 8;
-  min_offset = table + max_pattern * 6;
+  min_offset = table + ( m->ts_base ? m->ts_base - 1 : max_pattern ) * 6;
   for( i = 0; i < m->position_count; i++ )
-    if( m->positions[i] < PT3_PATTERNS )
+    if( m->positions[i] < PT3_PATTERNS ) {
       read_pattern( m, &reader, m->positions[i], table, min_offset );
+      if( m->ts_base )
+        read_pattern( m, &reader, m->ts_base - 1 - m->positions[i], table,
+                      min_offset );
+    }
 
   for( i = 0; i < PT3_SAMPLES; i++ )
     read_sample( m, &reader, i, read_le16( &reader, 105 + i * 2 ) );
@@ -488,6 +498,18 @@ pt3_load( const unsigned char *data, size_t length )
     return NULL;
   }
 
+  /* The player of the second AY */
+  if( m->ts_base ) {
+    m->mirror = malloc( sizeof( *m->mirror ) );
+    if( !m->mirror ) {
+      pt3_free( m );
+      return NULL;
+    }
+    *m->mirror = *m;
+    m->mirror->mirror = NULL;
+    m->mirror->shared = 1;
+  }
+
   pt3_reset( m );
   return m;
 }
@@ -498,6 +520,11 @@ pt3_free( pt3_module *m )
   int i;
 
   if( !m ) return;
+  if( m->shared ) {
+    free( m );
+    return;
+  }
+  pt3_free( m->mirror );
   for( i = 0; i < PT3_PATTERNS; i++ ) free( m->patterns[i].lines );
   for( i = 0; i < PT3_SAMPLES; i++ ) free( m->samples[i].lines );
   for( i = 0; i < PT3_ORNAMENTS; i++ ) free( m->ornaments[i].lines );
@@ -537,20 +564,44 @@ current_line( const pt3_module *m )
   return p->lines[ m->line ].present ? &p->lines[ m->line ] : NULL;
 }
 
+/* The pattern the second AY of a TurboSound module plays, or NULL */
+static const struct pt3_pattern *
+mirrored_pattern( const pt3_module *m )
+{
+  unsigned int index;
+
+  if( !m->ts_base || m->pattern >= m->ts_base ) return NULL;
+  index = m->ts_base - 1 - m->pattern;
+  if( index >= PT3_PATTERNS || !m->patterns[ index ].lines ) return NULL;
+  return &m->patterns[ index ];
+}
+
 static int
 line_valid( const pt3_module *m )
 {
+  const struct pt3_pattern *mirrored = mirrored_pattern( m );
+
   if( m->pattern >= PT3_PATTERNS ) return 0;
+  /* TurboSound: the line must be there in both patterns */
+  if( mirrored && m->line >= (unsigned int)mirrored->size ) return 0;
   return m->patterns[ m->pattern ].lines &&
          m->line < (unsigned int)m->patterns[ m->pattern ].size;
 }
 
-/* A line starts: its tempo, if it sets one */
+/* A line starts: its tempo, if it sets one (TurboSound: that of the second
+   AY first, as ZXTune does) */
 static void
 line_loaded( pt3_module *m )
 {
   const struct pt3_line *line = current_line( m );
+  const struct pt3_pattern *mirrored = mirrored_pattern( m );
 
+  if( mirrored && m->line < (unsigned int)mirrored->size &&
+      mirrored->lines[ m->line ].present &&
+      mirrored->lines[ m->line ].tempo ) {
+    m->tempo = mirrored->lines[ m->line ].tempo;
+    return;
+  }
   if( line && line->tempo ) m->tempo = line->tempo;
 }
 
@@ -675,6 +726,7 @@ pt3_reset( pt3_module *m )
   m->noise_base = m->noise_addon = 0;
   m->loops = 0;
   cursor_reset( m );
+  if( m->mirror ) pt3_reset( m->mirror );
 }
 
 static int
@@ -886,9 +938,10 @@ synthesize_channel( pt3_module *m, int chan, struct pt3_channel *dst,
     dst->position_in_ornament = ornament_loop;
 }
 
-void
-pt3_frame( pt3_module *m, unsigned char registers[ PT3_REGISTERS ],
-           unsigned int *mask )
+/* The registers of the current frame, without moving on */
+static void
+render_frame( pt3_module *m, unsigned char registers[ PT3_REGISTERS ],
+              unsigned int *mask )
 {
   int envelope_addon = 0, chan, period;
   unsigned int noise;
@@ -915,6 +968,37 @@ pt3_frame( pt3_module *m, unsigned char registers[ PT3_REGISTERS ],
   registers[12] = ( (unsigned int)period >> 8 ) & 0xff;
   *mask |= 1 << 6 | 1 << 11 | 1 << 12;
   slider_update( &m->envelope_slider );
+}
 
+void
+pt3_frame( pt3_module *m, unsigned char registers[ PT3_REGISTERS ],
+           unsigned int *mask )
+{
+  render_frame( m, registers, mask );
+  next_frame( m );
+}
+
+int
+pt3_chips( const pt3_module *m )
+{
+  return m->mirror ? 2 : 1;
+}
+
+void
+pt3_frame_ts( pt3_module *m, unsigned char registers[][ PT3_REGISTERS ],
+              unsigned int mask[] )
+{
+  pt3_module *second = m->mirror;
+
+  render_frame( m, registers[0], &mask[0] );
+  if( second ) {
+    /* The second AY: the same cursor, on the mirrored pattern */
+    second->position = m->position;
+    second->pattern = m->ts_base - 1 - m->pattern;
+    second->line = m->line;
+    second->quirk = m->quirk;
+    second->tempo = m->tempo;
+    render_frame( second, registers[1], &mask[1] );
+  }
   next_frame( m );
 }

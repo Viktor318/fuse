@@ -31,8 +31,8 @@
 
 /* Plays a Pro Tracker 3 (.pt3, also Vortex Tracker II, and its text
    modules: .vt2, .txt) module: works out the AY registers of every frame,
-   as the player of the tracker does.
-   Only the first AY of TurboSound modules is played for now. */
+   as the player of the tracker does. A TurboSound module in one file (the
+   mode byte of the header) plays on two AY chips, see pt3_chips() */
 
 typedef struct pt3_module pt3_module;
 
@@ -57,6 +57,14 @@ void pt3_reset( pt3_module *module );
 /* The registers of the next frame; *mask tells which ones to write */
 void pt3_frame( pt3_module *module, unsigned char registers[ PT3_REGISTERS ],
                 unsigned int *mask );
+
+/* 2 for a TurboSound module in one file, else 1 */
+int pt3_chips( const pt3_module *module );
+
+/* The next frame of both chips of such a module */
+void pt3_frame_ts( pt3_module *module,
+                   unsigned char registers[][ PT3_REGISTERS ],
+                   unsigned int mask[] );
 
 /* The length in frames, up to the end of the last position, and the frame
    of the loop position (*loop), as ZXTune tells them; the module is left at

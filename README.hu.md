@@ -95,7 +95,12 @@ A csomagban két program van, közös beállításokkal:
 
 
 `.ay` (ZXAYEMUL) zenefájlokat játszik le – sok Spectrum-játék és demó zenéje
-megvan ebben a formában –, valamint Pro Tracker 3 (`.pt3`) modulokat. A dal
+megvan ebben a formában –, tracker modulokat (Pro Tracker 1–3, Vortex
+Tracker II és szöveges moduljai, Sound Tracker és Sound Tracker Pro, ASC
+Sound Master, SQ-Tracker, Pro Sound Creator és Maker, Sound Tracker 1 és
+3, Global Tracker, Fast Tracker), regiszterfelvételeket (PSG, YM, VTX) és
+két vagy három AY chipes **TurboSound** zenéket (`.ts`, 6 vagy 9 csatorna).
+Az `.ay` dal
 egy saját Z80-on fut (Andre Weissflog [chips](https://github.com/floooh/chips)
 Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
 

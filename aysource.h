@@ -31,8 +31,12 @@
 
 typedef struct aysource aysource;
 
+/* TurboSound: up to three AY chips */
+#define AYSOURCE_CHIPS 3
+
 typedef struct aysource_write {
   unsigned int tstates;		/* in the frame */
+  unsigned char chip;		/* 0 for one AY; TurboSound: 0-2 */
   unsigned char reg, value;
 } aysource_write;
 
@@ -48,8 +52,12 @@ void aysource_free( aysource *source );
    none kept). Returns how many were kept */
 int aysource_frame( aysource *source, aysource_write *writes, int max );
 
-/* The registers (0-13) as the song left them */
-const unsigned char *aysource_registers( const aysource *source );
+/* The registers (0-13) of a chip as the song left them */
+const unsigned char *aysource_registers( const aysource *source, int chip );
+
+/* The chips the song uses (1-3): a TurboSound module tells it; an .ay
+   song uses the second one once it selects it (FEh on port FFFDh) */
+int aysource_chips( const aysource *source );
 
 /* The length of the song in frames if the file tells it exactly (a
    register dump), else 0; *loop: the frame the music goes on from (-1: it

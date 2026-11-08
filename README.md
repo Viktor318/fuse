@@ -89,7 +89,11 @@ There are two programs in the package, with the same settings:
 
 
 Plays `.ay` (ZXAYEMUL) music files – the music of many Spectrum games and
-demos – and Pro Tracker 3 (`.pt3`) modules. A song runs on a Z80 of its own
+demos –, tracker modules (Pro Tracker 1–3, Vortex Tracker II and its text
+modules, Sound Tracker and Sound Tracker Pro, ASC Sound Master,
+SQ-Tracker, Pro Sound Creator and Maker, Sound Tracker 1 and 3, Global
+Tracker, Fast Tracker), register dumps (PSG, YM, VTX) and **TurboSound**
+music on two or three AY chips (`.ts`, 6 or 9 channels). An `.ay` song runs on a Z80 of its own
 (the [chips](https://github.com/floooh/chips) Z80 by Andre Weissflog) with an
 AY sound generator of its own, apart from the emulated machine.
 

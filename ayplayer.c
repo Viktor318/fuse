@@ -203,7 +203,7 @@ is_text_module( const char *filename )
    register dumps */
 static const char * const extensions[] = {
   "ay", "pt3", "vt2", "pt2", "pt1", "stc", "st1", "st3", "stp", "asc", "as0", "sqt", "psc", "psm", "gtr", "ftc",
-  "psg", "ym", "vtx", NULL
+  "psg", "ym", "vtx", "ts", NULL
 };
 
 int
@@ -516,8 +516,14 @@ read_module( const libspectrum_byte *data, size_t length,
             aymodule_title( module ) );
   snprintf( info->author, sizeof( info->author ), "%s",
             aymodule_author( module ) );
-  snprintf( info->misc, sizeof( info->misc ), "%s",
-            aymodule_comment( module ) );
+  /* TurboSound: the chips, before the comment */
+  if( aymodule_chips( module ) > 1 )
+    snprintf( info->misc, sizeof( info->misc ), "TurboSound (%d AY)%s%s",
+              aymodule_chips( module ), aymodule_comment( module )[0] ?
+              " - " : "", aymodule_comment( module ) );
+  else
+    snprintf( info->misc, sizeof( info->misc ), "%s",
+              aymodule_comment( module ) );
   snprintf( info->stereo, sizeof( info->stereo ), "%s",
             aymodule_stereo( module ) );
   aymodule_free( module );

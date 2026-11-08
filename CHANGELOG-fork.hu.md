@@ -8,6 +8,26 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 
 ## Kiadatlan
 
+### TurboSound (1. lépés)
+
+- Az AY lejátszó a **TurboSound zenéket** minden chipjükön lejátssza: a
+  `.ts` fájlokat (bármilyen tracker két vagy három modulja `02TS` / `03TS`
+  lezárással, ahogy a Vortex Tracker, a ZXTune és – három chippel, 9
+  csatornán – a ZX Spectrum Next zenéi), az egy fájlban TurboSoundot
+  tartalmazó Pro Tracker 3 modulokat (a második AY a tükrözött mintákat
+  játssza, mint a ZXTune-ban), a két modult tartalmazó Vortex Tracker
+  szövegfájlokat, és a második AY-t kiválasztó (FFFDh portra FEh-t író)
+  `.ay` fájlokat. Eddig csak az első AY szólt. Az *Egyéb* sorban
+  „TurboSound (2 AY)” (vagy 3) látszik. A chipek csatornánként közösen
+  használják a keverő sztereó módját, hangerőit és panorámáit, a
+  szintjelzők pedig csatornánként a leghangosabb chipet mutatják; a saját
+  TurboSound lejátszó és keverő a következő lépés. Két chipnél
+  mindegyik a szint 2/3-án, háromnál a felén szól, így az összeg nem
+  torzul.
+- A modulok szövegei egyszer látszanak, ha egyeznek, különben „/”-lel
+  összefűzve. A hossz és az ismétlés az első modulé, mint a ZXTune-ban.
+- A `*.ts` bekerült az AY zenefájlok szűrőibe.
+
 ### Pillanatképek
 
 - Ha a pillanatkép olyan formátumba kerül, amely nem tud mindent tárolni

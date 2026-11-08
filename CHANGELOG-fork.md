@@ -81,6 +81,11 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   "/". The length and loop are those of the first module, as in ZXTune.
 - `*.ts` is in the AY music file filters.
 
+### AY player
+
+- In Hungarian, the level meter of channel C showed "K" in mono mode; it
+  shows "C" again.
+
 ### Snapshots
 
 - Saving a snapshot in a format that can't keep everything (`.sna`,

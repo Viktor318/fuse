@@ -993,6 +993,9 @@ command( player *p, WORD id, WORD code )
    not enough: Windows does not always send WM_TIMER while the emulation
    keeps the message queue busy */
 #define WM_AYPLAYER_SONG_END ( WM_APP + 1 )
+/* After the dialog texts are translated: the level labels again, as the
+   translation would turn the lone "C" of mono into "K" */
+#define WM_AYPLAYER_LABELS ( WM_APP + 2 )
 
 /* While the length of the song playing is measured: a line at the bottom
    of the window */
@@ -1182,6 +1185,7 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 
   if( msg == WM_INITDIALOG ) {
     init_dialog( (player *)lParam, hWnd );
+    if( (player *)lParam == AY ) PostMessage( hWnd, WM_AYPLAYER_LABELS, 0, 0 );
     return TRUE;
   }
 
@@ -1233,6 +1237,10 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   case WM_EXITMENULOOP:
     win32ui_modal_exit();
     remember_position( p );
+    return 0;
+
+  case WM_AYPLAYER_LABELS:
+    update_level_labels();
     return 0;
 
   case WM_AYPLAYER_SONG_END:

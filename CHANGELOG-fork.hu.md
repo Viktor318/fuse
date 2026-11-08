@@ -89,6 +89,11 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   összefűzve. A hossz és az ismétlés az első modulé, mint a ZXTune-ban.
 - A `*.ts` bekerült az AY zenefájlok szűrőibe.
 
+### AY lejátszó
+
+- Mono módban magyarul a C csatorna szintjelzőjének felirata „K” volt;
+  mostantól újra „C”.
+
 ### Pillanatképek
 
 - Ha a pillanatkép olyan formátumba kerül, amely nem tud mindent tárolni

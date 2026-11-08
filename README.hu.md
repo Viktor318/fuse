@@ -20,7 +20,7 @@ olvashatók.
 ## Letöltés
 
 A [Releases](https://github.com/Viktor318/fuse/releases) oldalról töltsd le
-a `Fuse-1.10.1-hu.2-windows.zip` fájlt, csomagold ki egy tetszőleges
+a `Fuse-1.10.1-hu.3-windows.zip` fájlt, csomagold ki egy tetszőleges
 mappába, és indítsd el a `fuse.exe`-t. Telepíteni nem kell semmit.
 
 A csomagban két program van, közös beállításokkal:

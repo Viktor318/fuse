@@ -5,28 +5,55 @@
 Changes of this fork on top of Fuse 1.10.1 (until v1.10.0-hu.1: 1.10.0).
 The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
-## Unreleased
+## v1.10.1-hu.3 – 2026-11-09
 
-### TurboSound (step 3)
+### TurboSound
 
-- **TurboSound mixer**: the *Mixer...* button of the TurboSound player
-  now opens a mixer of its own (also *Options > TurboSound mixer...*): a
-  master volume, one stereo mode for all the chips, and a group for each
-  AY chip with a column for each channel – its panorama, its letter, a tick
-  box to switch it off, its level meter (green, yellow, red) beside its
-  volume, and the volume in percent. It shows as many chips as the song
-  has (two or three), getting narrower or wider on the right; the title
-  names the song, the bottom line the settings in use ("Settings:
-  Song.mix", or "Default"). A stereo mode other than *Custom* puts the
-  channels A, B and C of every chip where it puts them in the AY mixer;
-  in *Custom* the nine panoramas stay where they are, each to be set on
-  its own. *Load...*, *Save...* and *Reset* are for `.mix` files and the
-  default values. It is minimized and closed with the TurboSound player,
-  remembers its place, and opens again with *Resume last session*.
-- The songs of the TurboSound player are heard with these settings only
+- **TurboSound music** on two or three AY chips: `.ts` files (two or three
+  modules of any tracker with a `02TS` / `03TS` footer, as made by Vortex
+  Tracker, ZXTune and, with three chips and 9 channels, for the ZX
+  Spectrum Next), Pro Tracker 3 modules with TurboSound inside (the second
+  AY plays the mirrored patterns, as in ZXTune), Vortex Tracker text files
+  with two modules, and `.ay` files that select the second AY (FEh on
+  port FFFDh). With two chips each is at 2/3, with three at 1/2 of the
+  level, so the sum stays in range. The texts of the modules are shown
+  once if they agree, else joined with "/"; the length and loop are those
+  of the first module, as in ZXTune.
+- **TurboSound player** (*Media > TurboSound player...*, below the AY music
+  player), with its own playlist window, saved list
+  (`fuse-ts-playlist.m3u`) and window places. It shows the file, author,
+  format ("TurboSound – PT3 + PT3 (2 AY, 6 channels)"; a Pro Tracker 3
+  module with TurboSound inside: "TurboSound – PT3 (2 AY, 6 channels)") and
+  misc lines, the song and its position, Previous / Pause / Stop / Next,
+  *List* and *Mixer...*, and play modes of its own (1 song / whole list,
+  repeat). The list and the mixer are minimized and closed with it, and
+  they open again at start (standing on the last song) with *Resume last
+  session*, like the AY player.
+- **Opening**: `.ts` files, Pro Tracker 3 modules with TurboSound inside
+  and Vortex Tracker text files with two modules open in the TurboSound
+  player (*File > Open*, dragging onto Fuse, command line); `.ay` files
+  always open in the AY player, also those using a second AY. Each list
+  takes only its own kind: a file added one by one to the other list is
+  refused with a message; the files of a folder are left out quietly.
+  One player plays at a time: starting a song in one stops the other.
+- **Channels column** (*Ch.*) in both playlists: 6 or 9 in the TurboSound
+  list; 3 in the AY list, or 6 for an `.ay` song that turns out to use the
+  second AY when its length is measured (kept with the length; lengths
+  measured earlier count as 3).
+- **TurboSound mixer** (*Mixer...* in the TurboSound player, or *Options >
+  TurboSound mixer...*): a master volume, one stereo mode for all the
+  chips, and a group for each AY chip with a column for each channel – its
+  panorama, its letter, a tick box to switch it off, its level meter
+  (green, yellow, red) beside its volume, and the volume in percent. It
+  shows as many chips as the song has, getting narrower or wider on the
+  right; the title names the song, the bottom line the settings in use
+  ("Settings: Song.mix", or "Default"). A stereo mode other than *Custom*
+  puts the channels A, B and C of every chip where the AY mixer puts them;
+  in *Custom* the nine panoramas can be set one by one.
+- The TurboSound songs are heard with the TurboSound mixer's settings only
   (kept in `fuse.cfg` apart from those of the AY mixer): the AY mixer, the
-  AY player's volume and its channel tick boxes no longer act on them, and
-  the TurboSound mixer does not act on the AY player's songs or on games.
+  AY player's volume and its channel tick boxes don't act on them, and the
+  TurboSound mixer doesn't act on the AY player's songs or on games.
 - **`.mix` files of the TurboSound mixer** keep the master volume and every
   channel of the three chips (whether it is heard, its volume and
   panorama); the keys of the first chip are those of the AY mixer, which
@@ -34,52 +61,6 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   the AY mixer gives its A, B and C to every chip. With *Load the mixer
   settings of the songs automatically*, a TurboSound song is played with
   its `.mix` file, found as for the AY player.
-
-### TurboSound (step 2)
-
-- **TurboSound player**: a player window of its own for music on two or
-  three AY chips (*Media > TurboSound player...*, below the AY music
-  player), with its own playlist window, saved list
-  (`fuse-ts-playlist.m3u`) and window places. It shows the file, author,
-  format ("TurboSound – PT3 + PT3 (2 AY, 6 channels)"; a Pro Tracker 3
-  module with TurboSound inside: "TurboSound – PT3 (2 AY, 6 channels)") and
-  misc lines, the song and its position, Previous / Pause / Stop / Next,
-  *List* and *Mixer...*, and the play modes (1 song / whole list, repeat)
-  of its own; no level meters or sound settings (they come with its mixer;
-  for now *Mixer...* opens the AY mixer, whose settings the chips share).
-  The list and the mixer opened from it are minimized and closed with it,
-  and it opens again at start (standing on its last song) with *Resume
-  last session*, like the AY player.
-- **Opening**: `.ts` files, Pro Tracker 3 modules with TurboSound inside
-  and Vortex Tracker text files with two modules open in the TurboSound
-  player (*File > Open*, dragging onto Fuse, command line); `.ay` files
-  always open in the AY player, also those using a second AY. Each list
-  takes only its own kind: a file added one by one to the other list is
-  refused with a message; the files of a folder are left out quietly.
-- **One player plays at a time**: starting a song in one stops the song of
-  the other, which then shows its own song as stopped.
-- **Channels column** (*Ch.*) in both playlists: 6 or 9 in the TurboSound
-  list; 3 in the AY list, or 6 for an `.ay` song that turns out to use the
-  second AY when its length is measured (kept with the length; lengths
-  measured earlier count as 3).
-
-### TurboSound (step 1)
-
-- **TurboSound music** plays on all its chips in the AY player: `.ts` files
-  (two or three modules of any tracker with a `02TS` / `03TS` footer, as
-  made by Vortex Tracker, ZXTune and, with three chips and 9 channels, for
-  the ZX Spectrum Next), Pro Tracker 3 modules with TurboSound in one file
-  (the second AY plays the mirrored patterns, as in ZXTune), Vortex
-  Tracker text files with two modules, and `.ay` files that select the
-  second AY (FEh on port FFFDh). Only the first AY was heard before. The
-  player shows "TurboSound (2 AY)" (or 3) in the *Misc* line. The chips
-  share the stereo mode, volumes and panoramas of the mixer, channel by
-  channel, and the level meters show the loudest chip of each channel; a
-  TurboSound player and mixer of their own come next. With two chips each
-  is at 2/3, with three at 1/2 of the level, so the sum stays in range.
-- The texts of the modules are shown once if they agree, else joined with
-  "/". The length and loop are those of the first module, as in ZXTune.
-- `*.ts` is in the AY music file filters.
 
 ### AY player
 

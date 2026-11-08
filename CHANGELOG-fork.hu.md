@@ -6,30 +6,58 @@ Ennek a változatnak a módosításai a Fuse 1.10.1-hez képest (a
 v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
-## Kiadatlan
+## v1.10.1-hu.3 – 2026-11-09
 
-### TurboSound (3. lépés)
+### TurboSound
 
-- **TurboSound keverő**: a TurboSound lejátszó *Keverő...* gombja mostantól
-  saját keverőt nyit meg (a *Beállítások > TurboSound keverő...*
-  menüpont is): fő hangerő, egy közös sztereó mód az összes chipre, és
-  minden AY chiphez egy csoport, csatornánként egy oszloppal – a
-  panoráma, a csatorna betűje, kikapcsoló jelölőnégyzet, a szintjelző
-  (zöld, sárga, piros) a hangerő mellett, alatta a hangerő százalékban.
-  Annyi chipet mutat, ahányat a dal használ (kettőt vagy hármat), és
-  ehhez jobbra keskenyebb vagy szélesebb lesz; a címsorban a dal, alul a
-  használt beállítások látszanak („Beállítások: Dal.mix”, vagy
-  „Alapértelmezett”). Az *Egyéni*-n kívüli sztereó módok minden chip A, B
-  és C csatornáját oda teszik, ahová az AY keverő; *Egyéni* módban a
-  kilenc panoráma a helyén marad, és egyenként állítható. A *Betöltés...*,
-  *Mentés...* és *Alaphelyzet* gomb a `.mix` fájlokhoz és az
-  alapértékekhez való. A TurboSound lejátszóval együtt kicsinyül és
-  záródik, megjegyzi a helyét, és a *Folytatás ott, ahol abbahagytam*
-  beállítással újra megnyílik.
-- A TurboSound lejátszó dalai csak ezekkel a beállításokkal szólnak (a
+- **TurboSound zenék** két vagy három AY chipen: a `.ts` fájlok (bármilyen
+  tracker két vagy három modulja `02TS` / `03TS` lezárással, ahogy a
+  Vortex Tracker, a ZXTune és – három chippel, 9 csatornán – a ZX
+  Spectrum Next zenéi), a TurboSoundot tartalmazó Pro Tracker 3 modulok (a
+  második AY a tükrözött mintákat játssza, mint a ZXTune-ban), a két
+  modult tartalmazó Vortex Tracker szövegfájlok, és a második AY-t
+  kiválasztó (FFFDh portra FEh-t író) `.ay` fájlok. Két chipnél mindegyik
+  a szint 2/3-án, háromnál a felén szól, így az összeg nem torzul. A
+  modulok szövegei egyszer látszanak, ha egyeznek, különben „/”-lel
+  összefűzve; a hossz és az ismétlés az első modulé, mint a ZXTune-ban.
+- **TurboSound lejátszó** (*Média > TurboSound lejátszó...*, az AY
+  zenelejátszó alatt), saját lejátszási lista ablakkal, mentett listával
+  (`fuse-ts-playlist.m3u`) és ablakhelyekkel. Mutatja a fájlt, a szerzőt,
+  a formátumot („TurboSound – PT3 + PT3 (2 AY, 6 csatorna)”; a
+  TurboSoundot tartalmazó Pro Tracker 3 modulnál „TurboSound – PT3 (2 AY,
+  6 csatorna)”) és az egyéb adatokat, a dalt és a pozícióját; Előző /
+  Szünet / Leállítás / Következő, *Lista* és *Keverő...*, és saját
+  lejátszási mód (1 dal / teljes lista, ismétlés). A lista és a keverő
+  vele együtt kicsinyül és záródik, és a *Folytatás ott, ahol
+  abbahagytam* beállítással induláskor újra megnyílnak (az utolsó dalon
+  állva), mint az AY lejátszónál.
+- **Megnyitás**: a `.ts` fájlok, a TurboSoundot tartalmazó Pro Tracker 3
+  modulok és a két modult tartalmazó Vortex Tracker szövegfájlok a
+  TurboSound lejátszóban nyílnak meg (*Fájl > Megnyitás*, Fuse-ra húzás,
+  parancssor); az `.ay` fájlok mindig az AY lejátszóban, a második AY-t
+  használók is. Mindkét lista csak a saját fajtáját fogadja el: a másik
+  listába egyenként hozzáadott fájlt üzenettel visszautasítja, egy mappa
+  ilyen fájljait csendben kihagyja. Egyszerre egy lejátszó szól: az
+  egyikben indított dal leállítja a másikat.
+- **Csatornák oszlop** (*Csat.*) mindkét listában: a TurboSound listában 6
+  vagy 9; az AY listában 3, vagy 6 annál az `.ay` dalnál, amelyről a hossz
+  mérésekor kiderül, hogy a második AY-t is használja (a hosszal együtt
+  megmarad; a korábban mért dalok 3 csatornásnak számítanak).
+- **TurboSound keverő** (a TurboSound lejátszó *Keverő...* gombja, vagy
+  *Beállítások > TurboSound keverő...*): fő hangerő, egy közös sztereó mód
+  az összes chipre, és minden AY chiphez egy csoport, csatornánként egy
+  oszloppal – a panoráma, a csatorna betűje, kikapcsoló jelölőnégyzet, a
+  szintjelző (zöld, sárga, piros) a hangerő mellett, alatta a hangerő
+  százalékban. Annyi chipet mutat, ahányat a dal használ, és ehhez jobbra
+  keskenyebb vagy szélesebb lesz; a címsorban a dal, alul a használt
+  beállítások látszanak („Beállítások: Dal.mix”, vagy „Alapértelmezett”).
+  Az *Egyéni*-n kívüli sztereó módok minden chip A, B és C csatornáját oda
+  teszik, ahová az AY keverő; *Egyéni* módban a kilenc panoráma egyenként
+  állítható.
+- A TurboSound dalok csak a TurboSound keverő beállításaival szólnak (a
   `fuse.cfg`-ben az AY keverőétől külön): az AY keverő, az AY lejátszó
-  hangereje és csatornakapcsolói már nem hatnak rájuk, a TurboSound
-  keverő pedig nem hat az AY lejátszó dalaira és a játékokra.
+  hangereje és csatornakapcsolói nem hatnak rájuk, a TurboSound keverő
+  pedig nem hat az AY lejátszó dalaira és a játékokra.
 - **A TurboSound keverő `.mix` fájljai** a fő hangerőt és a három chip
   minden csatornáját tárolják (szól-e, hangerő, panoráma); az első chip
   kulcsai az AY keverőéi, így az AY keverő ezeket (és a sztereó módot)
@@ -38,56 +66,6 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   betöltése a dalokhoz* beállítással a TurboSound dal a saját `.mix`
   fájljával szól, amelyet a program az AY lejátszóéval azonos módon keres
   meg.
-
-### TurboSound (2. lépés)
-
-- **TurboSound lejátszó**: saját lejátszóablak a két vagy három AY chipes
-  zenékhez (*Média > TurboSound lejátszó...*, az AY zenelejátszó alatt),
-  saját lejátszási lista ablakkal, mentett listával
-  (`fuse-ts-playlist.m3u`) és ablakhelyekkel. Mutatja a fájlt, a szerzőt, a
-  formátumot („TurboSound – PT3 + PT3 (2 AY, 6 csatorna)”; a TurboSoundot
-  tartalmazó Pro Tracker 3 modulnál „TurboSound – PT3 (2 AY, 6 csatorna)”)
-  és az egyéb adatokat, a dalt és a pozícióját; Előző / Szünet / Leállítás
-  / Következő, *Lista* és *Keverő...*, és saját lejátszási mód (1 dal /
-  teljes lista, ismétlés). Szintjelzők és hangbeállítások nincsenek benne
-  (ezek a saját keverőjébe kerülnek; egyelőre a *Keverő...* az AY keverőt
-  nyitja meg, amelynek beállításain a chipek osztoznak). A lista és a
-  belőle nyitott keverő vele együtt kicsinyül és záródik, és a *Folytatás ott,
-  ahol abbahagytam* beállítással induláskor újra megnyílik (az utolsó
-  dalán állva), mint az AY lejátszó.
-- **Megnyitás**: a `.ts` fájlok, a TurboSoundot tartalmazó Pro Tracker 3
-  modulok és a két modult tartalmazó Vortex Tracker szövegfájlok a
-  TurboSound lejátszóban nyílnak meg (*Fájl > Megnyitás*, Fuse-ra húzás,
-  parancssor); az `.ay` fájlok mindig az AY lejátszóban, a második AY-t
-  használók is. Mindkét lista csak a saját fajtáját fogadja el: a másik
-  listába egyenként hozzáadott fájlt üzenettel visszautasítja, egy mappa
-  ilyen fájljait csendben kihagyja.
-- **Egyszerre egy lejátszó szól**: az egyikben indított dal leállítja a
-  másik dalát, és az a saját dalát leállítottként mutatja.
-- **Csatornák oszlop** (*Csat.*) mindkét listában: a TurboSound listában 6
-  vagy 9; az AY listában 3, vagy 6 annál az `.ay` dalnál, amelyről a hossz
-  mérésekor kiderül, hogy a második AY-t is használja (a hosszal együtt
-  megmarad; a korábban mért hosszú dalok 3 csatornásnak számítanak).
-
-### TurboSound (1. lépés)
-
-- Az AY lejátszó a **TurboSound zenéket** minden chipjükön lejátssza: a
-  `.ts` fájlokat (bármilyen tracker két vagy három modulja `02TS` / `03TS`
-  lezárással, ahogy a Vortex Tracker, a ZXTune és – három chippel, 9
-  csatornán – a ZX Spectrum Next zenéi), az egy fájlban TurboSoundot
-  tartalmazó Pro Tracker 3 modulokat (a második AY a tükrözött mintákat
-  játssza, mint a ZXTune-ban), a két modult tartalmazó Vortex Tracker
-  szövegfájlokat, és a második AY-t kiválasztó (FFFDh portra FEh-t író)
-  `.ay` fájlokat. Eddig csak az első AY szólt. Az *Egyéb* sorban
-  „TurboSound (2 AY)” (vagy 3) látszik. A chipek csatornánként közösen
-  használják a keverő sztereó módját, hangerőit és panorámáit, a
-  szintjelzők pedig csatornánként a leghangosabb chipet mutatják; a saját
-  TurboSound lejátszó és keverő a következő lépés. Két chipnél
-  mindegyik a szint 2/3-án, háromnál a felén szól, így az összeg nem
-  torzul.
-- A modulok szövegei egyszer látszanak, ha egyeznek, különben „/”-lel
-  összefűzve. A hossz és az ismétlés az első modulé, mint a ZXTune-ban.
-- A `*.ts` bekerült az AY zenefájlok szűrőibe.
 
 ### AY lejátszó
 

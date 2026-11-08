@@ -651,3 +651,14 @@ extra	AY mixer	C	K
 extra	AY mixer	AY mixer settings (*.mix)	AY keverőbeállítások (*.mix)
 extra	AY mixer	Save AY mixer settings	AY keverőbeállítások mentése
 extra	AY mixer	Could not write '%s'	Nem sikerült írni: '%s'
+1 Menü	Media	Tu&rboSound player...	&TurboSound lejátszó...
+extra	TurboSound player	Fuse - TurboSound Player	Fuse - TurboSound lejátszó
+extra	TurboSound player	Format:	Formátum:
+extra	TurboSound player	TurboSound %s %s (%d AY, %d channels)	TurboSound %s %s (%d AY, %d csatorna)
+extra	TurboSound playlist	Fuse - TurboSound Playlist	Fuse - TurboSound lejátszási lista
+extra	TurboSound playlist	Fuse - Add TurboSound Files	Fuse - TurboSound fájlok hozzáadása
+extra	TurboSound playlist	TurboSound Music Files (*.ts;*.pt3;*.vt2;*.txt)	TurboSound zenefájlok (*.ts;*.pt3;*.vt2;*.txt)
+extra	TurboSound playlist	The TurboSound files of this folder are added:	Ennek a mappának a TurboSound fájljai kerülnek a listára:
+extra	TurboSound playlist	'%s' is not a TurboSound file: add it in the AY player	A(z) '%s' nem TurboSound fájl: az AY lejátszóban add hozzá
+extra	AY playlist	Ch.	Csat.
+extra	AY playlist	'%s' is a TurboSound file: add it in the TurboSound player	A(z) '%s' TurboSound fájl: a TurboSound lejátszóban add hozzá

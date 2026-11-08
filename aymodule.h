@@ -82,6 +82,10 @@ aymodule *aymodule_load( const unsigned char *data, size_t length );
 void aymodule_free( aymodule *module );
 
 const aymodule_format *aymodule_format_of( const aymodule *module );
+/* The format for the user: its name ("PT3"); TurboSound: the formats of
+   its modules ("PT3 + PT3") */
+void aymodule_format_text( const aymodule *module, char *text,
+                           size_t length );
 
 void aymodule_reset( aymodule *module );
 /* The chips the module plays (1-3) */

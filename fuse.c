@@ -65,7 +65,7 @@
 #include "ayplaylist.h"
 
 #ifdef UI_WIN32
-void win32_ayplayer_show( void );
+void win32_ayplayer_show_for( int turbosound );
 #endif
 #include "infrastructure/startup_manager.h"
 #include "keyboard.h"
@@ -1151,9 +1151,10 @@ do_start_files( start_files_t *start_files )
   }
 
   if( start_files->ay ) {
-    if( ayplaylist_open_file( start_files->ay ) ) return 1;
+    ayplaylist *list = ayplaylist_for_file( start_files->ay );
+    if( ayplaylist_open_file( list, start_files->ay ) ) return 1;
 #ifdef UI_WIN32
-    win32_ayplayer_show();
+    win32_ayplayer_show_for( ayplaylist_is_turbosound( list ) );
 #endif
   }
 

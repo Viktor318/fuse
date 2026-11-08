@@ -1342,20 +1342,27 @@ ui_widgets_reset( void )
   return 0;
 }
 
-/* The AY player, the playlist, the AY mixer and the keyboard picture: open
-   or not as Fuse exits, opened again at the next start if the last session
-   is resumed. Their places are kept all the time by the windows */
+/* The AY and TurboSound players, their playlists, the AY mixer and the
+   keyboard picture: open or not as Fuse exits, opened again at the next
+   start if the last session is resumed. Their places are kept all the time
+   by the windows */
 static void
 win32ui_remember_open_windows( void )
 {
   winstate_set( "ayplayer", "open", fuse_hAYWnd != NULL );
   winstate_set( "playlist", "open",
-                fuse_hAYWnd != NULL && win32_ayplaylist_is_open() );
+                fuse_hAYWnd != NULL && win32_ayplaylist_is_open( 0 ) );
+  winstate_set( "tsplayer", "open", fuse_hTSWnd != NULL );
+  winstate_set( "tsplaylist", "open",
+                fuse_hTSWnd != NULL && win32_ayplaylist_is_open( 1 ) );
   winstate_set( "aymixer", "open", win32_aymixer_is_open() );
   winstate_set( "keyboard", "open", win32ui_picture_is_open() );
-  winstate_set( "playlist", "current", ayplaylist_current() );
-  /* The player is closed with Fuse too */
-  win32_ayplayer_remember_companions();
+  winstate_set( "playlist", "current", ayplaylist_current( ayplaylist_ay() ) );
+  winstate_set( "tsplaylist", "current",
+                ayplaylist_current( ayplaylist_ts() ) );
+  /* The players are closed with Fuse too */
+  win32_ayplayer_remember_companions( 0 );
+  win32_ayplayer_remember_companions( 1 );
 }
 
 void
@@ -1366,12 +1373,21 @@ win32ui_reopen_windows( void )
   if( winstate_get( "ayplayer", "open", &open ) && open ) {
     if( !winstate_get( "playlist", "open", &list ) ) list = 0;
     if( !winstate_get( "playlist", "current", &song ) ) song = -1;
-    win32_ayplayer_reopen( list, song );
+    win32_ayplayer_reopen( 0, list, song );
+  }
+  if( winstate_get( "tsplayer", "open", &open ) && open ) {
+    if( !winstate_get( "tsplaylist", "open", &list ) ) list = 0;
+    if( !winstate_get( "tsplaylist", "current", &song ) ) song = -1;
+    win32_ayplayer_reopen( 1, list, song );
   }
 
-  /* After the player, so that it goes with the player */
-  if( winstate_get( "aymixer", "open", &open ) && open )
-    win32_aymixer_show();
+  /* After the players, so that it goes with the one it was open with */
+  if( winstate_get( "aymixer", "open", &open ) && open ) {
+    if( fuse_hTSWnd && win32_ayplayer_remembered_mixer( 1 ) )
+      win32_aymixer_show_for( fuse_hTSWnd );
+    else
+      win32_aymixer_show_for( fuse_hAYWnd ? fuse_hAYWnd : fuse_hWnd );
+  }
 
   if( winstate_get( "keyboard", "open", &open ) && open )
     menu_help_keyboard( 0 );
@@ -2066,7 +2082,7 @@ win32ui_process_messages( int process_queue_once )
 {
   MSG msg;
   int i, processMsg;
-  HWND hModelessDlgs[6];
+  HWND hModelessDlgs[8];
 
   while( 1 ) {
     while( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) ) {
@@ -2077,6 +2093,8 @@ win32ui_process_messages( int process_queue_once )
       hModelessDlgs[3] = fuse_hAYWnd;
       hModelessDlgs[4] = fuse_hAYListWnd;
       hModelessDlgs[5] = fuse_hAYMixWnd;
+      hModelessDlgs[6] = fuse_hTSWnd;
+      hModelessDlgs[7] = fuse_hTSListWnd;
 
       /* FIXME: rethink this loop, IsDialogMessage in particular */
       processMsg = TRUE;

@@ -108,6 +108,16 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   lejátszót, hogy nem szól semmi; a *Fájl > Megnyitás* (vagy a fájl Fuse-ra
   húzása) a fájl dalait a lejátszási lista végére teszi, és az elsőt
   elindítja.
+- **TurboSound lejátszó** (*Média > TurboSound lejátszó...*): a két vagy
+  három AY chipes zenék (`.ts` fájlok, TurboSoundot tartalmazó Pro Tracker 3
+  modulok, két modult tartalmazó Vortex Tracker szövegfájlok) saját
+  lejátszóablakban nyílnak meg, saját lejátszási listával (és `.m3u`-val):
+  fájl, szerző, formátum (pl. „TurboSound – PT3 + PT3 (2 AY, 6 csatorna)”),
+  pozíció, ugyanazok a gombok és lejátszási módok, szintjelzők nélkül.
+  Egyszerre egy lejátszó szól; az `.ay` fájlok mindig az AY lejátszóban
+  maradnak. Mindkét lista mutatja a dalok csatornaszámát (*Csat.*: 6 vagy
+  9; az AY listában 3, vagy 6, ha egy `.ay` dalról a méréskor kiderül, hogy
+  a második AY-t is használja).
 - **Az emulált gépet nem érinti**: a futó program megy tovább, és a hangja a
   zenével együtt hallatszik.
 - **Lejátszási lista ablak**: akárhány fájl dalai; Hozzáadás (egyszerre több
@@ -180,6 +190,7 @@ címsorába (vagy a Win+R ablakba), hogy `%APPDATA%\Fuse`. Benne:
 | `fuse.cfg` | a beállítások (a *Beállítások > Mentés* paranccsal, vagy kilépéskor, ha a *Beállítások > Általános > Beállítások automatikus mentése* be van kapcsolva) |
 | `fuse-windows.ini` | az ablakok helye és mérete |
 | `fuse-ay-playlist.m3u` | az AY lejátszási lista |
+| `fuse-ts-playlist.m3u` | a TurboSound lejátszási lista |
 | `fuse_ay_lengths.txt` | az AY dalok mért hossza |
 | `fuse-last-session.*` | az utolsó munkamenet (a *Folytatás ott, ahol abbahagytam* beállítással) |
 

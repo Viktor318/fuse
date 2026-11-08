@@ -522,6 +522,7 @@ Media/IDE/ZXMMC/_Eject, Item,, menu_media_ide_eject,, 9
 
 Media/separator, Separator
 Media/_AY music player..., Item,, menu_media_ayplayer
+Media/Tu_rboSound player..., Item,, menu_media_tsplayer
 
 _Help, Branch
 Help/_Keyboard..., Item

@@ -171,7 +171,7 @@ find_digital( const unsigned char *level, const unsigned char *block,
 
 long
 aymeasure_song( const unsigned char *data, size_t length, int song,
-                long *loop, volatile int *cancel )
+                long *loop, int *chips, volatile int *cancel )
 {
   aysource *source = aysource_new( data, length, song );
   unsigned int *hash = malloc( MAX_FRAMES * sizeof( *hash ) );
@@ -188,6 +188,7 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
   int i, digital = 0;
 
   *loop = 0;
+  if( chips ) *chips = 1;
   memset( recent, 0, sizeof( recent ) );
 
   /* A register dump tells its length (and loop) */
@@ -202,6 +203,7 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
 
   if( found || !source || !hash || !silent || !level || !block ||
       !writes ) {
+    if( source && chips ) *chips = aysource_chips( source );
     aysource_free( source );
     free( hash );
     free( silent );
@@ -308,6 +310,9 @@ aymeasure_song( const unsigned char *data, size_t length, int song,
     }
   }
 
+  /* The chips the song used (an .ay song: the second one once selected) */
+  if( chips ) *chips = aysource_chips( source );
+
   aysource_free( source );
   free( hash );
   free( silent );
@@ -329,16 +334,18 @@ static size_t job_length;
 static int job_song;
 static long job_id;
 
-static int done = 0;
+static int done = 0, done_chips;
 static long done_id, done_frames, done_loop;
 
 static void *
 run( void *unused )
 {
   long loop, frames;
+  int chips;
 
   (void)unused;
-  frames = aymeasure_song( job_data, job_length, job_song, &loop, &cancel );
+  frames = aymeasure_song( job_data, job_length, job_song, &loop, &chips,
+                           &cancel );
 
   pthread_mutex_lock( &lock );
   if( !cancel ) {
@@ -346,6 +353,7 @@ run( void *unused )
     done_id = job_id;
     done_frames = frames;
     done_loop = loop;
+    done_chips = chips;
   }
   busy = 0;
   pthread_mutex_unlock( &lock );
@@ -399,7 +407,7 @@ aymeasure_start( const unsigned char *data, size_t length, int song,
 }
 
 int
-aymeasure_result( long id, long *frames, long *loop )
+aymeasure_result( long id, long *frames, long *loop, int *chips )
 {
   int found = 0;
 
@@ -407,6 +415,7 @@ aymeasure_result( long id, long *frames, long *loop )
   if( done && done_id == id ) {
     *frames = done_frames;
     *loop = done_loop;
+    *chips = done_chips;
     done = 0;
     found = 1;
   }
@@ -426,14 +435,15 @@ aymeasure_running( void )
 #else			/* #ifdef HAVE_PTHREAD */
 
 /* Without threads: measured at once (it takes less than a second) */
-static int done = 0;
+static int done = 0, done_chips;
 static long done_id, done_frames, done_loop;
 
 void
 aymeasure_start( const unsigned char *data, size_t length, int song,
                  long id )
 {
-  done_frames = aymeasure_song( data, length, song, &done_loop, NULL );
+  done_frames = aymeasure_song( data, length, song, &done_loop, &done_chips,
+                                NULL );
   done_id = id;
   done = 1;
 }
@@ -442,11 +452,12 @@ void aymeasure_stop( void ) { done = 0; }
 int aymeasure_running( void ) { return 0; }
 
 int
-aymeasure_result( long id, long *frames, long *loop )
+aymeasure_result( long id, long *frames, long *loop, int *chips )
 {
   if( !done || done_id != id ) return 0;
   *frames = done_frames;
   *loop = done_loop;
+  *chips = done_chips;
   done = 0;
   return 1;
 }

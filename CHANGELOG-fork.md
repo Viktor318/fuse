@@ -7,6 +7,34 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
 ## Unreleased
 
+### TurboSound (step 2)
+
+- **TurboSound player**: a player window of its own for music on two or
+  three AY chips (*Media > TurboSound player...*, below the AY music
+  player), with its own playlist window, saved list
+  (`fuse-ts-playlist.m3u`) and window places. It shows the file, author,
+  format ("TurboSound – PT3 + PT3 (2 AY, 6 channels)"; a Pro Tracker 3
+  module with TurboSound inside: "TurboSound – PT3 (2 AY, 6 channels)") and
+  misc lines, the song and its position, Previous / Pause / Stop / Next,
+  *List* and *Mixer...*, and the play modes (1 song / whole list, repeat)
+  of its own; no level meters or sound settings (they come with its mixer;
+  for now *Mixer...* opens the AY mixer, whose settings the chips share).
+  The list and the mixer opened from it are minimized and closed with it,
+  and it opens again at start (standing on its last song) with *Resume
+  last session*, like the AY player.
+- **Opening**: `.ts` files, Pro Tracker 3 modules with TurboSound inside
+  and Vortex Tracker text files with two modules open in the TurboSound
+  player (*File > Open*, dragging onto Fuse, command line); `.ay` files
+  always open in the AY player, also those using a second AY. Each list
+  takes only its own kind: a file added one by one to the other list is
+  refused with a message; the files of a folder are left out quietly.
+- **One player plays at a time**: starting a song in one stops the song of
+  the other, which then shows its own song as stopped.
+- **Channels column** (*Ch.*) in both playlists: 6 or 9 in the TurboSound
+  list; 3 in the AY list, or 6 for an `.ay` song that turns out to use the
+  second AY when its length is measured (kept with the length; lengths
+  measured earlier count as 3).
+
 ### TurboSound (step 1)
 
 - **TurboSound music** plays on all its chips in the AY player: `.ts` files

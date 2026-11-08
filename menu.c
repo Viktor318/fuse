@@ -35,6 +35,7 @@
 
 #ifdef UI_WIN32
 void win32_ayplayer_show( void );
+void win32_tsplayer_show( void );
 void win32_aymixer_show( void );
 #endif
 #include "movie.h"
@@ -378,6 +379,15 @@ MENU_CALLBACK( menu_media_ayplayer )
   ui_widget_finish();
 #ifdef UI_WIN32
   win32_ayplayer_show();
+#endif
+}
+
+/* The TurboSound player with its playlist, without playing anything */
+MENU_CALLBACK( menu_media_tsplayer )
+{
+  ui_widget_finish();
+#ifdef UI_WIN32
+  win32_tsplayer_show();
 #endif
 }
 

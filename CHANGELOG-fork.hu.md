@@ -8,6 +8,36 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 
 ## Kiadatlan
 
+### TurboSound (2. lépés)
+
+- **TurboSound lejátszó**: saját lejátszóablak a két vagy három AY chipes
+  zenékhez (*Média > TurboSound lejátszó...*, az AY zenelejátszó alatt),
+  saját lejátszási lista ablakkal, mentett listával
+  (`fuse-ts-playlist.m3u`) és ablakhelyekkel. Mutatja a fájlt, a szerzőt, a
+  formátumot („TurboSound – PT3 + PT3 (2 AY, 6 csatorna)”; a TurboSoundot
+  tartalmazó Pro Tracker 3 modulnál „TurboSound – PT3 (2 AY, 6 csatorna)”)
+  és az egyéb adatokat, a dalt és a pozícióját; Előző / Szünet / Leállítás
+  / Következő, *Lista* és *Keverő...*, és saját lejátszási mód (1 dal /
+  teljes lista, ismétlés). Szintjelzők és hangbeállítások nincsenek benne
+  (ezek a saját keverőjébe kerülnek; egyelőre a *Keverő...* az AY keverőt
+  nyitja meg, amelynek beállításain a chipek osztoznak). A lista és a
+  belőle nyitott keverő vele együtt kicsinyül és záródik, és a *Folytatás ott,
+  ahol abbahagytam* beállítással induláskor újra megnyílik (az utolsó
+  dalán állva), mint az AY lejátszó.
+- **Megnyitás**: a `.ts` fájlok, a TurboSoundot tartalmazó Pro Tracker 3
+  modulok és a két modult tartalmazó Vortex Tracker szövegfájlok a
+  TurboSound lejátszóban nyílnak meg (*Fájl > Megnyitás*, Fuse-ra húzás,
+  parancssor); az `.ay` fájlok mindig az AY lejátszóban, a második AY-t
+  használók is. Mindkét lista csak a saját fajtáját fogadja el: a másik
+  listába egyenként hozzáadott fájlt üzenettel visszautasítja, egy mappa
+  ilyen fájljait csendben kihagyja.
+- **Egyszerre egy lejátszó szól**: az egyikben indított dal leállítja a
+  másik dalát, és az a saját dalát leállítottként mutatja.
+- **Csatornák oszlop** (*Csat.*) mindkét listában: a TurboSound listában 6
+  vagy 9; az AY listában 3, vagy 6 annál az `.ay` dalnál, amelyről a hossz
+  mérésekor kiderül, hogy a második AY-t is használja (a hosszal együtt
+  megmarad; a korábban mért hosszú dalok 3 csatornásnak számítanak).
+
 ### TurboSound (1. lépés)
 
 - Az AY lejátszó a **TurboSound zenéket** minden chipjükön lejátssza: a

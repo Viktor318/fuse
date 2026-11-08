@@ -33,12 +33,14 @@ void aymeasure_start( const unsigned char *data, size_t length, int song,
 void aymeasure_stop( void );
 int aymeasure_running( void );
 
-/* Measuring `id' is over: 1, the length in frames (0: no repetition found)
-   and where the music goes on from after the end (-1: it ends) */
-int aymeasure_result( long id, long *frames, long *loop );
+/* Measuring `id' is over: 1, the length in frames (0: no repetition found),
+   where the music goes on from after the end (-1: it ends) and the AY chips
+   the song used (1-3; TurboSound) */
+int aymeasure_result( long id, long *frames, long *loop, int *chips );
 
-/* Measure now, without a thread. Returns the length (0: none found) */
+/* Measure now, without a thread. Returns the length (0: none found);
+   *chips (if not NULL): the chips the song used */
 long aymeasure_song( const unsigned char *data, size_t length, int song,
-                     long *loop, volatile int *cancel );
+                     long *loop, int *chips, volatile int *cancel );
 
 #endif			/* #ifndef FUSE_AYMEASURE_H */

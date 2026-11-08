@@ -54,8 +54,16 @@
 #define IDC_AY_MODE_SINGLE  4235
 #define IDC_AY_MODE_LIST    4236
 #define IDC_AY_LIST         4237
+/* The TurboSound player: the format of the music */
+#define IDC_AY_FORMAT_LABEL 4238
+#define IDC_AY_FORMAT       4239
 #define IDC_AY_MIXER 4242
 #define IDC_AY_MIX_AUTO 4243
+
+/* The TurboSound player and its playlist: the controls of the AY player
+   and its playlist (without the level meters and the sound settings) */
+#define IDD_TSPLAYER        4270
+#define IDD_TSPLAYLIST      4271
 
 /* The AY mixer window */
 #define IDD_AYMIXER 4300

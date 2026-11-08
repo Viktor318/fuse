@@ -100,6 +100,15 @@ AY sound generator of its own, apart from the emulated machine.
 - **Opening**: *Media > AY music player...* opens the player without playing
   anything; *File > Open* (or dragging a file onto Fuse) adds the songs of an
   `.ay` file to the end of the playlist and plays the first one.
+- **TurboSound player** (*Media > TurboSound player...*): music on two or
+  three AY chips (`.ts` files, Pro Tracker 3 modules with TurboSound inside,
+  Vortex Tracker text files with two modules) opens in a player window of
+  its own, with its own playlist (and `.m3u`): file, author, format (e.g.
+  "TurboSound – PT3 + PT3 (2 AY, 6 channels)"), position, the same buttons
+  and play modes, without level meters. One player plays at a time; `.ay`
+  files always stay in the AY player. Both playlists show the channels of
+  each song (*Ch.*: 6 or 9; in the AY list 3, or 6 for an `.ay` song that
+  turns out to use a second AY when it is measured).
 - **The emulated machine is left alone**: the program that was running goes
   on, and its sound is heard together with the music.
 - **Playlist window**: songs of any number of files; Add (several files at
@@ -165,6 +174,7 @@ Everything is kept in the **Fuse folder of your Roaming folder**: type
 | `fuse.cfg` | the settings (saved with *Options > Save* or at exit when *Options > General > Auto-save settings* is on) |
 | `fuse-windows.ini` | the places and sizes of the windows |
 | `fuse-ay-playlist.m3u` | the AY playlist |
+| `fuse-ts-playlist.m3u` | the TurboSound playlist |
 | `fuse_ay_lengths.txt` | the measured lengths of AY songs |
 | `fuse-last-session.*` | the last session (with *Resume last session*) |
 

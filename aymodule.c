@@ -607,6 +607,25 @@ aymodule_format_of( const aymodule *module )
 }
 
 void
+aymodule_format_text( const aymodule *module, char *text, size_t length )
+{
+  if( module->format == &ts_format ) {
+    const turbosound *ts = module->data;
+    size_t used = 0;
+    int i;
+
+    text[0] = '\0';
+    for( i = 0; i < ts->chips && used < length; i++ ) {
+      snprintf( text + used, length - used, "%s%s", i ? " + " : "",
+                ts->chip[i]->format->name );
+      used += strlen( text + used );
+    }
+    return;
+  }
+  snprintf( text, length, "%s", module->format->name );
+}
+
+void
 aymodule_reset( aymodule *module )
 {
   module->format->reset( module->data );

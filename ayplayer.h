@@ -43,15 +43,28 @@ typedef struct ayplayer_info {
   int songs;
   libspectrum_dword checksum;
   char author[ 256 ];
+  char misc[ 256 ];		/* as ayplayer_misc() */
+  char comment[ 256 ];		/* as ayplayer_comment() */
+  char format[ 64 ];		/* modules: as ayplayer_format(); "" */
+  int chips;			/* modules: the AY chips (TurboSound); .ay: 1 */
   ayplayer_song_title *names;
 } ayplayer_info;
 int ayplayer_file_info( const char *filename, ayplayer_info *info );
 void ayplayer_file_info_free( ayplayer_info *info );
 
+/* The AY chips a file plays, without messages: a module (TurboSound: 2 or
+   3) tells it, an .ay file counts as 1 (its songs may select a second one
+   as they play); 0 if it cannot be read */
+int ayplayer_file_chips( const char *filename );
+
 /* The length measured earlier of a song (by file checksum): 1 if known;
    frames 0: no repetition found (default length) */
 int ayplayer_known_length( libspectrum_dword checksum, int song,
                            long *frames );
+
+/* The chips a song used, as measured with its length (1-3); 0 if not
+   measured, or measured by a version that did not count them (one chip) */
+int ayplayer_known_chips( libspectrum_dword checksum, int song );
 
 /* Stop and forget the file */
 void ayplayer_close( void );
@@ -110,6 +123,12 @@ void ayplayer_set_repeat_song( int repeat );
 const char *ayplayer_filename( void );
 const char *ayplayer_author( void );
 const char *ayplayer_misc( void );
+/* The comment of the file (misc without the TurboSound chips) */
+const char *ayplayer_comment( void );
+/* The format of the loaded file: "AY", "PT3", "PT3 + PT3"... */
+const char *ayplayer_format( void );
+/* The chips the loaded module plays (TurboSound); .ay files: 1 */
+int ayplayer_chips( void );
 /* The stereo mode stored in the file (VTX), as a stereo setting value; ""
    if none */
 const char *ayplayer_file_stereo( void );

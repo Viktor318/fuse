@@ -59,6 +59,9 @@ typedef struct module_info {
   long frames, loop;		/* exact length (0: to be measured); loop
 				   -1: the music ends */
   char title[ 256 ], author[ 256 ], misc[ 256 ];
+  char comment[ 256 ];		/* misc without the chips */
+  char format[ 64 ];		/* "PT3", "PT3 + PT3"... */
+  int chips;			/* TurboSound: 2 or 3 */
   char stereo[ 8 ];		/* stored in the file ("": none) */
 } module_info;
 static int ay_is_module = 0;
@@ -263,7 +266,9 @@ lengths_path( char *path, size_t size )
 /* Lines: checksum (hex), song (0 based), length in frames (0: no repetition
    found, the default length is used), the frame the music goes on from
    after the end (-1: the music ends), the version of the measuring (none:
-   the first one). The last line of a song counts.
+   the first one), and the AY chips the song used if more than one
+   (TurboSound; none: one chip, as in the lines of earlier versions). The
+   last line of a song counts.
 
    Read once, then kept in memory, with a hash table to find a song at once
    (the playlist looks up all of its songs). New lengths are added to the end
@@ -271,7 +276,7 @@ lengths_path( char *path, size_t size )
    when read, with one line for each song */
 typedef struct length_entry {
   libspectrum_dword sum;
-  int song, version;
+  int song, version, chips;
   long frames, loop;
 } length_entry;
 
@@ -324,7 +329,7 @@ lengths_table_grow( void )
 /* 1 if the song was there already */
 static int
 lengths_remember( libspectrum_dword sum, int song, long frames, long loop,
-                  int version )
+                  int version, int chips )
 {
   size_t slot, i;
   int found;
@@ -348,6 +353,7 @@ lengths_remember( libspectrum_dword sum, int song, long frames, long loop,
   lengths[i].frames = frames;
   lengths[i].loop = loop;
   lengths[i].version = version;
+  lengths[i].chips = chips;
   return found;
 }
 
@@ -365,7 +371,10 @@ lengths_rewrite( const char *path )
   if( !f ) return;
   for( i = 0; i < lengths_count; i++ ) {
     const length_entry *e = &lengths[i];
-    if( e->version > 1 )
+    if( e->chips > 1 )
+      fprintf( f, "%08lx %d %ld %ld %d %d\n", (unsigned long)e->sum,
+               e->song, e->frames, e->loop, e->version, e->chips );
+    else if( e->version > 1 )
       fprintf( f, "%08lx %d %ld %ld %d\n", (unsigned long)e->sum, e->song,
                e->frames, e->loop, e->version );
     else
@@ -385,7 +394,7 @@ lengths_load( void )
 {
   char path[ 1024 ], new_path[ 1040 ], line[ 128 ];
   unsigned long file_sum;
-  int file_song, version, fields, rewrite = 0;
+  int file_song, version, chips, fields, rewrite = 0;
   long file_frames, file_loop;
   FILE *f;
 
@@ -403,16 +412,18 @@ lengths_load( void )
 
   while( fgets( line, sizeof( line ), f ) ) {
     version = 1;
-    fields = sscanf( line, "%lx %d %ld %ld %d", &file_sum, &file_song,
-                     &file_frames, &file_loop, &version );
+    chips = 1;
+    fields = sscanf( line, "%lx %d %ld %ld %d %d", &file_sum, &file_song,
+                     &file_frames, &file_loop, &version, &chips );
     if( fields < 4 ) continue;
+    if( chips < 1 || chips > 3 ) chips = 1;
     /* Given up by an earlier measuring: measured again */
     if( version < AY_LENGTHS_VERSION && file_frames <= 0 ) {
       rewrite = 1;
       continue;
     }
     if( lengths_remember( file_sum, file_song, file_frames, file_loop,
-                          version ) )
+                          version, chips ) )
       rewrite = 1;
   }
   fclose( f );
@@ -448,19 +459,25 @@ lengths_current( libspectrum_dword sum, int song )
 }
 
 static void
-lengths_store( libspectrum_dword sum, int song, long frames, long loop )
+lengths_store( libspectrum_dword sum, int song, long frames, long loop,
+               int chips )
 {
   char path[ 1024 ];
   FILE *f;
 
   if( !lengths_read ) lengths_load();
-  lengths_remember( sum, song, frames, loop, AY_LENGTHS_VERSION );
+  lengths_remember( sum, song, frames, loop, AY_LENGTHS_VERSION, chips );
 
   lengths_path( path, sizeof( path ) );
   f = fopen( path, "a" );
   if( !f ) return;
-  fprintf( f, "%08lx %d %ld %ld %d\n", (unsigned long)sum, song, frames, loop,
-           AY_LENGTHS_VERSION );
+  /* One chip as before, so earlier versions read the line the same way */
+  if( chips > 1 )
+    fprintf( f, "%08lx %d %ld %ld %d %d\n", (unsigned long)sum, song, frames,
+             loop, AY_LENGTHS_VERSION, chips );
+  else
+    fprintf( f, "%08lx %d %ld %ld %d\n", (unsigned long)sum, song, frames,
+             loop, AY_LENGTHS_VERSION );
   fclose( f );
 }
 
@@ -469,6 +486,18 @@ ayplayer_known_length( libspectrum_dword checksum, int song, long *frames )
 {
   long loop;
   return lengths_lookup( checksum, song, frames, &loop );
+}
+
+int
+ayplayer_known_chips( libspectrum_dword checksum, int song )
+{
+  size_t slot;
+
+  if( !lengths_read ) lengths_load();
+
+  slot = lengths_slot( checksum, song );
+  if( !lengths_table[ slot ] ) return 0;
+  return lengths[ lengths_table[ slot ] - 1 ].chips;
 }
 
 /* Check and copy the file; on success it belongs to the caller */
@@ -512,6 +541,10 @@ read_module( const libspectrum_byte *data, size_t length,
     return -1;
   }
   info->frames = aymodule_exact_length( module, &info->loop );
+  info->chips = aymodule_chips( module );
+  aymodule_format_text( module, info->format, sizeof( info->format ) );
+  snprintf( info->comment, sizeof( info->comment ), "%s",
+            aymodule_comment( module ) );
   snprintf( info->title, sizeof( info->title ), "%s",
             aymodule_title( module ) );
   snprintf( info->author, sizeof( info->author ), "%s",
@@ -592,13 +625,51 @@ ayplayer_path( void )
   return ay_data ? ay_path : "";
 }
 
+int
+ayplayer_file_chips( const char *filename )
+{
+  libspectrum_byte *data;
+  size_t length;
+  long size;
+  aymodule *module;
+  int chips = 0;
+  FILE *f;
+
+  /* Quietly: the file is opened (with its messages) afterwards */
+  f = fopen( filename, "rb" );
+  if( !f ) return 0;
+  if( fseek( f, 0, SEEK_END ) || ( size = ftell( f ) ) <= 0 ||
+      fseek( f, 0, SEEK_SET ) ) {
+    fclose( f );
+    return 0;
+  }
+  length = size;
+  data = libspectrum_new( libspectrum_byte, length );
+  if( fread( data, 1, length, f ) != length ) {
+    fclose( f );
+    libspectrum_free( data );
+    return 0;
+  }
+  fclose( f );
+
+  if( is_ay_data( data, length ) ) {
+    chips = 1;
+  } else if( aymodule_identify( data, length ) &&
+             ( module = aymodule_load( data, length ) ) ) {
+    chips = aymodule_chips( module );
+    aymodule_free( module );
+  }
+  libspectrum_free( data );
+  return chips;
+}
+
 /* The songs of a file, without loading it for playing */
 int
 ayplayer_file_info( const char *filename, ayplayer_info *info )
 {
   libspectrum_byte *data, *saved_data = ay_data;
   size_t length, saved_length = ay_length;
-  int saved_songs = ay_songs;
+  int saved_songs = ay_songs, saved_is_module = ay_is_module;
   int i, error = 0;
 
   memset( info, 0, sizeof( *info ) );
@@ -610,6 +681,11 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
     if( read_module( data, length, filename, &module ) == 1 ) {
       info->checksum = checksum( data, length );
       snprintf( info->author, sizeof( info->author ), "%s", module.author );
+      snprintf( info->misc, sizeof( info->misc ), "%s", module.misc );
+      snprintf( info->comment, sizeof( info->comment ), "%s",
+                module.comment );
+      snprintf( info->format, sizeof( info->format ), "%s", module.format );
+      info->chips = module.chips;
       info->songs = 1;
       info->names = libspectrum_new0( ayplayer_song_title, 1 );
       snprintf( info->names[0], sizeof( info->names[0] ), "%s",
@@ -621,9 +697,11 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
     return error;
   }
 
-  /* The reading functions work on the loaded file: lend them this one */
+  /* The reading functions work on the loaded file: lend them this one
+     (the loaded one may be a module) */
   ay_data = data;
   ay_length = length;
+  ay_is_module = 0;
 
   if( song_data( 0 ) < 0 ) {
     ui_error( UI_ERROR_ERROR, "'%s' is not a valid AY music file", filename );
@@ -631,6 +709,10 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
   } else {
     info->checksum = checksum( data, length );
     string_at( 12, info->author, sizeof( info->author ) );
+    string_at( 14, info->misc, sizeof( info->misc ) );
+    snprintf( info->comment, sizeof( info->comment ), "%s", info->misc );
+    /* Its songs may use a second AY: known once measured */
+    info->chips = 1;
     info->songs = byte_at( 16 ) + 1;
     ay_songs = info->songs;
     info->names = libspectrum_new( ayplayer_song_title, info->songs );
@@ -641,6 +723,7 @@ ayplayer_file_info( const char *filename, ayplayer_info *info )
   ay_data = saved_data;
   ay_length = saved_length;
   ay_songs = saved_songs;
+  ay_is_module = saved_is_module;
   libspectrum_free( data );
   return error;
 }
@@ -680,10 +763,10 @@ measure_start( const libspectrum_byte *data, size_t length,
 
 /* A length found: kept, and used by the song if it is playing */
 static void
-measure_finished( long frames, long loop )
+measure_finished( long frames, long loop, int chips )
 {
   measure_busy = 0;
-  lengths_store( measure_checksum, measure_song, frames, loop );
+  lengths_store( measure_checksum, measure_song, frames, loop, chips );
 
   if( ay_current != measure_song || measure_checksum != ay_file_checksum ||
       !ay_data )
@@ -702,9 +785,10 @@ int
 ayplayer_poll( void )
 {
   long frames, loop;
+  int chips;
 
   if( !measure_busy ) return 0;
-  if( !aymeasure_result( measure_id, &frames, &loop ) ) {
+  if( !aymeasure_result( measure_id, &frames, &loop, &chips ) ) {
     /* Given up (could not be started) */
     if( !aymeasure_running() ) {
       measure_busy = 0;
@@ -712,7 +796,7 @@ ayplayer_poll( void )
     }
     return 0;
   }
-  measure_finished( frames, loop );
+  measure_finished( frames, loop, chips );
   return 1;
 }
 
@@ -921,6 +1005,24 @@ ayplayer_set_repeat_song( int repeat )
 const char *ayplayer_filename( void ) { return ay_filename; }
 const char *ayplayer_author( void ) { return ay_author; }
 const char *ayplayer_misc( void ) { return ay_misc; }
+
+const char *
+ayplayer_comment( void )
+{
+  return ay_data && ay_is_module ? ay_module.comment : ay_misc;
+}
+
+const char *
+ayplayer_format( void )
+{
+  return ay_data && ay_is_module ? ay_module.format : "AY";
+}
+
+int
+ayplayer_chips( void )
+{
+  return ay_data && ay_is_module ? ay_module.chips : 1;
+}
 
 const char *
 ayplayer_file_stereo( void )

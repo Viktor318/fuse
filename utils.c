@@ -64,7 +64,7 @@
 #include "ayplaylist.h"
 
 #ifdef UI_WIN32
-void win32_ayplayer_show( void );
+void win32_ayplayer_show_for( int turbosound );
 #endif
 #include "ui/uimedia.h"
 
@@ -120,13 +120,15 @@ utils_open_file( const char *filename, int autoload,
   utils_file file;
   int error;
 
-  /* AY music files: open the AY player */
+  /* AY music files: open the AY player, or the TurboSound player for
+     music of more chips */
   if( ayplayer_is_ay_file( filename ) ) {
+    ayplaylist *list = ayplaylist_for_file( filename );
     if( type_ptr ) *type_ptr = LIBSPECTRUM_ID_UNKNOWN;
     /* Added to the end of the playlist and played */
-    if( ayplaylist_open_file( filename ) ) return 1;
+    if( ayplaylist_open_file( list, filename ) ) return 1;
 #ifdef UI_WIN32
-    win32_ayplayer_show();
+    win32_ayplayer_show_for( ayplaylist_is_turbosound( list ) );
 #endif
     return 0;
   }

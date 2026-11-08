@@ -62,42 +62,54 @@ extern HWND fuse_hDBGWnd;
 /* about window handle */
 extern HWND fuse_hABOWnd;
 
-/* AY player window (ayplayer.c) */
+/* AY player and TurboSound player windows (ayplayer.c) and their
+   playlist windows (ayplaylist.c). The functions taking `turbosound' work
+   on the AY player (0) or the TurboSound player (1) */
 extern HWND fuse_hAYWnd;
 extern HWND fuse_hAYListWnd;
+extern HWND fuse_hTSWnd;
+extern HWND fuse_hTSListWnd;
 /* AY mixer window (aymixer.c) */
 extern HWND fuse_hAYMixWnd;
 void win32_aymixer_show( void );
+void win32_aymixer_show_for( HWND owner );
 void win32_aymixer_close( void );
-void win32_aymixer_toggle( void );
-void win32_aymixer_set_owner( HWND owner );
+void win32_aymixer_toggle( HWND player );
+void win32_aymixer_adopt( HWND player );
+HWND win32_aymixer_owner( void );
 int win32_aymixer_is_open( void );
 void win32_aymixer_update( void );
 /* The AY mixer settings changed: every window shows them */
 void win32_aymix_changed( void );
 
-/* The AY player window and its playlist window */
+/* Both player windows and their playlist windows */
 void win32_ayplayer_update( void );
 /* The AY player changed an AY sound setting: show it in Options > Sound
    if that is open */
 void win32_options_sound_sync( void );
-void win32_ayplayer_play_entry( int index );
-void win32_ayplayer_measure_all( void );
-void win32_ayplayer_remeasure( const int *indexes, int count );
-int win32_ayplayer_busy( void );
-void win32_ayplayer_measure_stop( void );
-int win32_ayplayer_measure_stopping( void );
-void win32_ayplaylist_show( void );
-void win32_ayplaylist_toggle( void );
-int win32_ayplaylist_is_open( void );
-void win32_ayplaylist_choose( int index );
-void win32_ayplaylist_close( void );
-void win32_ayplaylist_update( void );
-void win32_ayplaylist_update_status( void );
-int win32_ayplaylist_selected( void );
+void win32_ayplayer_play_entry( int turbosound, int index );
+HWND win32_ayplayer_window( int turbosound );
+void win32_ayplayer_measure_all( int turbosound );
+void win32_ayplayer_remeasure( int turbosound, const int *indexes,
+                               int count );
+int win32_ayplayer_busy( int turbosound );
+void win32_ayplayer_measure_stop( int turbosound );
+int win32_ayplayer_measure_stopping( int turbosound );
+void win32_ayplaylist_show( int turbosound );
+void win32_ayplaylist_toggle( int turbosound );
+int win32_ayplaylist_is_open( int turbosound );
+void win32_ayplaylist_choose( int turbosound, int index );
+void win32_ayplaylist_close( int turbosound );
+void win32_ayplaylist_update( int turbosound );
+void win32_ayplaylist_update_status( int turbosound );
+int win32_ayplaylist_selected( int turbosound );
 void win32_ayplayer_show( void );
-void win32_ayplayer_reopen( int with_list, int song );
-void win32_ayplayer_remember_companions( void );
+void win32_tsplayer_show( void );
+void win32_ayplayer_show_for( int turbosound );
+void win32_ayplayer_reopen( int turbosound, int with_list, int song );
+void win32_ayplayer_remember_companions( int turbosound );
+/* The mixer was open with the player when it was closed last */
+int win32_ayplayer_remembered_mixer( int turbosound );
 int win32ui_picture_is_open( void );
 void menu_help_keyboard( int action );
 int win32ui_machine_paused( void );

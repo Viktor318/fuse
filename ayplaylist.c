@@ -36,49 +36,90 @@
 #include "ui/ui.h"
 #include "utils.h"
 
-#define PLAYLIST_FILE "fuse-ay-playlist.m3u"
+/* Two lists: that of the AY player (music of one AY chip, and every .ay
+   file) and that of the TurboSound player (modules playing two or three
+   chips). Each is kept in a file of its own */
+struct ayplaylist {
+  int turbosound;
+  const char *filename;		/* in the settings folder */
 
-static ayplaylist_entry *entries = NULL;
-static int entry_count = 0, entry_size = 0;
-static int current = -1;
-static int loaded = 0;
-/* Do not write the file while it is being read */
-static int loading = 0;
-/* Reading the saved list when the player starts: no messages */
-static int quiet = 0;
-/* Files of a list being loaded that couldn't be read (left out) */
-static int missing_files = 0;
+  ayplaylist_entry *entries;
+  int entry_count, entry_size;
+  int current;
+  int loaded;
+  /* Do not write the file while it is being read */
+  int loading;
+  /* Reading the saved list when the player starts: no messages */
+  int quiet;
+  /* Files of a list being loaded that couldn't be read (left out) */
+  int missing_files;
+};
 
-static int save_m3u( const char *path );
+static ayplaylist ay_list = {
+  0, "fuse-ay-playlist.m3u", NULL, 0, 0, -1, 0, 0, 0, 0
+};
+static ayplaylist ts_list = {
+  1, "fuse-ts-playlist.m3u", NULL, 0, 0, -1, 0, 0, 0, 0
+};
+
+/* The list whose song the player (ayplayer.c, one file at a time) has
+   loaded; NULL: none */
+static ayplaylist *player_owner = NULL;
+
+ayplaylist *ayplaylist_ay( void ) { return &ay_list; }
+ayplaylist *ayplaylist_ts( void ) { return &ts_list; }
+
+int
+ayplaylist_is_turbosound( const ayplaylist *list )
+{
+  return list->turbosound;
+}
+
+/* A file is TurboSound music if its module plays more than one chip; .ay
+   files are always played by the AY player, also if they use a second
+   chip */
+static int
+is_turbosound_file( const char *path )
+{
+  return ayplayer_file_chips( path ) > 1;
+}
+
+ayplaylist*
+ayplaylist_for_file( const char *path )
+{
+  return is_turbosound_file( path ) ? &ts_list : &ay_list;
+}
+
+static int save_m3u( ayplaylist *list, const char *path );
 
 static void
-autosave( void )
+autosave( ayplaylist *list )
 {
   char path[ 1024 ];
 
-  if( loading ) return;
+  if( list->loading ) return;
   snprintf( path, sizeof( path ), "%s" FUSE_DIR_SEP_STR "%s",
-            compat_get_config_path(), PLAYLIST_FILE );
-  save_m3u( path );
+            compat_get_config_path(), list->filename );
+  save_m3u( list, path );
 }
 
 static void
-load_saved( void )
+load_saved( ayplaylist *list )
 {
   char path[ 1024 ];
   FILE *f;
 
-  if( loaded ) return;
-  loaded = 1;
+  if( list->loaded ) return;
+  list->loaded = 1;
 
   snprintf( path, sizeof( path ), "%s" FUSE_DIR_SEP_STR "%s",
-            compat_get_config_path(), PLAYLIST_FILE );
+            compat_get_config_path(), list->filename );
   f = fopen( path, "r" );
   if( !f ) return;
   fclose( f );
-  quiet = 1;
-  ayplaylist_load_m3u( path, 1 );
-  quiet = 0;
+  list->quiet = 1;
+  ayplaylist_load_m3u( list, path, 1 );
+  list->quiet = 0;
 }
 
 static int
@@ -92,47 +133,81 @@ file_readable( const char *path )
 }
 
 static ayplaylist_entry*
-new_entry( int index )
+new_entry( ayplaylist *list, int index )
 {
-  if( entry_count == entry_size ) {
-    entry_size = entry_size ? entry_size * 2 : 32;
-    entries = libspectrum_renew( ayplaylist_entry, entries, entry_size );
+  if( list->entry_count == list->entry_size ) {
+    list->entry_size = list->entry_size ? list->entry_size * 2 : 32;
+    list->entries = libspectrum_renew( ayplaylist_entry, list->entries,
+                                       list->entry_size );
   }
-  if( index < entry_count )
-    memmove( &entries[ index + 1 ], &entries[ index ],
-             ( entry_count - index ) * sizeof( entries[0] ) );
-  entry_count++;
-  if( current >= index ) current++;
-  memset( &entries[ index ], 0, sizeof( entries[0] ) );
-  return &entries[ index ];
+  if( index < list->entry_count )
+    memmove( &list->entries[ index + 1 ], &list->entries[ index ],
+             ( list->entry_count - index ) * sizeof( list->entries[0] ) );
+  list->entry_count++;
+  if( list->current >= index ) list->current++;
+  memset( &list->entries[ index ], 0, sizeof( list->entries[0] ) );
+  return &list->entries[ index ];
+}
+
+static void
+free_entries( ayplaylist *list )
+{
+  int i;
+
+  for( i = 0; i < list->entry_count; i++ )
+    libspectrum_free( list->entries[i].path );
+  list->entry_count = 0;
+  list->current = -1;
 }
 
 /* Add songs of a file: song -1 for all of them */
 static int
-add_songs( const char *path, int song )
+add_songs( ayplaylist *list, const char *path, int song )
 {
   ayplayer_info info;
   int i, first = -1;
 
   /* A file of a list that isn't there (any more) is left out, without a
      message for every one of them */
-  if( loading && !file_readable( path ) ) {
-    missing_files++;
+  if( list->loading && !file_readable( path ) ) {
+    list->missing_files++;
     return -1;
   }
 
   if( ayplayer_file_info( path, &info ) ) return -1;
+
+  /* Each list takes its own kind of music: a file added on its own is
+     refused with a message, the files of a folder or a list are just left
+     out */
+  if( ( info.chips > 1 ) != list->turbosound ) {
+    if( !list->loading && !list->quiet ) {
+      if( list->turbosound )
+        ui_error( UI_ERROR_WARNING,
+                  "'%s' is not a TurboSound file: add it in the AY player",
+                  path );
+      else
+        ui_error( UI_ERROR_WARNING,
+                  "'%s' is a TurboSound file: add it in the TurboSound "
+                  "player", path );
+    }
+    ayplayer_file_info_free( &info );
+    return -1;
+  }
 
   for( i = 0; i < info.songs; i++ ) {
     ayplaylist_entry *e;
 
     if( song >= 0 && i != song ) continue;
 
-    e = new_entry( entry_count );
+    e = new_entry( list, list->entry_count );
     e->path = utils_safe_strdup( path );
     e->song = i;
     e->checksum = info.checksum;
+    e->chips = info.chips;
     snprintf( e->author, sizeof( e->author ), "%s", info.author );
+    snprintf( e->misc, sizeof( e->misc ), "%s", info.misc );
+    snprintf( e->comment, sizeof( e->comment ), "%s", info.comment );
+    snprintf( e->format, sizeof( e->format ), "%s", info.format );
     if( info.names[i][0] ) {
       snprintf( e->title, sizeof( e->title ), "%s", info.names[i] );
     } else {
@@ -141,7 +216,7 @@ add_songs( const char *path, int song )
         if( *p == '/' || *p == '\\' ) name = p + 1;
       snprintf( e->title, sizeof( e->title ), "%s", name );
     }
-    if( first < 0 ) first = entry_count - 1;
+    if( first < 0 ) first = list->entry_count - 1;
   }
 
   ayplayer_file_info_free( &info );
@@ -149,28 +224,28 @@ add_songs( const char *path, int song )
 }
 
 int
-ayplaylist_count( void )
+ayplaylist_count( ayplaylist *list )
 {
-  load_saved();
-  return entry_count;
+  load_saved( list );
+  return list->entry_count;
 }
 
 const ayplaylist_entry*
-ayplaylist_get( int index )
+ayplaylist_get( ayplaylist *list, int index )
 {
-  load_saved();
-  if( index < 0 || index >= entry_count ) return NULL;
-  return &entries[ index ];
+  load_saved( list );
+  if( index < 0 || index >= list->entry_count ) return NULL;
+  return &list->entries[ index ];
 }
 
 int
-ayplaylist_add_file( const char *path )
+ayplaylist_add_file( ayplaylist *list, const char *path )
 {
   int first;
 
-  load_saved();
-  first = add_songs( path, -1 );
-  if( first >= 0 ) autosave();
+  load_saved( list );
+  first = add_songs( list, path, -1 );
+  if( first >= 0 ) autosave( list );
   return first;
 }
 
@@ -181,14 +256,14 @@ compare_names( const void *a, const void *b )
 }
 
 int
-ayplaylist_add_folder( const char *folder )
+ayplaylist_add_folder( ayplaylist *list, const char *folder )
 {
   char **names = NULL, path[ 1024 ];
   size_t count = 0, size = 0, i;
   int before;
 
-  load_saved();
-  before = entry_count;
+  load_saved( list );
+  before = list->entry_count;
 
 #ifdef WIN32
   {
@@ -232,77 +307,73 @@ ayplaylist_add_folder( const char *folder )
   /* In the order of their names */
   if( count ) qsort( names, count, sizeof( names[0] ), compare_names );
 
-  loading = 1;
+  /* The files of the other player are left out quietly */
+  list->loading = 1;
   for( i = 0; i < count; i++ ) {
     snprintf( path, sizeof( path ), "%s" FUSE_DIR_SEP_STR "%s", folder,
               names[i] );
-    add_songs( path, -1 );
+    add_songs( list, path, -1 );
     libspectrum_free( names[i] );
   }
-  loading = 0;
+  list->loading = 0;
   libspectrum_free( names );
 
-  if( entry_count != before ) autosave();
-  return entry_count - before;
+  if( list->entry_count != before ) autosave( list );
+  return list->entry_count - before;
 }
 
 void
-ayplaylist_remove( int index )
+ayplaylist_remove( ayplaylist *list, int index )
 {
-  load_saved();
-  if( index < 0 || index >= entry_count ) return;
+  load_saved( list );
+  if( index < 0 || index >= list->entry_count ) return;
 
-  libspectrum_free( entries[ index ].path );
-  memmove( &entries[ index ], &entries[ index + 1 ],
-           ( entry_count - index - 1 ) * sizeof( entries[0] ) );
-  entry_count--;
+  libspectrum_free( list->entries[ index ].path );
+  memmove( &list->entries[ index ], &list->entries[ index + 1 ],
+           ( list->entry_count - index - 1 ) * sizeof( list->entries[0] ) );
+  list->entry_count--;
 
-  if( current == index ) current = -1;
-  else if( current > index ) current--;
+  if( list->current == index ) list->current = -1;
+  else if( list->current > index ) list->current--;
 
-  autosave();
+  autosave( list );
 }
 
 void
-ayplaylist_clear( void )
+ayplaylist_clear( ayplaylist *list )
 {
-  int i;
-
-  load_saved();
-  for( i = 0; i < entry_count; i++ ) libspectrum_free( entries[i].path );
-  entry_count = 0;
-  current = -1;
-  autosave();
+  load_saved( list );
+  free_entries( list );
+  autosave( list );
 }
 
 int
-ayplaylist_move( int index, int direction )
+ayplaylist_move( ayplaylist *list, int index, int direction )
 {
   int other = index + direction;
   ayplaylist_entry swap;
 
-  load_saved();
-  if( index < 0 || index >= entry_count || other < 0 ||
-      other >= entry_count )
+  load_saved( list );
+  if( index < 0 || index >= list->entry_count || other < 0 ||
+      other >= list->entry_count )
     return index;
 
-  swap = entries[ index ];
-  entries[ index ] = entries[ other ];
-  entries[ other ] = swap;
+  swap = list->entries[ index ];
+  list->entries[ index ] = list->entries[ other ];
+  list->entries[ other ] = swap;
 
-  if( current == index ) current = other;
-  else if( current == other ) current = index;
+  if( list->current == index ) list->current = other;
+  else if( list->current == other ) list->current = index;
 
-  autosave();
+  autosave( list );
   return other;
 }
 
 int
-ayplaylist_load_m3u( const char *path, int append )
+ayplaylist_load_m3u( ayplaylist *list, const char *path, int append )
 {
   char line[ 2048 ];
   FILE *f;
-  int before;
 
   f = fopen( path, "r" );
   if( !f ) {
@@ -310,17 +381,11 @@ ayplaylist_load_m3u( const char *path, int append )
     return 1;
   }
 
-  loaded = 1;
-  if( !append ) {
-    int i;
-    for( i = 0; i < entry_count; i++ ) libspectrum_free( entries[i].path );
-    entry_count = 0;
-    current = -1;
-  }
-  before = entry_count;
+  list->loaded = 1;
+  if( !append ) free_entries( list );
 
-  loading = 1;
-  missing_files = 0;
+  list->loading = 1;
+  list->missing_files = 0;
   while( fgets( line, sizeof( line ), f ) ) {
     char *end = line + strlen( line ), *mark;
     int song = -1;
@@ -362,29 +427,28 @@ ayplaylist_load_m3u( const char *path, int append )
       if( slash ) {
         snprintf( full, sizeof( full ), "%.*s" FUSE_DIR_SEP_STR "%s",
                   (int)( slash - path ), path, line );
-        add_songs( full, song );
+        add_songs( list, full, song );
         continue;
       }
     }
-    add_songs( line, song );
+    add_songs( list, line, song );
   }
-  loading = 0;
+  list->loading = 0;
   fclose( f );
 
   /* The saved list: the missing files just go; a list loaded by the user:
      one message */
-  if( missing_files && !quiet )
+  if( list->missing_files && !list->quiet )
     ui_error( UI_ERROR_WARNING,
               "%d files of the list are not available and were left out",
-              missing_files );
+              list->missing_files );
 
-  autosave();
-  ( void )before;
+  autosave( list );
   return 0;
 }
 
 static int
-save_m3u( const char *path )
+save_m3u( ayplaylist *list, const char *path )
 {
   FILE *f;
   int i;
@@ -393,8 +457,8 @@ save_m3u( const char *path )
   if( !f ) return 1;
 
   fprintf( f, "#EXTM3U\n" );
-  for( i = 0; i < entry_count; i++ ) {
-    const ayplaylist_entry *e = &entries[i];
+  for( i = 0; i < list->entry_count; i++ ) {
+    const ayplaylist_entry *e = &list->entries[i];
     long frames;
 
     if( !ayplayer_known_length( e->checksum, e->song, &frames ) || !frames )
@@ -409,10 +473,10 @@ save_m3u( const char *path )
 }
 
 int
-ayplaylist_save_m3u( const char *path )
+ayplaylist_save_m3u( ayplaylist *list, const char *path )
 {
-  load_saved();
-  if( save_m3u( path ) ) {
+  load_saved( list );
+  if( save_m3u( list, path ) ) {
     ui_error( UI_ERROR_ERROR, "couldn't write '%s'", path );
     return 1;
   }
@@ -420,45 +484,84 @@ ayplaylist_save_m3u( const char *path )
 }
 
 int
-ayplaylist_current( void )
+ayplaylist_current( ayplaylist *list )
 {
-  return current;
+  return list->current;
 }
 
 void
-ayplaylist_set_current( int index )
+ayplaylist_set_current( ayplaylist *list, int index )
 {
-  current = index >= 0 && index < entry_count ? index : -1;
+  list->current = index >= 0 && index < list->entry_count ? index : -1;
 }
 
 int
-ayplaylist_play( int index )
+ayplaylist_play( ayplaylist *list, int index )
 {
-  const ayplaylist_entry *e = ayplaylist_get( index );
+  const ayplaylist_entry *e = ayplaylist_get( list, index );
 
   if( !e ) return 1;
 
-  if( strcmp( ayplayer_path(), e->path ) ) {
+  /* The player plays for one list at a time: the song of the other one
+     stops */
+  if( player_owner != list || strcmp( ayplayer_path(), e->path ) ) {
     if( ayplayer_load( e->path ) ) return 1;
   }
-  current = index;
+  player_owner = list;
+  list->current = index;
   return ayplayer_play( e->song );
 }
 
 int
-ayplaylist_length( int index, long *frames )
+ayplaylist_owns_player( const ayplaylist *list )
 {
-  const ayplaylist_entry *e = ayplaylist_get( index );
+  return player_owner == list && ayplayer_is_open();
+}
+
+int
+ayplaylist_playing( const ayplaylist *list )
+{
+  return ayplaylist_owns_player( list ) && ayplayer_current_song() >= 0;
+}
+
+void
+ayplaylist_close_player( ayplaylist *list )
+{
+  if( player_owner != list ) return;
+  ayplayer_close();
+  player_owner = NULL;
+}
+
+int
+ayplaylist_length( ayplaylist *list, int index, long *frames )
+{
+  const ayplaylist_entry *e = ayplaylist_get( list, index );
 
   if( !e ) return 0;
   return ayplayer_known_length( e->checksum, e->song, frames );
 }
 
 int
-ayplaylist_open_file( const char *path )
+ayplaylist_channels( ayplaylist *list, int index )
 {
-  int first = ayplaylist_add_file( path );
+  const ayplaylist_entry *e = ayplaylist_get( list, index );
+  int chips;
+
+  if( !e ) return 0;
+  chips = e->chips;
+  /* An .ay song: a second chip is found by measuring it */
+  if( chips <= 1 ) {
+    chips = ayplayer_known_chips( e->checksum, e->song );
+    if( chips < 1 ) chips = 1;
+  }
+  return chips * 3;
+}
+
+int
+ayplaylist_open_file( ayplaylist *list, const char *path )
+{
+  int first = ayplaylist_add_file( list, path );
 
   if( first < 0 ) return 1;
-  return ayplaylist_play( first );
+  return ayplaylist_play( list, first );
 }

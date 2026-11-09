@@ -180,6 +180,7 @@ struct button_info {
 struct joystick_info {
 
   int *type;
+  int *autofire;		/* fire pressed and released while held */
   HWND radio[ JOYSTICK_TYPE_COUNT ];
 
   struct button_info button[NUM_JOY_BUTTONS];
@@ -195,7 +196,7 @@ static void
 create_fire_button_selector( const TCHAR *title, struct button_info *info,
                              HWND hwndDlg );
 static void set_key_text( HWND hlabel, keyboard_key_name key );
-static void joystick_done( LONG_PTR user_data );
+static void joystick_done( HWND hwndDlg, LONG_PTR user_data );
 static void show_key_selection_popoup( HWND hwndDlg, LPARAM lParam );
 
 void
@@ -244,7 +245,7 @@ dialog_proc( HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam )
           return 0;
           
         case IDOK:
-          joystick_done( GetWindowLongPtr( hwndDlg, GWLP_USERDATA ) );
+          joystick_done( hwndDlg, GetWindowLongPtr( hwndDlg, GWLP_USERDATA ) );
           EndDialog( hwndDlg, 0 );
           return 0;
 
@@ -266,6 +267,8 @@ dialog_init( HWND hwndDlg, struct joystick_info *info )
 {
   size_t i;
   create_joystick_type_selector( info, hwndDlg );
+  CheckDlgButton( hwndDlg, IDC_JOYSTICKS_AUTOFIRE,
+                  *info->autofire ? BST_CHECKED : BST_UNCHECKED );
 
   for( i = 0; i < NUM_JOY_BUTTONS; i++ ) {
     
@@ -302,6 +305,7 @@ setup_info( struct joystick_info *info, int action )
 
   case 1:
     info->type = &( settings_current.joystick_1_output );
+    info->autofire = &( settings_current.joystick_1_autofire );
     info->button[0].setting = &( settings_current.joystick_1_fire_1  );
     info->button[1].setting = &( settings_current.joystick_1_fire_2  );
     info->button[2].setting = &( settings_current.joystick_1_fire_3  );
@@ -324,6 +328,7 @@ setup_info( struct joystick_info *info, int action )
 
   case 2:
     info->type = &( settings_current.joystick_2_output );
+    info->autofire = &( settings_current.joystick_2_autofire );
     info->button[0].setting = &( settings_current.joystick_2_fire_1  );
     info->button[1].setting = &( settings_current.joystick_2_fire_2  );
     info->button[2].setting = &( settings_current.joystick_2_fire_3  );
@@ -346,6 +351,7 @@ setup_info( struct joystick_info *info, int action )
 
   case 3:
     info->type = &( settings_current.joystick_keyboard_output );
+    info->autofire = &( settings_current.joystick_keyboard_autofire );
     info->button[0].setting = &( settings_current.joystick_keyboard_up  );
     _sntprintf( info->button[0].name, 80, "Button for UP" );
     info->button[1].setting = &( settings_current.joystick_keyboard_down  );
@@ -424,11 +430,14 @@ set_key_text( HWND hlabel, keyboard_key_name key )
 }
 
 static void
-joystick_done( LONG_PTR user_data )
+joystick_done( HWND hwndDlg, LONG_PTR user_data )
 {
   struct joystick_info *info = ( struct joystick_info * ) user_data;
 
   int i;
+
+  *info->autofire =
+    IsDlgButtonChecked( hwndDlg, IDC_JOYSTICKS_AUTOFIRE ) == BST_CHECKED;
 
   for( i = 0; i < NUM_JOY_BUTTONS; i++ )
     if( info->button[i].setting )

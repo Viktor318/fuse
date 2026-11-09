@@ -40,6 +40,16 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   a parancssorban (`--windows-layout`, `--no-windows-layout`) beállítod,
   úgy marad; addig a nyelvet követi, és nem kerül mentésre.
 
+### Joystickok
+
+- **Automatikus tűz**: *Automatikus tűz* jelölőnégyzet a Joystick 1, a
+  Joystick 2 és a billentyűzet-joystick beállításaiban (*Beállítások >
+  Joystickok*). Amíg a tűzgomb le van nyomva, a Spectrum felváltva
+  lenyomottnak és felengedettnek látja, 3-3 képkockáig (másodpercenként
+  kb. 8 lövés), minden joysticktípussal (Kempston, Sinclair 1 és 2,
+  Cursor, Fuller, Timex 1 és 2). A `fuse.cfg`-ben tárolódik
+  (`joystick1autofire`, `joystick2autofire`, `joystickkeyboardautofire`).
+
 ### Upstream Fuse
 
 - Javítás az upstream `master` ágból: a lemezmeghajtó motorja akkor is

@@ -82,6 +82,11 @@ A csomagban két program van, közös beállításokkal:
 - **Súgó > Billentyűzet**: nagy felbontású kép a Spectrum billentyűzetéről.
   A Fuse fölött marad, de nem veszi el a fókuszt, így közben tovább lehet
   gépelni; átméretezhető, és megjegyzi a helyét és a méretét.
+- **Automatikus tűz** (*Beállítások > Joystickok > Joystick 1 / Joystick 2
+  / Billentyűzet...*): amíg a tűzgomb le van nyomva, a Spectrum felváltva
+  lenyomottnak és felengedettnek látja, 3-3 képkockáig (másodpercenként
+  kb. 8 lövés), bármilyen joysticktípussal (Kempston, Sinclair, Cursor,
+  Fuller, Timex).
 
 ### BASIC programok szövegként
 

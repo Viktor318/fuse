@@ -676,3 +676,4 @@ extra	TurboSound mixer	Load TurboSound mixer settings	TurboSound keverőbeállí
 1 Menü	File > Recent files	&Clear list	Lista &törlése
 1 Menü	File > Recent files	(empty)	(üres)
 4 Üzenetek	hibaüzenet	'%s' no longer exists; it was removed from the list	A(z) '%s' már nem létezik, ezért lekerült a listáról
+3 Ablakok	IDD_JOYSTICKS: AUTOCHECKBOX	&Autofire	&Automatikus tűz

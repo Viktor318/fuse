@@ -37,6 +37,8 @@ const i18n_entry i18n_hu_table[] = {
     "&Hozzáadás..." },
   { "&Auto-load media",
     "&Automatikus betöltés" },
+  { "&Autofire",
+    "&Automatikus tűz" },
   { "&Automatically go to the next song at the end",
     "&Automatikus továbblépés a dal végén" },
   { "&Beta 128 interface",

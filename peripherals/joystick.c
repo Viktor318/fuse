@@ -168,8 +168,67 @@ joystick_register_startup( void )
                             joystick_end, NULL );
 }
 
+/* Autofire: while fire is held, the Spectrum sees it pressed and released
+   in turn, AUTOFIRE_FRAMES frames each (about 8 presses a second), for
+   every kind of joystick. For joysticks 1, 2 and the keyboard one */
+#define AUTOFIRE_FRAMES 3
+
+static int fire_held[3];	/* the fire button is held */
+static int fire_down[3];	/* fire as the Spectrum sees it */
+static int fire_frames[3];	/* frames since fire_down changed */
+
+static int *
+autofire_setting( int which )
+{
+  switch( which ) {
+  case 0: return &settings_current.joystick_1_autofire;
+  case 1: return &settings_current.joystick_2_autofire;
+  case JOYSTICK_KEYBOARD: return &settings_current.joystick_keyboard_autofire;
+  default: return NULL;
+  }
+}
+
+static int
+joystick_output( int which, joystick_button button, int press );
+
 int
 joystick_press( int which, joystick_button button, int press )
+{
+  if( button == JOYSTICK_BUTTON_FIRE && autofire_setting( which ) ) {
+    /* Held already (a key repeating): autofire goes on as it is */
+    if( press && fire_held[ which ] ) return joystick_output( which, button,
+                                                             fire_down[ which ] );
+    fire_held[ which ] = press;
+    fire_down[ which ] = press;
+    fire_frames[ which ] = 0;
+  }
+
+  return joystick_output( which, button, press );
+}
+
+void
+joystick_frame( void )
+{
+  int which;
+
+  for( which = 0; which < 3; which++ ) {
+    if( !fire_held[ which ] ) continue;
+
+    if( *autofire_setting( which ) ) {
+      if( ++fire_frames[ which ] < AUTOFIRE_FRAMES ) continue;
+      fire_frames[ which ] = 0;
+      fire_down[ which ] = !fire_down[ which ];
+      joystick_output( which, JOYSTICK_BUTTON_FIRE, fire_down[ which ] );
+    } else if( !fire_down[ which ] ) {
+      /* Autofire switched off while fire is held: held from now on */
+      fire_down[ which ] = 1;
+      joystick_output( which, JOYSTICK_BUTTON_FIRE, 1 );
+    }
+  }
+}
+
+static int
+joystick_output( int which, joystick_button button, int press )
 {
   joystick_type_t type;
 
@@ -245,7 +304,7 @@ joystick_press( int which, joystick_button button, int press )
   case JOYSTICK_TYPE_NONE: return 0;
   }
 
-  ui_error( UI_ERROR_ERROR, "%s:joystick_press:unknown joystick type %d",
+  ui_error( UI_ERROR_ERROR, "%s:joystick_output:unknown joystick type %d",
 	    __FILE__, type );
   fuse_abort();
 }

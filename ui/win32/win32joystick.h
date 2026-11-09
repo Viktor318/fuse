@@ -76,6 +76,7 @@
 #define IDC_JOYSTICKS_BUTTON_BUTTON15 ( IDC_JOYSTICKS_BUTTON_BUTTON14 + 1 )
 
 #define IDR_JOYSTICKS_POPUP           ( IDC_JOYSTICKS_BUTTON_BUTTON15 + 1 )
+#define IDC_JOYSTICKS_AUTOFIRE        ( IDR_JOYSTICKS_POPUP + 1 )
 
 /*
    win32joystick_buttonevent parameters:

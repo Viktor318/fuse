@@ -69,6 +69,9 @@ typedef enum joystick_button {
 /* Called whenever the (Spectrum) joystick is moved or the fire button
    pressed */
 int joystick_press( int which, joystick_button button, int press );
+/* Once every frame: autofire (joystick_N_autofire, joystick_keyboard_
+   autofire) presses and releases a fire button held */
+void joystick_frame( void );
 /* Clear direct interface button masks without mapping or UI dispatch.
    Keyboard-mapped joystick effects must be released separately. */
 void joystick_clear_interfaces( void );

@@ -38,6 +38,15 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   line (`--windows-layout`, `--no-windows-layout`), the setting stays as
   set; until then it follows the language and is not saved.
 
+### Joysticks
+
+- **Autofire**: an *Autofire* box in the settings of Joystick 1, Joystick 2
+  and the keyboard joystick (*Options > Joysticks*). While fire is held,
+  the Spectrum sees it pressed and released in turn, 3 frames each (about 8
+  shots a second), with every joystick type (Kempston, Sinclair 1 and 2,
+  Cursor, Fuller, Timex 1 and 2). Kept in `fuse.cfg`
+  (`joystick1autofire`, `joystick2autofire`, `joystickkeyboardautofire`).
+
 ### Upstream Fuse
 
 - Fix from upstream `master`: the motor of a floppy drive turns whether a

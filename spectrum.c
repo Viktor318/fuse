@@ -40,6 +40,7 @@
 #include "memory_pages.h"
 #include "machines/specplus3.h"
 #include "module.h"
+#include "peripherals/joystick.h"
 #include "peripherals/printer.h"
 #include "peripherals/ula.h"
 #include "hungarian_keyboard.h"
@@ -179,6 +180,7 @@ spectrum_frame( void )
   loader_frame( frame_length );
   phantom_typist_frame();
   hungarian_keyboard_frame();
+  joystick_frame();
   basic_text_frame();
   ayplayer_frame();
 

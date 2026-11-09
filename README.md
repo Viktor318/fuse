@@ -78,6 +78,10 @@ There are two programs in the package, with the same settings:
 - **Help > Keyboard**: a high resolution picture of the Spectrum keyboard. It
   stays above Fuse without taking the focus, so you can keep typing; it can be
   resized and remembers its place and size.
+- **Autofire** (*Options > Joysticks > Joystick 1 / Joystick 2 /
+  Keyboard...*): while fire is held, the Spectrum sees it pressed and
+  released in turn, 3 frames each (about 8 shots a second), whatever the
+  joystick type (Kempston, Sinclair, Cursor, Fuller, Timex).
 
 ### BASIC programs as text
 

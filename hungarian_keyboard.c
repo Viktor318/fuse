@@ -41,6 +41,7 @@
 
 #include "fuse.h"
 #include "hungarian_keyboard.h"
+#include "i18n.h"
 #include "keyboard.h"
 #include "settings.h"
 #include "ui/ui.h"
@@ -167,9 +168,17 @@ hungarian_keyboard_map_character( libspectrum_dword character, int *key,
 }
 
 int
+hungarian_keyboard_enabled( void )
+{
+  if( settings_current.hungarian_keyboard >= 0 )
+    return settings_current.hungarian_keyboard != 0;
+  return i18n_hungarian();
+}
+
+int
 hungarian_keyboard_active( void )
 {
-  return settings_current.hungarian_keyboard &&
+  return hungarian_keyboard_enabled() &&
          !settings_current.recreated_spectrum &&
          ui_widget_level < 0;
 }

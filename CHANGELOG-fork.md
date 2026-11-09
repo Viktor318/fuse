@@ -21,6 +21,15 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   ("Fuse 1.10.1-hu.3"), not only that of the Fuse it is based on; so does
   the version information of `fuse.exe`.
 
+### Keyboard
+
+- *Type using the Windows keyboard layout* is on by default when the
+  interface is Hungarian (*Language* Magyar, or Automatic on a Hungarian
+  Windows) and off otherwise, as the READMEs said; it was always off. Once
+  set in the options, in `fuse.cfg` (`windowslayout`) or on the command
+  line (`--windows-layout`, `--no-windows-layout`), the setting stays as
+  set; until then it follows the language and is not saved.
+
 ### Upstream Fuse
 
 - Fix from upstream `master`: the motor of a floppy drive turns whether a

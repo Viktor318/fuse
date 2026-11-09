@@ -13,6 +13,7 @@
 
 #include "input.h"
 #include "keyboard.h"
+#include "hungarian_keyboard.h"
 #include "settings.h"
 #include "ui/ui.h"
 #include "sdl2_keyboard.h"
@@ -160,7 +161,7 @@ sdl2keyboard_get_character( const SDL_KeyboardEvent *keyevent )
   SDL_Keymod mod = keyevent->keysym.mod;
   int altgr = ( mod & ( KMOD_RALT | KMOD_MODE ) ) ? 1 : 0;
 
-  if( !settings_current.hungarian_keyboard ) return 0;
+  if( !hungarian_keyboard_enabled() ) return 0;
 
   /* Ctrl or left Alt without AltGr act as Symbol Shift: no character */
   if( !altgr && ( mod & ( KMOD_CTRL | KMOD_LALT ) ) ) return 0;
@@ -193,7 +194,7 @@ sdl2keyboard_event( SDL_KeyboardEvent *keyevent, input_dispatch_context context 
      (e.g. accented letters), or on release, as they may have done so */
   if( keysym == INPUT_KEY_NONE && !character &&
       !( type == INPUT_EVENT_KEYRELEASE &&
-         settings_current.hungarian_keyboard ) )
+         hungarian_keyboard_enabled() ) )
     return INPUT_DISPATCH_APPLIED;
 
   fuse_event.type = type;

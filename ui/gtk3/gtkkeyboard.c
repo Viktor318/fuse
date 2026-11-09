@@ -31,6 +31,7 @@
 #include "gtkinternals.h"
 #include "input.h"
 #include "keyboard.h"
+#include "hungarian_keyboard.h"
 #include "settings.h"
 #include "ui/ui.h"
 
@@ -69,7 +70,7 @@ unshift_keysym( guint keycode, gint group )
 static libspectrum_dword
 get_character( guint keysym, GdkModifierType state )
 {
-  if( !settings_current.hungarian_keyboard ) return 0;
+  if( !hungarian_keyboard_enabled() ) return 0;
 
   /* Ctrl or Alt without AltGr act as Symbol Shift: no character */
   if( ( state & ( GDK_CONTROL_MASK | GDK_MOD1_MASK ) ) &&

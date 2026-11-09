@@ -43,7 +43,8 @@ A csomagban két program van, közös beállításokkal:
 ### Billentyűzet
 
 - **Gépelés a Windows billentyűkiosztása szerint** (Beállítások >
-  Általános, alapból bekapcsolva): az jelenik meg a Spectrumon, amit
+  Általános; amíg nem állítod be, magyar felülettel bekapcsolva, angollal
+  kikapcsolva): az jelenik meg a Spectrumon, amit
   begépelsz, bármilyen kiosztású a billentyűzeted. Magyar billentyűzeten a
   Shift+2 `"`-t, az AltGr+V `@`-ot ír, és így tovább. Az ékezetes betűk
   ékezet nélkül kerülnek be. A kiterjesztett módot igénylő jeleket

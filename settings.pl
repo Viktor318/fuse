@@ -386,7 +386,8 @@ foreach my $name ( sort keys %options ) {
 
     if( $type eq 'boolean' ) {
 
-	print "  xmlNewTextChild( root, NULL, (const xmlChar*)\"$options{$name}->{configfile}\", (const xmlChar*)(settings->$name ? \"1\" : \"0\") );\n";
+	# Below 0: automatic (resolved where it is used), not written
+	print "  if( settings->$name >= 0 )\n    xmlNewTextChild( root, NULL, (const xmlChar*)\"$options{$name}->{configfile}\", (const xmlChar*)(settings->$name ? \"1\" : \"0\") );\n";
 
     } elsif( $type eq 'string' ) {
 	print << "CODE";
@@ -618,9 +619,13 @@ settings_string_write( compat_fd doc, const char* name, const char* config )
   return 0;
 }
 
+/* A boolean below 0 is automatic (its default decided where it is used,
+   e.g. by the language of the interface): not written, so it stays
+   automatic */
 static int
 settings_boolean_write( compat_fd doc, const char* name, int config )
 {
+  if( config < 0 ) return 0;
   return settings_string_write( doc, name, config ? "1" : "0" );
 }
 

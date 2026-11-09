@@ -22,6 +22,15 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   mutatja („Fuse 1.10.1-hu.3”), nem csak az alapul szolgáló Fuse-ét; a
   `fuse.exe` verzióinformációja is.
 
+### Billentyűzet
+
+- A *Gépelés a Windows billentyűkiosztása szerint* alapból be van
+  kapcsolva, ha a felület magyar (*Nyelv*: Magyar, vagy Automatikus magyar
+  Windowson), egyébként ki, ahogy a README-k írták; eddig mindig ki volt
+  kapcsolva. Ha a beállításokban, a `fuse.cfg`-ben (`windowslayout`) vagy
+  a parancssorban (`--windows-layout`, `--no-windows-layout`) beállítod,
+  úgy marad; addig a nyelvet követi, és nem kerül mentésre.
+
 ### Upstream Fuse
 
 - Javítás az upstream `master` ágból: a lemezmeghajtó motorja akkor is

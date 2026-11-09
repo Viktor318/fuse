@@ -169,7 +169,7 @@ get_character( void )
   MSG msg;
   libspectrum_dword character;
 
-  if( !settings_current.hungarian_keyboard ) return 0;
+  if( !hungarian_keyboard_enabled() ) return 0;
 
   if( !PeekMessageW( &msg, fuse_hWnd, WM_CHAR, WM_CHAR, PM_REMOVE ) )
     return 0;
@@ -202,7 +202,7 @@ sync_modifiers( void )
   input_event_t fuse_event;
   size_t i;
 
-  if( !settings_current.hungarian_keyboard ) return;
+  if( !hungarian_keyboard_enabled() ) return;
 
   for( i = 0; i < ARRAY_SIZE( modifiers ); i++ ) {
     if( ( GetKeyState( modifiers[i].vk ) & 0x8000 ) ||
@@ -317,7 +317,7 @@ win32keyboard_keyrelease( WPARAM wParam, LPARAM lParam )
   /* With character based typing, keys with no mapping may have produced a
      character on press, so their release is needed too */
   if( fuse_keysym == INPUT_KEY_NONE &&
-      !settings_current.hungarian_keyboard ) return;
+      !hungarian_keyboard_enabled() ) return;
 
   fuse_event.type = INPUT_EVENT_KEYRELEASE;
   fuse_event.types.key.native_key = fuse_keysym;

@@ -25,6 +25,12 @@
 
 #include "input.h"
 
+/* Is typing using the host keyboard layout switched on? The setting
+   (hungarian_keyboard, "windowslayout") is on or off when set in the
+   config file, on the command line or in the options; until then (-1) it
+   is on when the user interface is Hungarian */
+int hungarian_keyboard_enabled( void );
+
 /* Is character based typing active right now? */
 int hungarian_keyboard_active( void );
 

@@ -16,6 +16,7 @@
 #include "input.h"
 #include "keyboard_refresh.h"
 #include "menu.h"
+#include "hungarian_keyboard.h"
 #include "settings.h"
 #include "ui/display_timing.h"
 #include "ui/ui.h"
@@ -205,7 +206,7 @@ ui_event( void )
   display_timing_input_begin();
 
   /* Character based typing needs SDL_TEXTINPUT events */
-  if( settings_current.hungarian_keyboard && !SDL_IsTextInputActive() )
+  if( hungarian_keyboard_enabled() && !SDL_IsTextInputActive() )
     SDL_StartTextInput();
 
   result = sdl2_events_collect( &sdl2ui_events, INPUT_DISPATCH_NORMAL );

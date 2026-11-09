@@ -47,6 +47,7 @@ print Fuse::GPL( 'options.c: options dialog boxes',
 
 #include "display.h"
 #include "fuse.h"
+#include "hungarian_keyboard.h"
 #include "i18n.h"
 #include "menu.h"
 #include "options.h"
@@ -70,6 +71,10 @@ option_enumerate_combo( const char * const *options, char *value, int count,
   }
   return def;
 }
+
+/* "Type using the Windows keyboard layout" as shown in the dialog: it is
+   set only if changed, so an automatic setting stays automatic */
+static int hungarian_keyboard_shown = 0;
 
 CODE
 
@@ -151,7 +156,17 @@ CODE
     foreach my $widget ( @{ $_->{widgets} } ) {
 	my $type = $widget->{type};
 
-	if( $type eq "Checkbox" ) {
+	if( $type eq "Checkbox" && $widget->{value} eq 'hungarian_keyboard' ) {
+	    my $idcname = uc( "$widget->{value}" );
+            # Automatic (-1) until set: shown as it is now, and set only if
+            # changed, so it stays automatic otherwise
+            print << "CODE";
+  hungarian_keyboard_shown = hungarian_keyboard_enabled();
+  SendDlgItemMessage( hwndDlg, IDC_${optname}_${idcname}, BM_SETCHECK,
+    hungarian_keyboard_shown ? BST_CHECKED : BST_UNCHECKED, 0 );
+
+CODE
+	} elsif( $type eq "Checkbox" ) {
 	    my $idcname = uc( "$widget->{value}" );
         print << "CODE";
   SendDlgItemMessage( hwndDlg, IDC_${optname}_${idcname}, BM_SETCHECK,
@@ -232,7 +247,17 @@ CODE
     foreach my $widget ( @{ $_->{widgets} } ) {
 	my $type = $widget->{type};
 
-	if( $type eq "Checkbox" ) {
+	if( $type eq "Checkbox" && $widget->{value} eq 'hungarian_keyboard' ) {
+	    my $idcname = uc( "$widget->{value}" );
+
+	    print << "CODE";
+  if( IsDlgButtonChecked( hwndDlg, IDC_${optname}_${idcname} ) !=
+      hungarian_keyboard_shown )
+    settings_current.hungarian_keyboard =
+      IsDlgButtonChecked( hwndDlg, IDC_${optname}_${idcname} );
+
+CODE
+	} elsif( $type eq "Checkbox" ) {
 	    my $idcname = uc( "$widget->{value}" );
 
 	    print << "CODE";

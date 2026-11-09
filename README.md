@@ -40,8 +40,9 @@ There are two programs in the package, with the same settings:
 
 ### Keyboard
 
-- **Type using the Windows keyboard layout** (Options > General, on by
-  default): what you type is what appears on the Spectrum, whatever the
+- **Type using the Windows keyboard layout** (Options > General; on by
+  default when the interface is Hungarian, off when it is English, until
+  you set it): what you type is what appears on the Spectrum, whatever the
   layout of your keyboard. On a Hungarian keyboard Shift+2 types `"`,
   AltGr+V types `@`, and so on. Accented letters are typed without the
   accent. Symbols that need the extended mode (`[ ] { } \ | ~ ©`) are typed

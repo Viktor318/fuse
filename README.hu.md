@@ -81,7 +81,10 @@ A csomagban két program van, közös beállításokkal:
   az RZX menüpontoknak.
 - **Súgó > Billentyűzet**: nagy felbontású kép a Spectrum billentyűzetéről.
   A Fuse fölött marad, de nem veszi el a fókuszt, így közben tovább lehet
-  gépelni; átméretezhető, és megjegyzi a helyét és a méretét.
+  gépelni. Öt mérete van, 100%-tól 200%-ig (a 200% a kép saját felbontása,
+  így mindig éles): a képre duplán kattintva a következőre vált, a keret
+  húzásakor a legközelebbire ugrik; a képernyőre ki nem férő méreteket
+  kihagyja. Megjegyzi a helyét és a méretét.
 - **Automatikus tűz** (*Beállítások > Joystickok > Joystick 1 / Joystick 2
   / Billentyűzet...*): amíg a tűzgomb le van nyomva, a Spectrum felváltva
   lenyomottnak és felengedettnek látja, 3-3 képkockáig (másodpercenként

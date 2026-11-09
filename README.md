@@ -76,8 +76,11 @@ There are two programs in the package, with the same settings:
   Insert and Delete are then shortcuts for the RZX menu items only while
   an RZX file is being recorded.
 - **Help > Keyboard**: a high resolution picture of the Spectrum keyboard. It
-  stays above Fuse without taking the focus, so you can keep typing; it can be
-  resized and remembers its place and size.
+  stays above Fuse without taking the focus, so you can keep typing. It has
+  five sizes, 100% to 200% (200% is the picture's own resolution, so it is
+  always sharp): a double click on the picture goes to the next one, and
+  dragging the frame snaps to the nearest one; sizes that don't fit the
+  screen are skipped. It remembers its place and size.
 - **Autofire** (*Options > Joysticks > Joystick 1 / Joystick 2 /
   Keyboard...*): while fire is held, the Spectrum sees it pressed and
   released in turn, 3 frames each (about 8 shots a second), whatever the

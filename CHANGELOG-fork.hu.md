@@ -45,6 +45,16 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   kapcsolva. Ha a beállításokban, a `fuse.cfg`-ben (`windowslayout`) vagy
   a parancssorban (`--windows-layout`, `--no-windows-layout`) beállítod,
   úgy marad; addig a nyelvet követi, és nem kerül mentésre.
+- **Billentyűzetkép** (*Súgó > Billentyűzet*): öt méret, 100%, 125%, 150%,
+  175% és 200%, ahol a 200% a kép saját felbontása (1336 × 584), a 100% a
+  fele, így a kép csak kicsinyítve jelenik meg, és éles marad. A képre
+  duplán kattintva a következő méretre vált (a 200% után a 100%-ra); a
+  keret húzásakor a legközelebbi méretre ugrik, a húzott oldal mozog, a
+  szemközti a helyén marad. A monitor munkaterületére ki nem férő
+  méreteket kihagyja. A méret a `fuse-windows.ini`-ben (`step`) marad meg
+  a hellyel együtt; egy korábbi változat által mentett méretből a
+  legközelebbi lépés lesz. Először 200%-on nyílik meg, vagy a legnagyobb
+  kiférő méreten.
 
 ### Joystickok
 

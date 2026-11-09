@@ -43,6 +43,15 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   set in the options, in `fuse.cfg` (`windowslayout`) or on the command
   line (`--windows-layout`, `--no-windows-layout`), the setting stays as
   set; until then it follows the language and is not saved.
+- **Keyboard picture** (*Help > Keyboard*): five sizes, 100%, 125%, 150%,
+  175% and 200%, where 200% is the picture's own resolution (1336 × 584)
+  and 100% half of it, so it is only ever made smaller and stays sharp. A
+  double click on the picture goes to the next size (after 200% 100%);
+  dragging the frame snaps to the nearest size, the side dragged moving
+  and the opposite side staying. Sizes that don't fit the work area of the
+  monitor are skipped. The size is kept in `fuse-windows.ini` (`step`)
+  with the place; a size saved by an earlier version gives the nearest
+  step. The first time it opens at 200%, or the largest size that fits.
 
 ### Joysticks
 

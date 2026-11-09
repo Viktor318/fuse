@@ -24,6 +24,7 @@
 
 #include "config.h"
 
+#include <stdlib.h>
 #include <windows.h>
 #include <objidl.h>
 #include <gdiplus.h>
@@ -47,8 +48,6 @@ static const int picture_pitch = DISPLAY_ASPECT_WIDTH * 4;
 
 static HWND hDialogPicture = NULL;
 static HBITMAP picture_BMP = NULL;
-static int min_height;
-static int min_width;
 
 static HWND create_dialog( int width, int height );
 
@@ -185,70 +184,145 @@ resize_dialog( HWND dialog )
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS );
 }
 
+/* ------------------------------------------------------------------------
+   The size steps: 100% is half of the picture's own size, 200% its own
+   size, so it is only ever made smaller and stays sharp
+   ------------------------------------------------------------------------ */
+
+#define STEPS 5			/* 100%, 125%, 150%, 175%, 200% */
+#define LARGEST_STEP ( STEPS - 1 )
+
+/* The picture's own size */
+static int picture_width, picture_height;
+/* The step shown */
+static int step = LARGEST_STEP;
+
+/* The size of the picture at a step: ( 4 + step ) / 8 of its own size */
 static void
-inflate_dialog( HWND dialog, int width, int height )
+content_size( int at, int *width, int *height )
 {
-  RECT wr_dialog, cr_dialog, wr_button, rc, rc_workarea;
-  HWND button_hWnd;
-  int decorations_width, decorations_height;
-  int available_width, available_height, shown_width, shown_height;
-  float scale;
+  *height = picture_height * ( 4 + at ) / 8;
+  *width = picture_width * ( 4 + at ) / 8;
+}
 
-  /* Dialog dimensions */
-  GetWindowRect( dialog, &wr_dialog );
-  GetClientRect( dialog, &cr_dialog );
-  OffsetRect( &wr_dialog, -wr_dialog.left, -wr_dialog.top );
-  OffsetRect( &cr_dialog, -cr_dialog.left, -cr_dialog.top );
+/* The size of the window's client area besides the picture: the Close
+   button with the room around it, under the picture */
+static void
+button_area( HWND dialog, int *width, int *height )
+{
+  RECT button, rc;
 
-  /* Button dimensions */
-  button_hWnd = GetDlgItem( dialog, IDCLOSE );
-  GetWindowRect( button_hWnd, &wr_button );
-  OffsetRect( &wr_button, -wr_button.left, -wr_button.top );
-
-  /* Button spacing */
+  GetWindowRect( GetDlgItem( dialog, IDCLOSE ), &button );
   SetRectEmpty( &rc );
   rc.bottom = 7 + 7; /* top spacing + bottom spacing (DLUs) */
   rc.right  = 7 + 7; /* left spacing + right spacing (DLUs) */
   MapDialogRect( dialog, &rc );
-  rc.bottom += wr_button.bottom; /* pixels */
-  rc.right  += wr_button.right;  /* pixels */
+  *width = rc.right + button.right - button.left;
+  *height = rc.bottom + button.bottom - button.top;
+}
 
-  /* Window decorations */
-  decorations_width = wr_dialog.right - cr_dialog.right;
-  decorations_height = wr_dialog.bottom - cr_dialog.bottom;
+/* The size of the whole window at a step */
+static void
+window_size( HWND dialog, int at, int *width, int *height )
+{
+  RECT rect;
+  int content_width, content_height, button_width, button_height;
 
-  /* Initial size: the picture at its own size, unless that doesn't fit on
-     the screen, then scaled down to fit */
-  SystemParametersInfo( SPI_GETWORKAREA, 0, &rc_workarea, 0 );
-  available_width = ( rc_workarea.right - rc_workarea.left ) * 9 / 10 -
-                    decorations_width;
-  available_height = ( rc_workarea.bottom - rc_workarea.top ) * 9 / 10 -
-                     decorations_height - rc.bottom;
+  content_size( at, &content_width, &content_height );
+  button_area( dialog, &button_width, &button_height );
 
-  scale = 1.0f;
-  if( available_width > 0 && width > available_width )
-    scale = (float)available_width / width;
-  if( available_height > 0 && height * scale > available_height )
-    scale = (float)available_height / height;
+  rect.left = rect.top = 0;
+  rect.right = content_width > button_width ? content_width : button_width;
+  rect.bottom = content_height + button_height;
+  AdjustWindowRectEx( &rect, GetWindowLong( dialog, GWL_STYLE ), FALSE,
+                      GetWindowLong( dialog, GWL_EXSTYLE ) );
+  *width = rect.right - rect.left;
+  *height = rect.bottom - rect.top;
+}
 
-  shown_width = width * scale;
-  shown_height = height * scale;
+/* The work area of the monitor the window (or the place) is on */
+static void
+work_area( HWND dialog, const RECT *place, RECT *area )
+{
+  MONITORINFO info;
+  HMONITOR monitor = place ? MonitorFromRect( place, MONITOR_DEFAULTTONEAREST )
+                           : MonitorFromWindow( dialog,
+                                                MONITOR_DEFAULTTONEAREST );
 
-  SetWindowPos( dialog, NULL, 0, 0,
-                ( shown_width > rc.right ? shown_width : rc.right ) +
-                  decorations_width,
-                rc.bottom + shown_height + decorations_height,
-                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE );
+  info.cbSize = sizeof( info );
+  if( monitor && GetMonitorInfo( monitor, &info ) )
+    *area = info.rcWork;
+  else
+    SystemParametersInfo( SPI_GETWORKAREA, 0, area, 0 );
+}
 
-  /* The window can be made smaller than the picture, down to a quarter of
-     it (the picture is scaled to fit) */
-  shown_width = width / 4;
-  shown_height = height / 4;
-  min_width = ( shown_width > rc.right ? shown_width : rc.right ) +
-              decorations_width;
-  min_height = rc.bottom + shown_height + decorations_height;
+/* Does the window fit the work area at this step? */
+static int
+step_fits( HWND dialog, int at, const RECT *place )
+{
+  RECT area;
+  int width, height;
 
-  resize_dialog( dialog );
+  work_area( dialog, place, &area );
+  window_size( dialog, at, &width, &height );
+  return width <= area.right - area.left && height <= area.bottom - area.top;
+}
+
+/* The largest step that fits, not larger than `at' (100% if none) */
+static int
+fitting_step( HWND dialog, int at, const RECT *place )
+{
+  for( ; at > 0; at-- )
+    if( step_fits( dialog, at, place ) ) break;
+  return at;
+}
+
+/* Show a step: the size changes, the top left corner stays where it is
+   (unless the window would go over the edge of the work area) */
+static void
+set_step( HWND dialog, int at )
+{
+  RECT window, area;
+  int width, height, x, y;
+
+  step = at;
+  window_size( dialog, at, &width, &height );
+  GetWindowRect( dialog, &window );
+  work_area( dialog, &window, &area );
+
+  x = window.left;
+  y = window.top;
+  if( x + width > area.right ) x = area.right - width;
+  if( y + height > area.bottom ) y = area.bottom - height;
+  if( x < area.left ) x = area.left;
+  if( y < area.top ) y = area.top;
+
+  SetWindowPos( dialog, NULL, x, y, width, height,
+                SWP_NOZORDER | SWP_NOACTIVATE );
+  InvalidateRect( GetDlgItem( dialog, IDC_PICTURE_FRAME ), NULL, FALSE );
+}
+
+/* Double click: the next step that fits, after 200% 100% again */
+static void
+next_step( HWND dialog )
+{
+  int at = step, i;
+
+  for( i = 0; i < STEPS; i++ ) {
+    at = ( at + 1 ) % STEPS;
+    if( !at || step_fits( dialog, at, NULL ) ) break;
+  }
+  set_step( dialog, at );
+}
+
+static void
+inflate_dialog( HWND dialog, int width, int height )
+{
+  picture_width = width;
+  picture_height = height;
+
+  /* The first time: 200% if it fits, else the largest step that does */
+  set_step( dialog, fitting_step( dialog, LARGEST_STEP, NULL ) );
 }
 
 static void
@@ -356,7 +430,7 @@ create_dialog( int width, int height )
   return dialog;
 }
 
-/* The window's place and size are kept in fuse-windows.ini */
+/* The window's place and size step are kept in fuse-windows.ini */
 static void
 save_geometry( HWND dialog )
 {
@@ -365,47 +439,62 @@ save_geometry( HWND dialog )
   if( IsIconic( dialog ) || !GetWindowRect( dialog, &rect ) ) return;
   winstate_set( "keyboard", "x", rect.left );
   winstate_set( "keyboard", "y", rect.top );
-  winstate_set( "keyboard", "width", rect.right - rect.left );
-  winstate_set( "keyboard", "height", rect.bottom - rect.top );
+  winstate_set( "keyboard", "step", step );
+  /* Earlier versions kept the size */
+  winstate_remove( "keyboard", "width" );
+  winstate_remove( "keyboard", "height" );
 }
 
-/* Read the saved geometry; returns 0 if there is one */
+/* The step nearest to a window width saved by an earlier version */
 static int
-load_geometry( RECT *rect )
+step_for_width( HWND dialog, long width )
 {
-  long x, y, width, height;
+  int at, best = LARGEST_STEP, best_difference = -1;
 
-  if( !winstate_get( "keyboard", "x", &x ) ||
-      !winstate_get( "keyboard", "y", &y ) ||
-      !winstate_get( "keyboard", "width", &width ) ||
-      !winstate_get( "keyboard", "height", &height ) ||
-      width <= 0 || height <= 0 )
-    return 1;
-
-  rect->left = x; rect->top = y;
-  rect->right = x + width; rect->bottom = y + height;
-  return 0;
+  for( at = 0; at < STEPS; at++ ) {
+    int step_width, step_height, difference;
+    window_size( dialog, at, &step_width, &step_height );
+    difference = abs( step_width - (int)width );
+    if( best_difference < 0 || difference < best_difference ) {
+      best = at;
+      best_difference = difference;
+    }
+  }
+  return best;
 }
 
 /* Put the window where it was last time, if its title bar would be on a
-   monitor (which may have been disconnected since) */
+   monitor (which may have been disconnected since), at the step it had
+   (or the largest one that fits there now) */
 static void
 restore_geometry( HWND dialog )
 {
   RECT rect, title;
+  long x, y, saved_step, width;
 
-  if( load_geometry( &rect ) ) return;
+  if( !winstate_get( "keyboard", "x", &x ) ||
+      !winstate_get( "keyboard", "y", &y ) )
+    return;
 
+  if( winstate_get( "keyboard", "step", &saved_step ) &&
+      saved_step >= 0 && saved_step < STEPS ) {
+    step = saved_step;
+  } else if( winstate_get( "keyboard", "width", &width ) && width > 0 ) {
+    step = step_for_width( dialog, width );
+  }
+
+  GetWindowRect( dialog, &rect );
+  OffsetRect( &rect, x - rect.left, y - rect.top );
   title = rect;
   title.bottom = rect.top + GetSystemMetrics( SM_CYCAPTION );
-  if( !MonitorFromRect( &title, MONITOR_DEFAULTTONULL ) ) return;
+  if( !MonitorFromRect( &title, MONITOR_DEFAULTTONULL ) ) {
+    set_step( dialog, fitting_step( dialog, step, NULL ) );
+    return;
+  }
 
-  if( rect.right - rect.left < min_width ) rect.right = rect.left + min_width;
-  if( rect.bottom - rect.top < min_height )
-    rect.bottom = rect.top + min_height;
-
-  SetWindowPos( dialog, NULL, rect.left, rect.top, rect.right - rect.left,
-                rect.bottom - rect.top, SWP_NOZORDER | SWP_NOACTIVATE );
+  SetWindowPos( dialog, NULL, x, y, 0, 0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE );
+  set_step( dialog, fitting_step( dialog, step, &rect ) );
 }
 
 static void
@@ -421,33 +510,68 @@ destroy_dialog( void )
   picture_BMP = NULL;
 }
 
+/* Dragging the frame: where the window was and the mouse pointer was when
+   it started */
+static RECT drag_start_window;
+static POINT drag_start_pointer;
+
 static void
-resizing_dialog( WPARAM wParam, LPARAM lParam )
+start_resizing( HWND dialog )
 {
-  RECT *rc;
-  int width, height;
+  GetWindowRect( dialog, &drag_start_window );
+  GetCursorPos( &drag_start_pointer );
+}
 
-  rc = (RECT *)lParam;
-  width = rc->right - rc->left;
-  height = rc->bottom - rc->top;
+/* Dragging the frame: the nearest step that fits; the side being dragged
+   moves, the opposite one stays. The size wanted is taken from the
+   pointer, not from the rectangle proposed (which may be built on the one
+   snapped to last time, so it would never get to the next step) */
+static void
+resizing_dialog( HWND dialog, WPARAM edge, LPARAM lParam )
+{
+  RECT *rc = (RECT *)lParam;
+  POINT pointer;
+  int at, best = step, best_difference = -1, width, height;
+  int wanted_width, wanted_height, dx, dy;
+  int by_width = edge == WMSZ_LEFT || edge == WMSZ_RIGHT;
+  int by_height = edge == WMSZ_TOP || edge == WMSZ_BOTTOM;
+  int left = edge == WMSZ_LEFT || edge == WMSZ_TOPLEFT ||
+             edge == WMSZ_BOTTOMLEFT;
+  int top = edge == WMSZ_TOP || edge == WMSZ_TOPLEFT ||
+            edge == WMSZ_TOPRIGHT;
 
-  /* Force dialog minimum size to fit original picture size */
-  if( height < min_height ) {
-    if( wParam == WMSZ_TOP || wParam == WMSZ_TOPLEFT ||
-        wParam == WMSZ_TOPRIGHT )
-      rc->top = rc->bottom - min_height;
-    else
-      rc->bottom = rc->top + min_height;
+  GetCursorPos( &pointer );
+  dx = pointer.x - drag_start_pointer.x;
+  dy = pointer.y - drag_start_pointer.y;
+  wanted_width = drag_start_window.right - drag_start_window.left +
+                 ( left ? -dx : dx );
+  wanted_height = drag_start_window.bottom - drag_start_window.top +
+                  ( top ? -dy : dy );
+
+  for( at = 0; at < STEPS; at++ ) {
+    int difference;
+
+    if( at && !step_fits( dialog, at, rc ) ) continue;
+    window_size( dialog, at, &width, &height );
+    /* A corner: by both */
+    difference = by_width ? abs( width - wanted_width ) :
+                 by_height ? abs( height - wanted_height ) :
+                 abs( width - wanted_width ) + abs( height - wanted_height );
+    if( best_difference < 0 || difference < best_difference ) {
+      best = at;
+      best_difference = difference;
+    }
   }
 
-  if( width < min_width ) {
-    if( wParam == WMSZ_LEFT ||
-        wParam == WMSZ_TOPLEFT ||
-        wParam == WMSZ_BOTTOMLEFT )
-      rc->left = rc->right - min_width;
-    else
-      rc->right = rc->left + min_width;
-  }
+  step = best;
+  window_size( dialog, step, &width, &height );
+
+  /* From where the window was: the opposite sides stay */
+  *rc = drag_start_window;
+  if( left ) rc->left = rc->right - width;
+  else rc->right = rc->left + width;
+  if( top ) rc->top = rc->bottom - height;
+  else rc->bottom = rc->top + height;
 }
 
 static int
@@ -536,8 +660,12 @@ picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
       resize_dialog( hWnd );
       return 0;
 
+    case WM_ENTERSIZEMOVE:
+      start_resizing( hWnd );
+      break;
+
     case WM_SIZING:
-      resizing_dialog( wParam, lParam );
+      resizing_dialog( hWnd, wParam, lParam );
       return TRUE;
 
     case WM_DRAWITEM:
@@ -548,6 +676,12 @@ picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     case WM_COMMAND:
       if( LOWORD( wParam ) == IDCLOSE ) {
         destroy_dialog();
+        return 0;
+      }
+      /* A double click on the picture: the next size step */
+      if( LOWORD( wParam ) == IDC_PICTURE_FRAME &&
+          HIWORD( wParam ) == STN_DBLCLK ) {
+        next_step( hWnd );
         return 0;
       }
       break;

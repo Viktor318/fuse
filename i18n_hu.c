@@ -227,6 +227,8 @@ const i18n_entry i18n_hu_table[] = {
     "Ka&zetta" },
   { "&Try merge 'B' side of disks",
     "Lemezek „B” oldalának &összevonása" },
+  { "&Turbo",
+    "&Turbó" },
   { "&TurboSound mixer...",
     "T&urboSound keverő..." },
   { "&Unplug RxD",

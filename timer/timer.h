@@ -36,7 +36,14 @@ extern int timer_event;
 
 void timer_start_fastloading( void );
 void timer_stop_fastloading( void );
+/* Running flat out without sound: fastloading (with the fastload setting)
+   or turbo */
 int timer_fastloading_active( void );
+
+/* Machine > Turbo: as fast as the emulation can run, until switched off
+   (not a setting) */
+void timer_set_turbo( int on );
+int timer_turbo( void );
 
 /* Internal routines */
 

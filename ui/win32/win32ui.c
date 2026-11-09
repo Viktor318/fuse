@@ -1239,6 +1239,15 @@ modal_emulation_tick( void )
   modal_emulating = 0;
 }
 
+/* Machine > Turbo was switched: its tick in the menu */
+void
+win32ui_turbo_changed( void )
+{
+  CheckMenuItem( GetMenu( fuse_hWnd ), IDM_MENU_MACHINE_TURBO,
+                 MF_BYCOMMAND | ( timer_turbo() ? MF_CHECKED :
+                                                  MF_UNCHECKED ) );
+}
+
 /* Machine/Pause */
 void
 menu_machine_pause( int action )

@@ -30,6 +30,12 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   üzenettel lekerül a listáról. A lista a `fuse.cfg`-ben van
   (`recentfiles`, az útvonalak `|` jellel elválasztva), és minden
   változáskor kiíródik, a többi beállítás nélkül.
+- **Turbó** (F12, *Gép > Turbó*, bekapcsolva pipa jelzi): az emuláció
+  olyan gyorsan fut, ahogy csak tud, mint a kazetta gyorsbetöltésekor (az
+  is az a megoldás), hang nélkül; az állapotsor mutatja a sebességet
+  (több ezer százalék). Az F12 újra megnyomva visszavált a beállított
+  sebességre, és visszajön a hang. Nem beállítás: a Fuse mindig normál
+  sebességgel indul. Ha közben gépet váltasz, a hang akkor sem kapcsol be.
 
 ### Billentyűzet
 

@@ -40,6 +40,7 @@ void win32_ayplayer_show( void );
 void win32_tsplayer_show( void );
 void win32_aymixer_show( void );
 void win32_tsmixer_show( void );
+void win32ui_turbo_changed( void );
 #endif
 #include "movie.h"
 #include "machines/specplus3.h"
@@ -69,6 +70,7 @@ void win32_tsmixer_show( void );
 #include "snapshot.h"
 #include "svg.h"
 #include "tape.h"
+#include "timer/timer.h"
 #include "ui/scaler/scaler.h"
 #include "ui/ui.h"
 #include "ui/uimedia.h"
@@ -80,6 +82,16 @@ static int menu_select_machine_roms( libspectrum_machine machine, size_t start,
 
 static int menu_select_peripheral_roms( const char *peripheral_name,
 					size_t start, size_t n );
+
+/* Machine > Turbo: as fast as the emulation can go, and back */
+MENU_CALLBACK( menu_machine_turbo )
+{
+  ui_widget_finish();
+  timer_set_turbo( !timer_turbo() );
+#ifdef UI_WIN32
+  win32ui_turbo_changed();
+#endif
+}
 
 /* File > Recent files > Clear list */
 MENU_CALLBACK( menu_file_recentfiles_clearlist )

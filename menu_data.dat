@@ -162,6 +162,7 @@ _Machine, Branch
 #ifndef USE_WIDGET
 Machine/_Pause..., Item, Pause
 #endif
+Machine/_Turbo, Item, F12
 
 Machine/_Reset..., Item, F5,,, 0
 Machine/_Hard reset..., Item,, menu_machine_reset,, 1

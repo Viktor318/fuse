@@ -115,6 +115,7 @@ MENU_CALLBACK_WITH_ACTION( menu_media_if1_rs232 );
 
 MENU_CALLBACK( menu_media_ayplayer );
 MENU_CALLBACK( menu_media_tsplayer );
+MENU_CALLBACK( menu_machine_turbo );
 MENU_CALLBACK( menu_options_aymixer );
 MENU_CALLBACK( menu_options_tsmixer );
 

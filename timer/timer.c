@@ -153,6 +153,10 @@ timer_frame_callback_sound( libspectrum_dword last_tstates )
              timer_event );
 }
 
+/* Turbo (Machine > Turbo): the emulation runs as fast as it can, without
+   sound, as when fastloading */
+static int turbo = 0;
+
 void
 timer_start_fastloading( void )
 {
@@ -163,8 +167,8 @@ timer_start_fastloading( void )
 void
 timer_stop_fastloading( void )
 {
-  /* If we were fastloading, sound was off, so turn it back on, and
-     reset the speed counter */
+  /* If we were fastloading, sound was off, so turn it back on (unless
+     turbo keeps it off), and reset the speed counter */
   if( settings_current.fastload ) {
     sound_unpause();
     timer_estimate_reset();
@@ -174,7 +178,31 @@ timer_stop_fastloading( void )
 int
 timer_fastloading_active( void )
 {
-  return tape_is_playing() || phantom_typist_is_active();
+  return turbo || ( settings_current.fastload &&
+                    ( tape_is_playing() || phantom_typist_is_active() ) );
+}
+
+void
+timer_set_turbo( int on )
+{
+  on = on ? 1 : 0;
+  if( on == turbo ) return;
+
+  if( on ) {
+    turbo = 1;
+    sound_pause();
+  } else {
+    /* The normal speed (and the sound, unless still fastloading) again */
+    turbo = 0;
+    sound_unpause();
+    timer_estimate_reset();
+  }
+}
+
+int
+timer_turbo( void )
+{
+  return turbo;
 }
 
 static void
@@ -189,9 +217,9 @@ timer_frame( libspectrum_dword last_tstates, int event GCC_UNUSED,
     return;
   }
 
-  /* If we're fastloading, just schedule another check in a frame's time
-     and do nothing else */
-  if( settings_current.fastload && timer_fastloading_active() ) {
+  /* If we're fastloading (or in turbo), just schedule another check in a
+     frame's time and do nothing else */
+  if( timer_fastloading_active() ) {
 
     libspectrum_dword next_check_time =
       last_tstates + machine_current->timings.tstates_per_frame;

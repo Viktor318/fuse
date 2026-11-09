@@ -28,6 +28,12 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   Open*. A file that is not there any more is taken off the list with a
   message. The list is kept in `fuse.cfg` (`recentfiles`, the paths apart by
   `|`) and written at each change, without the other settings.
+- **Turbo** (F12, *Machine > Turbo*, ticked while on): the emulation runs
+  as fast as it can, as when fastloading a tape (the same mechanism),
+  without sound; the status bar shows the speed (thousands of percent).
+  F12 again goes back to the speed set in the options and the sound comes
+  back. It is not a setting: Fuse always starts at normal speed. Changing
+  the machine meanwhile doesn't turn the sound on.
 
 ### Keyboard
 

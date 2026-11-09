@@ -172,6 +172,9 @@ AY sound generator of its own, apart from the emulated machine.
   next start.
 - The main window, the keyboard picture and the AY player windows open where
   they were last time.
+- **Turbo** (F12, *Machine > Turbo*): the emulation runs as fast as it
+  can, without sound (as when fastloading a tape); F12 again goes back to
+  the normal speed. The status bar shows the speed. It is not saved.
 - **Recent files** (*File > Recent files*): the last 10 files opened (with
   *File > Open*, by dragging onto Fuse, on the command line, or from the
   *Media* menus), newest first, to open again with a click or 1–9, 0. A file

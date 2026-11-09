@@ -129,6 +129,8 @@ int win32_recent_files_command( WORD id );
 int win32ui_picture_is_open( void );
 void menu_help_keyboard( int action );
 int win32ui_machine_paused( void );
+/* Machine > Turbo was switched on or off */
+void win32ui_turbo_changed( void );
 
 /* A Windows modal loop (menu, moving or resizing a window) starts / ends */
 void win32ui_modal_enter( void );

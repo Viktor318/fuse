@@ -187,6 +187,10 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   következő indításkor visszaállítja.
 - A főablak, a billentyűzetkép és az AY lejátszó ablakai ott nyílnak meg,
   ahol legutóbb voltak.
+- **Turbó** (F12, *Gép > Turbó*): az emuláció olyan gyorsan fut, ahogy
+  csak tud, hang nélkül (mint a kazetta gyorsbetöltésekor); az F12 újra
+  megnyomva visszavált a normál sebességre. Az állapotsor mutatja a
+  sebességet. Nem kerül mentésre.
 - **Legutóbbi fájlok** (*Fájl > Legutóbbi fájlok*): az utolsó 10 megnyitott
   fájl (*Fájl > Megnyitás*, a Fuse-ra húzás, a parancssor vagy a *Média*
   menük útján), a legújabb elöl; egy kattintással vagy az 1–9, 0

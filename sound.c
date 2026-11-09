@@ -149,6 +149,10 @@ sound_init( const char *device )
          is_in_sound_enabled_range() ) )
     return;
 
+  /* No sound while running flat out (turbo; fastloading), also if the
+     machine is changed meanwhile */
+  if( timer_fastloading_active() ) return;
+
   /* only try for stereo if we need it */
   sound_stereo_ay = sound_ay_stereo_setting();
   if( settings_current.sound &&
@@ -230,8 +234,8 @@ sound_pause( void )
 void
 sound_unpause( void )
 {
-  /* No sound if fastloading in progress */
-  if( settings_current.fastload && timer_fastloading_active() )
+  /* No sound if fastloading (or turbo) in progress */
+  if( timer_fastloading_active() )
     return;
 
   sound_init( settings_current.sound_device );

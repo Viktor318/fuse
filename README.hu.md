@@ -30,6 +30,11 @@ A csomagban két program van, közös beállításokkal:
 - a `fuse-directsound.exe` a régebbi DirectSoundot használja, tartaléknak,
   ha egy gépen a WASAPI-val nem szól jól a hang.
 
+A `doc` mappában weboldalként ott van a Fuse kézikönyve (angolul) és ennek
+a kiadásnak a leírása (ez a README és a változásnapló); a *Súgó >
+Kézikönyv* és a *Súgó > A magyar kiadás újdonságai* a böngészőben nyitja
+meg őket.
+
 ## Mit ad hozzá ez a kiadás
 
 ### Magyar vagy angol felület
@@ -235,6 +240,7 @@ lehet lefordítani, MinGW-w64-gyel:
 sudo apt install gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
      libz-mingw-w64-dev autoconf automake libtool pkg-config flex bison \
      perl zip git
+sudo apt install pandoc     # nem kötelező, a doc mappához kell
 ./build-windows-cross.sh
 ```
 
@@ -244,7 +250,9 @@ Windows-felülettel kétszer (WASAPI: `fuse.exe`, DirectSound:
 `fuse-directsound.exe`), és ezeket a két szükséges DLL-lel (`zlib1.dll`,
 `libwinpthread-1.dll`), a ROM-okkal és
 adatfájlokkal együtt a `~/fuse-windows/Fuse-windows-<ág>.zip` fájlba
-csomagolja. `FUSE_AUDIO_DRIVERS=wasapi` esetén csak az egyiket fordítja le. A forrás egy másolatán dolgozik. A WSL-hez kapcsolódó VS Code-ból
+csomagolja. Ha van pandoc, a kézikönyvet (`man/fuse.1`), a README-ket és
+a változásnaplókat HTML-be alakítja a `doc` mappába; pandoc nélkül a `doc`
+figyelmeztetéssel kimarad. `FUSE_AUDIO_DRIVERS=wasapi` esetén csak az egyiket fordítja le. A forrás egy másolatán dolgozik. A WSL-hez kapcsolódó VS Code-ból
 való fordítás beállításai a `.vscode` mappában vannak (Ctrl+Shift+B).
 
 ## Licenc

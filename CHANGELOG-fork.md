@@ -34,6 +34,12 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   F12 again goes back to the speed set in the options and the sound comes
   back. It is not a setting: Fuse always starts at normal speed. Changing
   the machine meanwhile doesn't turn the sound on.
+- **Manual and description in the package**: the `doc` folder has the Fuse
+  manual (from `man/fuse.1`), the READMEs and the change logs of this
+  edition as web pages. *Help > Manual* opens the manual, *Help > What's
+  new in this edition* the README (Hungarian with the Hungarian interface)
+  in the browser; a missing file gives a message. `build-windows-cross.sh`
+  makes them with pandoc, and leaves them out with a warning without it.
 
 ### Keyboard
 

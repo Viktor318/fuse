@@ -28,6 +28,10 @@ There are two programs in the package, with the same settings:
 - `fuse-directsound.exe` uses the older DirectSound, as a fallback if the
   sound doesn't work well with WASAPI on a computer.
 
+The `doc` folder has the Fuse manual and the descriptions of this edition
+(this README and the change log) as web pages; *Help > Manual* and *Help >
+What's new in this edition* open them in the browser.
+
 ## What this edition adds
 
 ### Hungarian or English user interface
@@ -217,6 +221,7 @@ Linux) with MinGW-w64:
 sudo apt install gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
      libz-mingw-w64-dev autoconf automake libtool pkg-config flex bison \
      perl zip git
+sudo apt install pandoc     # optional, for the doc folder
 ./build-windows-cross.sh
 ```
 
@@ -225,7 +230,9 @@ libraries and then Fuse with the Win32
 user interface twice (WASAPI: `fuse.exe`, DirectSound:
 `fuse-directsound.exe`), and packages them with the two DLLs they need
 (`zlib1.dll`, `libwinpthread-1.dll`), the ROMs and data files
-into `~/fuse-windows/Fuse-windows-<branch>.zip`. `FUSE_AUDIO_DRIVERS=wasapi`
+into `~/fuse-windows/Fuse-windows-<branch>.zip`. With pandoc it also
+converts the manual (`man/fuse.1`), the READMEs and the change logs to HTML
+in `doc`; without it, `doc` is left out with a warning. `FUSE_AUDIO_DRIVERS=wasapi`
 builds only one of them. It works on a copy of the
 source tree. Settings for building from VS Code connected to WSL are in
 `.vscode` (Ctrl+Shift+B).

@@ -36,6 +36,13 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   (több ezer százalék). Az F12 újra megnyomva visszavált a beállított
   sebességre, és visszajön a hang. Nem beállítás: a Fuse mindig normál
   sebességgel indul. Ha közben gépet váltasz, a hang akkor sem kapcsol be.
+- **Kézikönyv és leírás a csomagban**: a `doc` mappában weboldalként ott
+  van a Fuse kézikönyve (a `man/fuse.1`-ből), valamint ennek a kiadásnak a
+  README-i és változásnaplói. A *Súgó > Kézikönyv* a kézikönyvet, a
+  *Súgó > A magyar kiadás újdonságai* a README-t (magyar felülettel a
+  magyart) nyitja meg a böngészőben; ha a fájl hiányzik, üzenet jelzi. A
+  `build-windows-cross.sh` pandockal készíti el őket, pandoc nélkül
+  figyelmeztetéssel kihagyja.
 
 ### Billentyűzet
 

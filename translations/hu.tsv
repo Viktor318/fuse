@@ -678,3 +678,7 @@ extra	TurboSound mixer	Load TurboSound mixer settings	TurboSound keverőbeállí
 4 Üzenetek	hibaüzenet	'%s' no longer exists; it was removed from the list	A(z) '%s' már nem létezik, ezért lekerült a listáról
 3 Ablakok	IDD_JOYSTICKS: AUTOCHECKBOX	&Autofire	&Automatikus tűz
 1 Menü	Machine	&Turbo	&Turbó
+1 Menü	Help	&Manual	&Kézikönyv
+1 Menü	Help	&What's new in this edition	A &magyar kiadás újdonságai
+4 Üzenetek	hibaüzenet	'%s' is missing: the documents come in the doc folder of the Windows package	Nem található: „%s”. A leírások a Windows-csomag doc mappájában vannak
+4 Üzenetek	hibaüzenet	'%s' could not be opened	A(z) „%s” nem nyitható meg

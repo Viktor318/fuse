@@ -532,4 +532,9 @@ Media/Tu_rboSound player..., Item,, menu_media_tsplayer
 
 _Help, Branch
 Help/_Keyboard..., Item
+#ifdef UI_WIN32
+Help/_Manual, Item
+Help/_What's new in this edition, Item
+Help/separator, Separator
+#endif
 Help/_About..., Item

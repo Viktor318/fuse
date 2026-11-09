@@ -9,6 +9,8 @@
 #   sudo apt install gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
 #        libz-mingw-w64-dev autoconf automake libtool pkg-config flex bison \
 #        perl zip git
+#   sudo apt install pandoc     (optional: the HTML manual and descriptions
+#                                in doc\ for the Help menu)
 #   ./build-windows-cross.sh
 #
 # Result / Eredmény:  ~/fuse-windows/Fuse-windows-<branch>.zip, with
@@ -25,6 +27,7 @@
 
 set -e
 
+no_docs=
 HOST=x86_64-w64-mingw32
 LIBSPECTRUM_REPO="${LIBSPECTRUM_REPO:-https://github.com/fuse-emulator/libspectrum.git}"
 LIBPNG_REPO="${LIBPNG_REPO:-https://github.com/pnggroup/libpng.git}"
@@ -173,6 +176,37 @@ for doc in README.md README.hu.md CHANGELOG-fork.md CHANGELOG-fork.hu.md; do
   [ -f "$doc" ] && cp "$doc" "$NAME/"
 done
 
+# The manual and the descriptions as HTML in doc\, for Help > Manual and
+# Help > What's new in this edition. They need pandoc: without it they are
+# left out with a warning, and the rest of the package is made as usual
+# A kézikönyv és a leírások HTML-ben a doc\ mappában a Súgó menühöz; pandoc
+# nélkül figyelmeztetéssel kimaradnak
+if command -v pandoc >/dev/null 2>&1; then
+  mkdir -p "$NAME/doc"
+  style=data/win32/doc-style.html
+  filter=data/win32/doc-filter.lua
+  pandoc -f man -t html -s --toc --lua-filter "$filter" -H "$style" \
+         -M title=Fuse -M pagetitle="Fuse manual" -M lang=en \
+         -o "$NAME/doc/fuse-manual.html" man/fuse.1 ||
+    echo "Warning / Figyelmeztetés: man/fuse.1 could not be converted"
+  for doc in README README.hu CHANGELOG-fork CHANGELOG-fork.hu; do
+    case $doc in
+      *.hu) lang=hu ;;
+      *) lang=en ;;
+    esac
+    title=$(sed -n 's/^# //p' "$doc.md" | head -n 1)
+    pandoc -f gfm -t html -s --lua-filter "$filter" -H "$style" \
+           -M pagetitle="$title" -M lang=$lang \
+           -o "$NAME/doc/$doc.html" "$doc.md" ||
+      echo "Warning / Figyelmeztetés: $doc.md could not be converted"
+  done
+else
+  no_docs="Warning / Figyelmeztetés: pandoc is missing, the package has no
+  doc folder (Help > Manual) / nincs pandoc, a csomagból kimaradt a doc
+  mappa (Súgó > Kézikönyv): sudo apt install pandoc"
+  echo "$no_docs"
+fi
+
 mkdir -p "$OUTDIR"
 rm -rf "$OUTDIR/$NAME" "$OUTDIR/$NAME.zip"
 cp -a "$NAME" "$OUTDIR/"
@@ -182,3 +216,4 @@ echo
 echo "Windows build ready / Elkészült:"
 for exe in "$OUTDIR/$NAME"/fuse*.exe; do echo "  $exe"; done
 echo "  $OUTDIR/$NAME.zip"
+[ -z "$no_docs" ] || { echo; echo "$no_docs"; }

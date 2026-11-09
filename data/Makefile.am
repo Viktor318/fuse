@@ -127,6 +127,8 @@ EXTRA_DIST += \
               data/win32/LICENSES.txt \
               data/win32/README-win32.txt \
               data/win32/check_win32_dll_deps.sh \
+              data/win32/doc-filter.lua \
+              data/win32/doc-style.html \
               data/win32/fuse.manifest.in \
               data/win32/installer.nsi.in \
               data/win32/winfuse.ico

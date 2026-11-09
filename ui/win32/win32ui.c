@@ -1421,6 +1421,44 @@ menu_help_keyboard( int action )
   win32ui_picture( "keyboard.scr", PICTURE_SCR );
 }
 
+/* Help > Manual and Help > What's new in this edition: the HTML documents
+   of the package (in the doc folder beside fuse.exe), in the browser */
+static void
+open_document( const char *name )
+{
+  char path[ PATH_MAX ], *end;
+  DWORD length;
+
+  length = GetModuleFileName( NULL, path, sizeof( path ) );
+  if( !length || length >= sizeof( path ) ) return;
+  end = strrchr( path, '\\' );
+  end = end ? end + 1 : path;
+  snprintf( end, sizeof( path ) - ( end - path ), "doc\\%s", name );
+
+  if( !compat_file_exists( path ) ) {
+    ui_error( UI_ERROR_ERROR,
+              "'%s' is missing: the documents come in the doc folder of the "
+              "Windows package", path );
+    return;
+  }
+
+  if( (INT_PTR)ShellExecute( fuse_hWnd, "open", path, NULL, NULL,
+                             SW_SHOWNORMAL ) <= 32 )
+    ui_error( UI_ERROR_ERROR, "'%s' could not be opened", path );
+}
+
+void
+menu_help_manual( int action )
+{
+  open_document( "fuse-manual.html" );
+}
+
+void
+menu_help_whatsnewinthisedition( int action )
+{
+  open_document( i18n_hungarian() ? "README.hu.html" : "README.html" );
+}
+
 /* Functions to activate and deactivate certain menu items */
 static int
 set_active( HMENU menu, const char *path, int active )

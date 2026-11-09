@@ -8,6 +8,14 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 
 ## Kiadatlan
 
+### Spectrum 128 keypad
+
+- A keypad többi szerkesztőfunkciója: a Ctrl + Home / End a program első /
+  utolsó sorára ugrik, a Ctrl + Backspace / Delete a szó elejéig / végéig
+  töröl, a Ctrl + Insert vált a felső és az alsó képernyőrész között
+  (TOGGLE). A sor elejéig / végéig törlés a Shift + Backspace / Delete-re
+  került (eddig Ctrl + Backspace / Delete volt).
+
 ### Upstream Fuse
 
 - Javítás az upstream `master` ágból: a lemezmeghajtó motorja akkor is

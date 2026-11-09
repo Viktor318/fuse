@@ -28,10 +28,10 @@
    1, 2, 3 from the lowest bits up, as the keypad sends them. The editing
    functions of the 128 BASIC editor in brackets */
 typedef enum keypad128_key {
-  KEYPAD128_PERIOD = 1,		/* (10 lines down?) see keypad128.c */
+  KEYPAD128_PERIOD = 1,		/* (last line of the program) */
   KEYPAD128_0 = 3,		/* (SHIFT) */
   KEYPAD128_ENTER = 4,
-  KEYPAD128_3 = 5,
+  KEYPAD128_3 = 5,		/* (first line of the program) */
   KEYPAD128_2 = 6,		/* (end of line) */
   KEYPAD128_1 = 7,		/* (start of line) */
   KEYPAD128_RPAREN = 8,		/* (TOGGLE) */
@@ -42,8 +42,8 @@ typedef enum keypad128_key {
   KEYPAD128_9 = 13,		/* (cursor right) */
   KEYPAD128_8 = 14,		/* (cursor down) */
   KEYPAD128_7 = 15,		/* (cursor left) */
-  KEYPAD128_PLUS = 16,
-  KEYPAD128_6 = 17,
+  KEYPAD128_PLUS = 16,		/* (10 lines down) */
+  KEYPAD128_6 = 17,		/* (10 lines up) */
   KEYPAD128_5 = 18,		/* (next word) */
   KEYPAD128_4 = 19,		/* (previous word) */
 } keypad128_key;

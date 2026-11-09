@@ -305,14 +305,17 @@ keypad128_read( void )
    editing functions of the 128 BASIC editor, which only the keypad has:
 
      Home / End                start / end of the line
+     Ctrl + Home / End         first / last line of the program
      Ctrl + Left / Right       previous / next word
      Page Up / Page Down       10 lines up / down
      Delete                    delete the character under the cursor
-     Ctrl + Delete             delete to the end of the line
-     Ctrl + Backspace          delete to the start of the line
+     Ctrl + Backspace / Delete delete to the start / end of the word
+     Shift + Backspace / Delete delete to the start / end of the line
      Insert                    CMND (the editor menu)
+     Ctrl + Insert             TOGGLE (between the upper and lower screen)
 
-   The deletions of more than one character need the keypad SHIFT too. */
+   The deletions of more than one character need the keypad SHIFT too.
+   Ctrl wins over Shift when both are held. */
 
 #define KEY( k ) ( (libspectrum_dword)1 << ( k ) )
 
@@ -320,25 +323,33 @@ keypad128_read( void )
 static struct { input_key key; libspectrum_dword bits; } held[ MAX_HELD ];
 static int held_count = 0;
 
-/* Ctrl keys held: bit 0 left, bit 1 right */
+/* Ctrl and Shift keys held: bit 0 left, bit 1 right */
 static int ctrl_held = 0;
+static int shift_held = 0;
 
 static libspectrum_dword
 keypad_keys_for( input_key key )
 {
   int ctrl = ctrl_held != 0;
+  int shift = shift_held != 0;
 
   switch( key ) {
-  case INPUT_KEY_Home:      return KEY( KEYPAD128_1 );
-  case INPUT_KEY_End:       return KEY( KEYPAD128_2 );
+  case INPUT_KEY_Home:
+    return ctrl ? KEY( KEYPAD128_3 ) : KEY( KEYPAD128_1 );
+  case INPUT_KEY_End:
+    return ctrl ? KEY( KEYPAD128_PERIOD ) : KEY( KEYPAD128_2 );
   case INPUT_KEY_Page_Up:   return KEY( KEYPAD128_6 );
   case INPUT_KEY_Page_Down: return KEY( KEYPAD128_PLUS );
-  case INPUT_KEY_Insert:    return KEY( KEYPAD128_MINUS );
+  case INPUT_KEY_Insert:
+    return ctrl ? KEY( KEYPAD128_RPAREN ) : KEY( KEYPAD128_MINUS );
   case INPUT_KEY_Delete:
-    return ctrl ? KEY( KEYPAD128_0 ) | KEY( KEYPAD128_2 )
-                : KEY( KEYPAD128_LPAREN );
+    if( ctrl ) return KEY( KEYPAD128_0 ) | KEY( KEYPAD128_5 );
+    if( shift ) return KEY( KEYPAD128_0 ) | KEY( KEYPAD128_2 );
+    return KEY( KEYPAD128_LPAREN );
   case INPUT_KEY_BackSpace:
-    return ctrl ? KEY( KEYPAD128_0 ) | KEY( KEYPAD128_1 ) : 0;
+    if( ctrl ) return KEY( KEYPAD128_0 ) | KEY( KEYPAD128_4 );
+    if( shift ) return KEY( KEYPAD128_0 ) | KEY( KEYPAD128_1 );
+    return 0;
   case INPUT_KEY_Left:      return ctrl ? KEY( KEYPAD128_4 ) : 0;
   case INPUT_KEY_Right:     return ctrl ? KEY( KEYPAD128_5 ) : 0;
   default:                  return 0;
@@ -363,6 +374,12 @@ keypad128_host_key( input_key key, int press )
   if( key == INPUT_KEY_Control_L || key == INPUT_KEY_Control_R ) {
     int bit = key == INPUT_KEY_Control_L ? 1 : 2;
     if( press ) ctrl_held |= bit; else ctrl_held &= ~bit;
+    return 0;
+  }
+
+  if( key == INPUT_KEY_Shift_L || key == INPUT_KEY_Shift_R ) {
+    int bit = key == INPUT_KEY_Shift_L ? 1 : 2;
+    if( press ) shift_held |= bit; else shift_held &= ~bit;
     return 0;
   }
 
@@ -396,5 +413,6 @@ keypad128_release_all( void )
 {
   held_count = 0;
   ctrl_held = 0;
+  shift_held = 0;
   update_keys();
 }

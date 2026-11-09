@@ -63,12 +63,14 @@ There are two programs in the package, with the same settings:
   | Key | 128 BASIC editor |
   |---|---|
   | Home / End | start / end of the line |
+  | Ctrl + Home / End | first / last line of the program |
   | Ctrl + ← / → | previous / next word |
   | Page Up / Page Down | 10 lines up / down |
   | Delete | delete the character under the cursor |
-  | Ctrl + Delete | delete to the end of the line |
-  | Ctrl + Backspace | delete to the start of the line |
+  | Ctrl + Backspace / Delete | delete to the start / end of the word |
+  | Shift + Backspace / Delete | delete to the start / end of the line |
   | Insert | the Options menu (CMND) |
+  | Ctrl + Insert | switch between the upper and lower screen (TOGGLE) |
 
   Insert and Delete are then shortcuts for the RZX menu items only while
   an RZX file is being recorded.

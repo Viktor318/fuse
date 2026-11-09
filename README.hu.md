@@ -67,12 +67,14 @@ A csomagban két program van, közös beállításokkal:
   | Billentyű | 128 BASIC szerkesztő |
   |---|---|
   | Home / End | a sor eleje / vége |
+  | Ctrl + Home / End | a program első / utolsó sora |
   | Ctrl + ← / → | előző / következő szó |
   | Page Up / Page Down | 10 sorral fel / le |
   | Delete | a kurzor alatti karakter törlése |
-  | Ctrl + Delete | törlés a sor végéig |
-  | Ctrl + Backspace | törlés a sor elejéig |
+  | Ctrl + Backspace / Delete | törlés a szó elejéig / végéig |
+  | Shift + Backspace / Delete | törlés a sor elejéig / végéig |
   | Insert | az Options menü (CMND) |
+  | Ctrl + Insert | váltás a felső és az alsó képernyőrész között (TOGGLE) |
 
   Az Insert és a Delete ilyenkor csak RZX felvétel közben gyorsbillentyűje
   az RZX menüpontoknak.

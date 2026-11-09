@@ -7,6 +7,14 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
 ## Unreleased
 
+### Spectrum 128 keypad
+
+- The rest of the keypad's editing functions: Ctrl + Home / End go to the
+  first / last line of the program, Ctrl + Backspace / Delete delete to
+  the start / end of the word, Ctrl + Insert switches between the upper
+  and lower screen (TOGGLE). Deleting to the start / end of the line moved
+  to Shift + Backspace / Delete (it was Ctrl + Backspace / Delete).
+
 ### Upstream Fuse
 
 - Fix from upstream `master`: the motor of a floppy drive turns whether a

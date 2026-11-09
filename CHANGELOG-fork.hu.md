@@ -55,6 +55,13 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   a hellyel együtt; egy korábbi változat által mentett méretből a
   legközelebbi lépés lesz. Először 200%-on nyílik meg, vagy a legnagyobb
   kiférő méreten.
+- **Spectrum 128 keypad a billentyűzetképen**: a 128-on és a +2-n,
+  bekapcsolt *Spectrum 128 keypad* mellett a keypad a billentyűzet jobb
+  oldalán látszik, ugyanakkora magasságban és ugyanazokban a méretekben, a
+  billentyűk alatt szürkével a funkcióikat adó PC billentyűkkel. A gép vagy
+  a beállítás változásakor megjelenik, illetve eltűnik; az ablak bal
+  oldala a helyén marad. A kép ehhez a kiadáshoz készült (`lib/keypad.png`,
+  a `data/keypad.svg`-ből).
 
 ### Joystickok
 

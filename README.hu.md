@@ -84,7 +84,9 @@ A csomagban két program van, közös beállításokkal:
   gépelni. Öt mérete van, 100%-tól 200%-ig (a 200% a kép saját felbontása,
   így mindig éles): a képre duplán kattintva a következőre vált, a keret
   húzásakor a legközelebbire ugrik; a képernyőre ki nem férő méreteket
-  kihagyja. Megjegyzi a helyét és a méretét.
+  kihagyja. Megjegyzi a helyét és a méretét. Bekapcsolt Spectrum 128
+  keypad mellett (128, +2) a keypad a billentyűzet jobb oldalán látszik, a
+  billentyűk alatt szürkével a funkcióikat adó PC billentyűkkel.
 - **Automatikus tűz** (*Beállítások > Joystickok > Joystick 1 / Joystick 2
   / Billentyűzet...*): amíg a tűzgomb le van nyomva, a Spectrum felváltva
   lenyomottnak és felengedettnek látja, 3-3 képkockáig (másodpercenként

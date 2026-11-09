@@ -52,6 +52,13 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   monitor are skipped. The size is kept in `fuse-windows.ini` (`step`)
   with the place; a size saved by an earlier version gives the nearest
   step. The first time it opens at 200%, or the largest size that fits.
+- **Spectrum 128 keypad in the keyboard picture**: on the 128 and the +2
+  with the *Spectrum 128 keypad* on, the keypad is drawn right of the
+  keyboard, at the same height and in the same sizes, with the PC keys
+  that give its functions in grey under the keys. It comes and goes as the
+  machine or the option changes, the left side of the window staying. The
+  picture is drawn for this edition (`lib/keypad.png`, made from
+  `data/keypad.svg`).
 
 ### Joysticks
 

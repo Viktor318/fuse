@@ -122,6 +122,7 @@ EXTRA_DIST += \
               data/net.sourceforge.fuse_emulator.Fuse.desktop.in \
               data/net.sourceforge.fuse_emulator.Fuse.metainfo.xml \
               data/fuse.xml.in \
+              data/keypad.svg \
               data/shell-completion/diff_options.sh \
               data/win32/LICENSES.txt \
               data/win32/README-win32.txt \

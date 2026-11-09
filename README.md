@@ -80,7 +80,9 @@ There are two programs in the package, with the same settings:
   five sizes, 100% to 200% (200% is the picture's own resolution, so it is
   always sharp): a double click on the picture goes to the next one, and
   dragging the frame snaps to the nearest one; sizes that don't fit the
-  screen are skipped. It remembers its place and size.
+  screen are skipped. It remembers its place and size. With the Spectrum
+  128 keypad on (128 and +2), the keypad is shown right of the keyboard,
+  with the PC keys that give its functions in grey under the keys.
 - **Autofire** (*Options > Joysticks > Joystick 1 / Joystick 2 /
   Keyboard...*): while fire is held, the Spectrum sees it pressed and
   released in turn, 3 frames each (about 8 shots a second), whatever the

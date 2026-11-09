@@ -36,6 +36,7 @@
 
 #include "compat.h"
 #include "display.h"
+#include "peripherals/keypad128.h"
 #include "picture.h"
 #include "utils.h"
 #include "win32internals.h"
@@ -59,6 +60,7 @@ static int show_system_picture( const char *filename );
 static HBITMAP load_picture( const char *filename, int *width, int *height );
 static void draw_bitmap( HBITMAP bitmap, int width, int height );
 static void restore_geometry( HWND dialog );
+static void load_keypad( void );
 
 #ifdef PNG_SIMPLIFIED_READ_SUPPORTED
 
@@ -197,12 +199,23 @@ static int picture_width, picture_height;
 /* The step shown */
 static int step = LARGEST_STEP;
 
-/* The size of the picture at a step: ( 4 + step ) / 8 of its own size */
+/* The Spectrum 128 keypad (lib/keypad.png), to the right of the keyboard,
+   as tall as it, while the keypad is plugged in (and the machine can use
+   it) */
+static HBITMAP keypad_BMP = NULL;
+static int keypad_width, keypad_height;
+static int keypad_shown = 0;
+#define KEYPAD_TIMER 1
+
+/* The size of the picture at a step: ( 4 + step ) / 8 of its own size,
+   with the keypad beside it */
 static void
 content_size( int at, int *width, int *height )
 {
   *height = picture_height * ( 4 + at ) / 8;
   *width = picture_width * ( 4 + at ) / 8;
+  if( keypad_shown && keypad_height )
+    *width += keypad_width * *height / keypad_height;
 }
 
 /* The size of the window's client area besides the picture: the Close
@@ -398,6 +411,10 @@ create_dialog( int width, int height )
   if( dialog == NULL )
     return NULL;
 
+  load_keypad();
+  keypad_shown = keypad_BMP && keypad128_active();
+  SetTimer( dialog, KEYPAD_TIMER, 300, NULL );
+
   inflate_dialog( dialog, width, height );
   move_dialog( dialog, fuse_hWnd );
   restore_geometry( dialog );
@@ -450,7 +467,10 @@ static int
 step_for_width( HWND dialog, long width )
 {
   int at, best = LARGEST_STEP, best_difference = -1;
+  int shown = keypad_shown;
 
+  /* Those versions had no keypad beside the keyboard */
+  keypad_shown = 0;
   for( at = 0; at < STEPS; at++ ) {
     int step_width, step_height, difference;
     window_size( dialog, at, &step_width, &step_height );
@@ -460,6 +480,7 @@ step_for_width( HWND dialog, long width )
       best_difference = difference;
     }
   }
+  keypad_shown = shown;
   return best;
 }
 
@@ -508,6 +529,22 @@ destroy_dialog( void )
 
   DeleteObject( picture_BMP );
   picture_BMP = NULL;
+  if( keypad_BMP ) {
+    DeleteObject( keypad_BMP );
+    keypad_BMP = NULL;
+  }
+}
+
+/* The keypad plugged in or out, or the machine changed: the keypad
+   appears or goes, the window gets wider or narrower on the right */
+static void
+check_keypad( HWND dialog )
+{
+  int shown = keypad_BMP && keypad128_active();
+
+  if( shown == keypad_shown ) return;
+  keypad_shown = shown;
+  set_step( dialog, fitting_step( dialog, step, NULL ) );
 }
 
 /* Dragging the frame: where the window was and the mouse pointer was when
@@ -574,51 +611,71 @@ resizing_dialog( HWND dialog, WPARAM edge, LPARAM lParam )
   else rc->bottom = rc->top + height;
 }
 
+/* Stretch a bitmap into a place of the frame */
+static void
+draw_bitmap_at( HDC dc, HBITMAP bitmap, int x, int y, int width, int height )
+{
+  BITMAP info;
+  HDC bitmap_dc = CreateCompatibleDC( dc );
+  HBITMAP old = SelectObject( bitmap_dc, bitmap );
+
+  GetObject( bitmap, sizeof( BITMAP ), &info );
+
+  /* Good quality when the picture is shown smaller than its own size */
+  if( width < info.bmWidth || height < info.bmHeight ) {
+    SetStretchBltMode( dc, HALFTONE );
+    SetBrushOrgEx( dc, 0, 0, NULL );
+  } else {
+    SetStretchBltMode( dc, COLORONCOLOR );
+  }
+
+  StretchBlt( dc, x, y, width, height, bitmap_dc, 0, 0, info.bmWidth,
+              info.bmHeight, SRCCOPY );
+
+  SelectObject( bitmap_dc, old );
+  DeleteDC( bitmap_dc );
+}
+
 static int
 draw_frame( LPDRAWITEMSTRUCT drawitem )
 {
   float scale_x, scale_y, scale_factor;
   int offset_x, offset_y;
-  int scaled_width, scaled_height;
-  int allocation_width, allocation_height;
+  int scaled_width, scaled_height, keypad_scaled_width = 0;
+  int allocation_width, allocation_height, own_width;
   BITMAP bitmap_info;
   RECT rc;
 
   if( !( drawitem->itemAction & ODA_DRAWENTIRE ) )
     return FALSE;
 
-  HDC pic_dc = CreateCompatibleDC( drawitem->hDC );
-  HBITMAP old_bmp = SelectObject( pic_dc, picture_BMP );
   GetObject( picture_BMP, sizeof( BITMAP ), &bitmap_info );
 
   allocation_width = drawitem->rcItem.right - drawitem->rcItem.left;
   allocation_height = drawitem->rcItem.bottom - drawitem->rcItem.top;
 
-  scale_x = (float)allocation_width / bitmap_info.bmWidth;
+  /* The keyboard, and the keypad beside it as tall as the keyboard */
+  own_width = bitmap_info.bmWidth;
+  if( keypad_shown && keypad_height )
+    own_width += keypad_width * bitmap_info.bmHeight / keypad_height;
+
+  scale_x = (float)allocation_width / own_width;
   scale_y = (float)allocation_height / bitmap_info.bmHeight;
   scale_factor = scale_x < scale_y ? scale_x : scale_y;
 
-  scaled_width = bitmap_info.bmWidth * scale_factor;
-  scaled_height = bitmap_info.bmHeight * scale_factor;
-  offset_x = ( allocation_width - scaled_width ) / 2;
+  scaled_width = bitmap_info.bmWidth * scale_factor + 0.5f;
+  scaled_height = bitmap_info.bmHeight * scale_factor + 0.5f;
+  if( keypad_shown && keypad_height )
+    keypad_scaled_width = keypad_width * scaled_height / keypad_height;
+  offset_x = ( allocation_width - scaled_width - keypad_scaled_width ) / 2;
   offset_y = ( allocation_height - scaled_height ) / 2;
 
-  /* Good quality when the picture is shown smaller than its own size */
-  if( scale_factor < 1.0f ) {
-    SetStretchBltMode( drawitem->hDC, HALFTONE );
-    SetBrushOrgEx( drawitem->hDC, 0, 0, NULL );
-  } else {
-    SetStretchBltMode( drawitem->hDC, COLORONCOLOR );
-  }
-
-  StretchBlt( drawitem->hDC, offset_x, offset_y,
-              scaled_width,
-              scaled_height,
-              pic_dc, 0, 0, bitmap_info.bmWidth, bitmap_info.bmHeight,
-              SRCCOPY );
-
-  SelectObject( pic_dc, old_bmp );
-  DeleteDC( pic_dc );
+  draw_bitmap_at( drawitem->hDC, picture_BMP, offset_x, offset_y,
+                  scaled_width, scaled_height );
+  if( keypad_scaled_width )
+    draw_bitmap_at( drawitem->hDC, keypad_BMP, offset_x + scaled_width,
+                    offset_y, keypad_scaled_width, scaled_height );
+  scaled_width += keypad_scaled_width;
 
   /* Erase background (hopefully) without flickering */
   if( offset_y > 0 ) {
@@ -662,6 +719,13 @@ picture_wnd_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 
     case WM_ENTERSIZEMOVE:
       start_resizing( hWnd );
+      break;
+
+    case WM_TIMER:
+      if( wParam == KEYPAD_TIMER ) {
+        check_keypad( hWnd );
+        return 0;
+      }
       break;
 
     case WM_SIZING:
@@ -873,6 +937,51 @@ draw_bitmap( HBITMAP bitmap, int width, int height )
   SelectObject( picture_dc, old_picture );
   DeleteDC( source_dc );
   DeleteDC( picture_dc );
+}
+
+/* The keypad picture, lib/keypad.png (NULL if it can't be read: then the
+   keypad isn't shown) */
+static void
+load_keypad( void )
+{
+  if( keypad_BMP ) return;
+
+#ifdef PNG_SIMPLIFIED_READ_SUPPORTED
+  {
+    png_bytep buffer;
+    size_t size;
+    int width, height;
+    BITMAPINFO info;
+    void *bits;
+    HDC dc;
+
+    if( read_png_file( "keypad.png", &buffer, &size, &width, &height ) )
+      return;
+
+    memset( &info, 0, sizeof( info ) );
+    info.bmiHeader.biSize = sizeof( info.bmiHeader );
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;	/* top down */
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+
+    dc = GetDC( NULL );
+    keypad_BMP = CreateDIBSection( dc, &info, DIB_RGB_COLORS, &bits, NULL,
+                                   0 );
+    ReleaseDC( NULL, dc );
+    if( keypad_BMP ) {
+      GdiFlush();
+      memcpy( bits, buffer, size );
+      keypad_width = width;
+      keypad_height = height;
+    }
+    free( buffer );
+  }
+#else
+  /* Without libpng, let Windows decode it */
+  keypad_BMP = load_picture( "keypad.png", &keypad_width, &keypad_height );
+#endif			/* #ifdef PNG_SIMPLIFIED_READ_SUPPORTED */
 }
 
 #ifdef PNG_SIMPLIFIED_READ_SUPPORTED

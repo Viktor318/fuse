@@ -25,6 +25,7 @@ lib_files = \
             lib/keyboard.jpg \
             lib/keyboard.png \
             lib/keyboard.scr \
+            lib/keypad.png \
             lib/microdrive.bmp \
             lib/plus3disk.bmp
 

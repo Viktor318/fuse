@@ -96,6 +96,7 @@ static const char * const event_type_string = "beta128";
 static int page_event, unpage_event;
 
 static void beta_reset( int hard_reset );
+static void beta_motoron( fdd_t *d GCC_UNUSED, int on );
 static void beta_memory_map( void );
 static void beta_enabled_snapshot( libspectrum_snap *snap );
 static void beta_from_snapshot( libspectrum_snap *snap );
@@ -174,6 +175,7 @@ beta_init( void *context )
   beta_fdc->reset_intrq = NULL;
   beta_fdc->set_datarq = NULL;
   beta_fdc->reset_datarq = NULL;
+  beta_fdc->fdd_motoron = &beta_motoron;
 
   module_register( &beta_module_info );
 
@@ -252,6 +254,15 @@ beta_reset( int hard_reset GCC_UNUSED )
   beta_select_drive( 0 );
   machine_current->memory_map();
 
+}
+
+static void
+beta_motoron( fdd_t *d GCC_UNUSED, int on )
+{
+  int i;
+
+  for( i = 0; i < BETA_NUM_DRIVES; i++ )
+    fdd_motoron( &beta_drives[ i ], on );
 }
 
 static void

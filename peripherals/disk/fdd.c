@@ -196,8 +196,6 @@ fdd_init( fdd_t *d, fdd_type_t type, const fdd_params_t *dt, int reinit )
 void
 fdd_motoron( fdd_t *d, int on )
 {
-  if( !d->loaded )
-    return;
   on = on > 0 ? 1 : 0;
   if( d->motoron == on )
     return;
@@ -223,6 +221,8 @@ fdd_motoron( fdd_t *d, int on )
     event_add_with_data( tstates + 4 *			/* 2 revolution: 2 * 200 / 1000 */
 			 machine_current->timings.processor_speed / 10,
 			 motor_event, d );
+    /* A rapid off/on transition may still have a pulse pending. */
+    event_remove_type_user_data( index_event, d );
     if( d->loaded ) /* index rotating */
       event_add_with_data( tstates + ( d->index_pulse ? 10 : 190 ) *
 			 machine_current->timings.processor_speed / 1000,
@@ -298,6 +298,13 @@ fdd_load( fdd_t *d, int upsidedown )
   d->ready = ( d->motoron && d->loaded );
   if( d->disk.density == DISK_HD ) d->hdout = 1;
 
+  /* Replace any pulse left pending when the previous disk was ejected. */
+  event_remove_type_user_data( index_event, d );
+  if( d->motoron )
+    event_add_with_data( tstates + ( d->index_pulse ? 10 : 190 ) *
+			 machine_current->timings.processor_speed / 1000,
+			 index_event, d );
+
   return d->status = FDD_OK;
 }
 
@@ -306,7 +313,8 @@ fdd_unload( fdd_t *d )
 {
   d->ready = d->loaded = d->dskchg = d->hdout = 0;
   d->index = d->wrprot = 1;
-  fdd_motoron( d, 0 );
+  event_remove_type_user_data( index_event, d );
+  d->index_pulse = 0;
   if( d->type == FDD_SHUGART && d->selected )
     fdd_head_load( d, 0 );
 }

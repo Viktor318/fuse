@@ -142,6 +142,9 @@ typedef struct wd_fdc {
   void ( *reset_intrq ) ( struct wd_fdc *f );
   void ( *set_datarq ) ( struct wd_fdc *f );
   void ( *reset_datarq ) ( struct wd_fdc *f );
+  /* Interface wiring for the motor output; defaults to the selected drive.
+     Interfaces with a shared motor line override this to update all drives. */
+  void ( *fdd_motoron ) ( fdd_t *d, int on );
 
 } wd_fdc;
 

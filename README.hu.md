@@ -182,6 +182,11 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   következő indításkor visszaállítja.
 - A főablak, a billentyűzetkép és az AY lejátszó ablakai ott nyílnak meg,
   ahol legutóbb voltak.
+- **Legutóbbi fájlok** (*Fájl > Legutóbbi fájlok*): az utolsó 10 megnyitott
+  fájl (*Fájl > Megnyitás*, a Fuse-ra húzás, a parancssor vagy a *Média*
+  menük útján), a legújabb elöl; egy kattintással vagy az 1–9, 0
+  billentyűvel újra megnyitható. A már nem létező fájl lekerül a listáról. A
+  lista a `fuse.cfg`-ben van.
 - **Rákérdezés kilépéskor** (Beállítások > Általános, alapból bekapcsolva).
 - A perifériák beállításainál szürkék azok, amelyek az emulált gépen nem
   lehetnek.

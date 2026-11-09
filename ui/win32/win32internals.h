@@ -121,6 +121,11 @@ void win32_tsplayer_show( void );
 void win32_ayplayer_show_for( int turbosound );
 void win32_ayplayer_reopen( int turbosound, int with_list, int song );
 void win32_ayplayer_remember_companions( int turbosound );
+/* File > Recent files (recentfiles.c) */
+void win32_recent_files_init( void );
+void win32_recent_files_update( void );
+int win32_recent_files_is_menu( HMENU menu );
+int win32_recent_files_command( WORD id );
 int win32ui_picture_is_open( void );
 void menu_help_keyboard( int action );
 int win32ui_machine_paused( void );

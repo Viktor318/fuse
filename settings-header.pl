@@ -100,6 +100,9 @@ extern settings_info settings_default;
 
 int settings_init( int *first_arg, int argc, char **argv );
 void settings_defaults( settings_info *settings );
+/* The settings as saved in the config file (defaults for the rest), e.g.
+   to save one setting without the others changed since */
+int settings_read_config( settings_info *settings );
 void settings_copy( settings_info *dest, settings_info *src );
 
 #define SETTINGS_ROM_COUNT 30

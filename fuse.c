@@ -64,6 +64,7 @@
 #include "fuse.h"
 #include "ayplayer.h"
 #include "ayplaylist.h"
+#include "recent_files.h"
 
 #ifdef UI_WIN32
 void win32_ayplayer_show_for( int turbosound );
@@ -834,6 +835,7 @@ parse_nonoption_args( int argc, char **argv, int first_arg,
     /* AY music files are not known to libspectrum */
     if( ayplayer_is_ay_file( filename ) ) {
       start_files->ay = filename;
+      recent_files_add( filename );
       continue;
     }
 
@@ -843,6 +845,8 @@ parse_nonoption_args( int argc, char **argv, int first_arg,
       utils_file_free( &file );
       return error;
     }
+    /* File > Recent files */
+    recent_files_add( filename );
 
     type = file.type;
     class = file.file_class;

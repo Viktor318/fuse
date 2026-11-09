@@ -62,6 +62,7 @@ ui_win32_files = \
                  ui/win32/menu_data.c \
                  ui/win32/options.c \
                  ui/win32/picture.c \
+                 ui/win32/recentfiles.c \
                  ui/win32/picture.h \
                  ui/win32/pokefinder.c \
                  ui/win32/pokefinder.h \

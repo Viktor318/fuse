@@ -22,6 +22,10 @@
 
 _File, Branch
 File/_Open..., Item, F3
+#ifdef UI_WIN32
+File/Recent _files, Branch
+File/Recent files/_Clear list, Item
+#endif
 File/_Save Snapshot..., Item, F2
 
 File/_Recording, Branch

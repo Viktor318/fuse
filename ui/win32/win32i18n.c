@@ -82,7 +82,9 @@ remember_menu( HMENU menu )
       if( menu_texts[ menu_text_count ].english ) menu_text_count++;
     }
 
-    if( info.hSubMenu ) remember_menu( info.hSubMenu );
+    /* Not the items of File > Recent files, which come and go */
+    if( info.hSubMenu && !win32_recent_files_is_menu( info.hSubMenu ) )
+      remember_menu( info.hSubMenu );
   }
 }
 
@@ -516,6 +518,7 @@ static void
 language_changed( void )
 {
   translate_menu();
+  win32_recent_files_update();
 }
 
 const char*

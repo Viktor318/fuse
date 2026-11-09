@@ -177,6 +177,13 @@ void settings_defaults( settings_info *settings )
   settings_copy_internal( settings, &settings_default );
 }
 
+int
+settings_read_config( settings_info *settings )
+{
+  settings_defaults( settings );
+  return read_config_file( settings );
+}
+
 #ifdef HAVE_LIB_XML2
 
 /* Read options from the config file (if libxml2 is available) */

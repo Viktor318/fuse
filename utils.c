@@ -62,6 +62,7 @@
 #include "utils.h"
 #include "ayplayer.h"
 #include "ayplaylist.h"
+#include "recent_files.h"
 
 #ifdef UI_WIN32
 void win32_ayplayer_show_for( int turbosound );
@@ -130,12 +131,15 @@ utils_open_file( const char *filename, int autoload,
 #ifdef UI_WIN32
     win32_ayplayer_show_for( ayplaylist_is_turbosound( list ) );
 #endif
+    recent_files_add( filename );
     return 0;
   }
 
   utils_file_init( &file, filename );
   error = utils_open_loaded_file( &file, autoload, type_ptr );
   utils_file_free( &file );
+  /* File > Recent files */
+  if( !error ) recent_files_add( filename );
   return error;
 }
 

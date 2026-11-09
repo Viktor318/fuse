@@ -33,6 +33,7 @@
 #include "event.h"
 #include "fuse.h"
 #include "menu.h"
+#include "recent_files.h"
 
 #ifdef UI_WIN32
 void win32_ayplayer_show( void );
@@ -79,6 +80,13 @@ static int menu_select_machine_roms( libspectrum_machine machine, size_t start,
 
 static int menu_select_peripheral_roms( const char *peripheral_name,
 					size_t start, size_t n );
+
+/* File > Recent files > Clear list */
+MENU_CALLBACK( menu_file_recentfiles_clearlist )
+{
+  ui_widget_finish();
+  recent_files_clear();
+}
 
 MENU_CALLBACK( menu_file_open )
 {
@@ -475,7 +483,7 @@ MENU_CALLBACK( menu_media_tape_open )
   filename = ui_get_open_filename( "Fuse - Open Tape" );
   if( !filename ) { fuse_emulation_unpause(); return; }
 
-  tape_open( filename, 0 );
+  if( !tape_open( filename, 0 ) ) recent_files_add( filename );
 
   libspectrum_free( filename );
 
@@ -591,10 +599,11 @@ MENU_CALLBACK_WITH_ACTION( menu_media_insert )
 
   switch( type ) {
   case 3:
-    if1_mdr_insert( which, filename );
+    if( !if1_mdr_insert( which, filename ) ) recent_files_add( filename );
     break;
   default:
-    ui_media_drive_insert( drive, filename, 0 );
+    if( !ui_media_drive_insert( drive, filename, 0 ) )
+      recent_files_add( filename );
     break;
   }
 
@@ -694,7 +703,7 @@ MENU_CALLBACK( menu_media_cartridge_timexdock_insert )
   filename = ui_get_open_filename( "Fuse - Insert Timex Dock Cartridge" );
   if( !filename ) { fuse_emulation_unpause(); return; }
 
-  dck_insert( filename );
+  if( !dck_insert( filename ) ) recent_files_add( filename );
 
   libspectrum_free( filename );
 
@@ -716,7 +725,7 @@ MENU_CALLBACK( menu_media_cartridge_interface2_insert )
   filename = ui_get_open_filename( "Fuse - Insert Interface 2 Cartridge" );
   if( !filename ) { fuse_emulation_unpause(); return; }
 
-  if2_insert( filename );
+  if( !if2_insert( filename ) ) recent_files_add( filename );
 
   libspectrum_free( filename );
 

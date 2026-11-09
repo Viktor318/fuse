@@ -463,6 +463,8 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
   switch( msg ) {
 
     case WM_COMMAND:
+      /* File > Recent files: the files */
+      if( win32_recent_files_command( LOWORD( wParam ) ) ) return 0;
       if( ! handle_menu( LOWORD( wParam ), hWnd ) ) {
         /* Apply a full screen change at once, even if emulation is paused */
         win32ui_fullscreen_apply();
@@ -918,6 +920,7 @@ ui_init( int *argc, char ***argv )
 
   /* menus and dialogs in the selected language */
   win32i18n_init();
+  win32_recent_files_init();
 
   /* the menu bar is drawn by Fuse */
   menubar_init();

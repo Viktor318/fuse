@@ -334,3 +334,4 @@ tsmixer_volume, numeric, 100
 tsmixer_volumes, string, NULL
 tsmixer_pans, string, NULL
 tsmixer_channels, string, NULL
+recent_files, string, NULL

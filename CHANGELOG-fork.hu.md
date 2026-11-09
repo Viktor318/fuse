@@ -21,6 +21,15 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A *Súgó > Névjegy* és a `fuse --version` ennek a kiadásnak a verzióját
   mutatja („Fuse 1.10.1-hu.3”), nem csak az alapul szolgáló Fuse-ét; a
   `fuse.exe` verzióinformációja is.
+- **Legutóbbi fájlok** (*Fájl > Legutóbbi fájlok*): az utolsó 10 megnyitott
+  fájl, a legújabb elöl, 1–9, 10 számozással, a hosszú útvonalak közepe
+  rövidítve; alattuk a *Lista törlése*. A *Fájl > Megnyitás*, a Fuse-ra
+  húzás, a parancssor, valamint a *Média > Kazetta > Megnyitás*, a *Média >
+  Lemez > Behelyezés* és a kártyák menüi útján megnyitott fájlok kerülnek
+  rá; újra a *Fájl > Megnyitás* módján nyílnak meg. A már nem létező fájl
+  üzenettel lekerül a listáról. A lista a `fuse.cfg`-ben van
+  (`recentfiles`, az útvonalak `|` jellel elválasztva), és minden
+  változáskor kiíródik, a többi beállítás nélkül.
 
 ### Billentyűzet
 

@@ -672,3 +672,7 @@ extra	TurboSound mixer	Default	Alapértelmezett
 extra	TurboSound mixer	Mixer settings (*.mix)	Keverőbeállítások (*.mix)
 extra	TurboSound mixer	Save TurboSound mixer settings	TurboSound keverőbeállítások mentése
 extra	TurboSound mixer	Load TurboSound mixer settings	TurboSound keverőbeállítások betöltése
+1 Menü	File	Recent &files	&Legutóbbi fájlok
+1 Menü	File > Recent files	&Clear list	Lista &törlése
+1 Menü	File > Recent files	(empty)	(üres)
+4 Üzenetek	hibaüzenet	'%s' no longer exists; it was removed from the list	A(z) '%s' már nem létezik, ezért lekerült a listáról

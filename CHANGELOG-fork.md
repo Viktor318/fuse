@@ -20,6 +20,14 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - *Help > About* and `fuse --version` show the version of this edition
   ("Fuse 1.10.1-hu.3"), not only that of the Fuse it is based on; so does
   the version information of `fuse.exe`.
+- **Recent files** (*File > Recent files*): the last 10 files opened, newest
+  first, numbered 1–9, 10, long paths shortened in the middle; *Clear list*
+  under them. Files opened with *File > Open*, by dragging onto Fuse, on the
+  command line, or with *Media > Tape > Open*, *Media > Disk > Insert* and
+  the cartridge menus are listed; they are opened again as with *File >
+  Open*. A file that is not there any more is taken off the list with a
+  message. The list is kept in `fuse.cfg` (`recentfiles`, the paths apart by
+  `|`) and written at each change, without the other settings.
 
 ### Keyboard
 

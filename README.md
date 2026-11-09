@@ -168,6 +168,11 @@ AY sound generator of its own, apart from the emulated machine.
   next start.
 - The main window, the keyboard picture and the AY player windows open where
   they were last time.
+- **Recent files** (*File > Recent files*): the last 10 files opened (with
+  *File > Open*, by dragging onto Fuse, on the command line, or from the
+  *Media* menus), newest first, to open again with a click or 1–9, 0. A file
+  that is not there any more is taken off the list. The list is kept in
+  `fuse.cfg`.
 - **Confirm on exit** (Options > General, on by default).
 - The peripheral options grey out what the emulated machine can't have.
 - The menu bar is drawn with a clearly visible selection.

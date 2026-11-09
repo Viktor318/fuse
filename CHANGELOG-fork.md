@@ -15,6 +15,12 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   and lower screen (TOGGLE). Deleting to the start / end of the line moved
   to Shift + Backspace / Delete (it was Ctrl + Backspace / Delete).
 
+### User interface
+
+- *Help > About* and `fuse --version` show the version of this edition
+  ("Fuse 1.10.1-hu.3"), not only that of the Fuse it is based on; so does
+  the version information of `fuse.exe`.
+
 ### Upstream Fuse
 
 - Fix from upstream `master`: the motor of a floppy drive turns whether a

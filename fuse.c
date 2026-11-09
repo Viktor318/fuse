@@ -60,6 +60,7 @@
 #include "debugger/debugger.h"
 #include "display.h"
 #include "event.h"
+#include "fork_version.h"
 #include "fuse.h"
 #include "ayplayer.h"
 #include "ayplaylist.h"
@@ -601,7 +602,8 @@ static void fuse_show_copyright(void)
 
 static void fuse_show_version( void )
 {
-  printf( "The Free Unix Spectrum Emulator (Fuse) version " VERSION ".\n" );
+  printf( "The Free Unix Spectrum Emulator (Fuse) version " FUSE_FORK_VERSION
+          " (based on Fuse " VERSION ").\n" );
 
   fuse_show_test_build_info();
 }

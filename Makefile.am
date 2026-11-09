@@ -183,6 +183,7 @@ noinst_HEADERS = bitmap.h \
 	menu.h \
 	movie.h \
 	movie_tables.h \
+	fork_version.h \
 	module.h \
 	periph.h \
 	hungarian_keyboard.h \

@@ -16,6 +16,12 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   (TOGGLE). A sor elejéig / végéig törlés a Shift + Backspace / Delete-re
   került (eddig Ctrl + Backspace / Delete volt).
 
+### Felhasználói felület
+
+- A *Súgó > Névjegy* és a `fuse --version` ennek a kiadásnak a verzióját
+  mutatja („Fuse 1.10.1-hu.3”), nem csak az alapul szolgáló Fuse-ét; a
+  `fuse.exe` verzióinformációja is.
+
 ### Upstream Fuse
 
 - Javítás az upstream `master` ágból: a lemezmeghajtó motorja akkor is

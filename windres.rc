@@ -25,6 +25,8 @@
 
 #include <windows.h>
 
+#include "fork_version.h"
+
 win32_icon ICON "data/win32/winfuse.ico"
 
 #ifdef UI_WIN32
@@ -65,13 +67,13 @@ BEGIN
     BEGIN
       VALUE "CompanyName",      "\0"
       VALUE "FileDescription",  "Fuse\0"
-      VALUE "FileVersion",      VERSION##"\0"
+      VALUE "FileVersion",      FUSE_FORK_VERSION##"\0"
       VALUE "InternalName",     "Fuse\0"
       VALUE "LegalCopyright",   FUSE_COPYRIGHT##"\0"
       VALUE "License",          "Fuse is licensed under the GNU General Public License, version 2 or later\0"
       VALUE "OriginalFilename", "fuse.exe\0"
       VALUE "ProductName",      "Fuse - the Free Unix Spectrum Emulator\0"
-      VALUE "ProductVersion",   VERSION##"\0"
+      VALUE "ProductVersion",   FUSE_FORK_VERSION##"\0"
     END
  END
 

@@ -6,6 +6,17 @@ Ennek a változatnak a módosításai a Fuse 1.10.1-hez képest (a
 v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
+## Kiadatlan
+
+### Upstream Fuse
+
+- Javítás az upstream `master` ágból: a lemezmeghajtó motorja akkor is
+  forog, ha nincs benne lemez; a lemez betétele vagy kivétele csak az
+  indexjeleket indítja vagy állítja le. A +D, a DISCiPLE és az Opus egy
+  motorjele mindkét meghajtót, a Beta 128-é mind a négyet hajtja, mint a
+  valódi gépen; a WD1770/1772 alaphelyzetbe állítása leállítja a motort; a
+  DISCiPLE beállítja a lemezvezérlő sűrűségjelét (DDEN).
+
 ## v1.10.1-hu.3 – 2026-11-09
 
 ### TurboSound

@@ -5,6 +5,17 @@
 Changes of this fork on top of Fuse 1.10.1 (until v1.10.0-hu.1: 1.10.0).
 The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
+## Unreleased
+
+### Upstream Fuse
+
+- Fix from upstream `master`: the motor of a floppy drive turns whether a
+  disk is in it or not; inserting or ejecting a disk only starts or stops
+  the index pulses. On the +D, DISCiPLE and Opus one motor line drives
+  both drives, on the Beta 128 all four, as on the real hardware; a reset
+  of the WD1770/1772 stops the motor; the DISCiPLE sets the density
+  (DDEN) of the disk controller.
+
 ## v1.10.1-hu.3 – 2026-11-09
 
 ### TurboSound

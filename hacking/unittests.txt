@@ -46,6 +46,35 @@ This builds all test binaries and runs them in sequence:
       z80/tests.actual and compared against
       z80/tests/tests.expected using cmp(1).
 
+The check-local target also runs these test targets:
+
+  check-input-refresh, check-input-dispatch, check-keyboard-refresh
+      Input-layer policy tests: refresh scheduling, deferred dispatch
+      and emulated keyboard-matrix refresh.
+
+  check-sdl2-events
+      SDL2 event collection; built only when SDL2 is available.
+
+  check-widget-utf8
+      Widget UTF-8 decoding and editing tests.
+
+  check-silence-noise, check-sfifo, check-pcm-fifo, check-blip-preview
+      Audio FIFO, PCM frame access, silence/noise and Blip preview tests.
+
+  check-sound-renderer
+      Audio renderer, frame/sub-frame cadence, discontinuity and physical
+      admission tests. soundpartitiontest also accepts 44100 and 96000.
+
+  check-audio-pacing, check-alsa-pacing, check-alsasound,
+  check-sound-admission, check-sdl2sound, check-sdl2-wakeup,
+  check-coreaudio
+      Audio pacing, admission and backend-specific tests; ALSA, SDL2 and
+      CoreAudio targets are built only when that backend is available.
+
+  unittests/automation_json_test
+      Automation JSON output tests, built and run when configured with
+      --enable-automation.
+
 Contributors should run `make check' before submitting changes.
 
 To run a single test binary directly (from the build directory), use
@@ -55,6 +84,9 @@ e.g.:
   ./unittests/displaytest
   ./unittests/palcompositetest
   ./unittests/scalerexpandtest
+  ./unittests/inputrefreshtest
+  ./unittests/soundpartitiontest
+  ./unittests/audiopacingtest
   ./z80/coretest z80/tests/tests.in
 
 For manual peripheral smoke tests, see `hacking/peripheral_tests.txt'.

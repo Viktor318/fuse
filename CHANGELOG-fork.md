@@ -41,6 +41,14 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   in the browser; a missing file gives a message. `build-windows-cross.sh`
   makes them with pandoc, and leaves them out with a warning without it.
 
+### Memory browser
+
+- *Machine > Memory Browser* can change memory: double-click a byte (or
+  press Enter on a row for its first byte), type the new value in
+  hexadecimal (`$3A`, `#3A`, `0x3A`, `3Ah`) or decimal, *OK*. The address
+  can be changed there too. ROM is written only with *Options > General >
+  Allow writes to ROM* on; otherwise Fuse says so.
+
 ### Keyboard
 
 - *Type using the Windows keyboard layout* is on by default when the

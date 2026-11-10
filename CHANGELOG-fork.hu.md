@@ -44,6 +44,15 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   `build-windows-cross.sh` pandockal készíti el őket, pandoc nélkül
   figyelmeztetéssel kihagyja.
 
+### Memóriaböngésző
+
+- A *Gép > Memóriaböngésző* már a memóriát is módosítja: kattints duplán
+  egy bájtra (vagy nyomj Entert egy sor első bájtjához), írd be az új
+  értéket hexadecimálisan (`$3A`, `#3A`, `0x3A`, `3Ah`) vagy decimálisan,
+  majd *OK*. A cím is átírható ott. A ROM-ba csak akkor ír, ha be van
+  kapcsolva a *Beállítások > Általános > Írás engedélyezése a ROM-ba*;
+  különben szól.
+
 ### Billentyűzet
 
 - A *Gépelés a Windows billentyűkiosztása szerint* alapból be van

@@ -24,3 +24,9 @@
 #define IDD_MEM				4000
 #define IDC_MEM_LV			4001
 #define IDC_MEM_SB			4002
+#define IDC_MEM_HINT			4003
+
+#define IDD_MEM_EDIT			4010
+#define IDC_MEM_EDIT_ADDRESS		4011
+#define IDC_MEM_EDIT_VALUE		4012
+#define IDC_MEM_EDIT_HINT		4013

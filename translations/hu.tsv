@@ -328,6 +328,9 @@ group	context	english	hungarian
 3 Ablakok	IDD_DBG: LTEXT	Halted	HALT állapot
 3 Ablakok	ablak címe	Fuse - Info	Fuse - Tájékoztatás
 3 Ablakok	ablak címe	Fuse - Memory Browser	Fuse - Memóriaböngésző
+3 Ablakok	IDD_MEM: LTEXT	Double-click a byte or press Enter to change it.	Egy bájtot dupla kattintással vagy Enterrel módosíthatsz.
+3 Ablakok	ablak címe	Fuse - Edit Memory	Fuse - Memória szerkesztése
+3 Ablakok	IDD_MEM_EDIT: LTEXT	Hexadecimal: $3A or 3Ah, decimal: 58	Hexadecimális: $3A vagy 3Ah, decimális: 58
 3 Ablakok	ablak címe	Fuse - Keyboard	Fuse - Billentyűzet
 3 Ablakok	ablak címe	Fuse - Poke Finder	Fuse - Poke-kereső
 3 Ablakok	IDD_POKEFINDER: CTEXT	Search for:	Keresett érték:
@@ -682,3 +685,7 @@ extra	TurboSound mixer	Load TurboSound mixer settings	TurboSound keverőbeállí
 1 Menü	Help	&What's new in this edition	A &magyar kiadás újdonságai
 4 Üzenetek	hibaüzenet	'%s' is missing: the documents come in the doc folder of the Windows package	Nem található: „%s”. A leírások a Windows-csomag doc mappájában vannak
 4 Üzenetek	hibaüzenet	'%s' could not be opened	A(z) „%s” nem nyitható meg
+4 Üzenetek	hibaüzenet	The address must be a number from 0 to 65535 ($FFFF).	A cím 0 és 65535 ($FFFF) közötti szám lehet.
+4 Üzenetek	hibaüzenet	The value must be a number from 0 to 255 ($FF).	Az érték 0 és 255 ($FF) közötti szám lehet.
+4 Üzenetek	hibaüzenet	This address is in ROM. To change it, turn on Options > General > Allow writes to ROM.	Ez a cím a ROM-ban van. A módosításához kapcsold be: Beállítások > Általános > Írás engedélyezése a ROM-ba.
+4 Üzenetek	hibaüzenet	There is no memory at this address.	Ezen a címen nincs memória.

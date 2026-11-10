@@ -109,6 +109,14 @@ meg őket.
 - **Fájl > BASIC mentése szövegként...**: a memóriában lévő programot
   szövegfájlba írja.
 
+### Memóriaböngésző
+
+- A **Gép > Memóriaböngésző** a memóriát is módosítja: kattints duplán egy
+  bájtra (vagy nyomj Entert egy soron), írd be az új értéket
+  hexadecimálisan (`$3A`, `3Ah`) vagy decimálisan, és nyomd meg az *OK*-t.
+  A ROM-ba csak akkor ír, ha be van kapcsolva a *Beállítások > Általános >
+  Írás engedélyezése a ROM-ba*.
+
 ### AY zenelejátszó
 
 

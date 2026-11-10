@@ -101,6 +101,13 @@ What's new in this edition* open them in the browser.
   a program is running, Fuse asks and resets the machine first.
 - **File > Save BASIC as text...** writes the program in memory as text.
 
+### Memory browser
+
+- **Machine > Memory Browser** can change memory too: double-click a byte
+  (or press Enter on a row), type the new value in hexadecimal (`$3A`,
+  `3Ah`) or decimal and press *OK*. ROM is written only with *Options >
+  General > Allow writes to ROM* on.
+
 ### AY music player
 
 

@@ -30,6 +30,9 @@ set -e
 no_docs=
 HOST=x86_64-w64-mingw32
 LIBSPECTRUM_REPO="${LIBSPECTRUM_REPO:-https://github.com/fuse-emulator/libspectrum.git}"
+# fmfconv (movie converter) from the Fuse utilities, at a fixed commit
+FUSE_UTILS_REPO="${FUSE_UTILS_REPO:-https://github.com/fuse-emulator/fuse-utils.git}"
+FUSE_UTILS_REF="${FUSE_UTILS_REF:-b26a4244d41fe22028f7532f4da7318611258f86}"
 LIBPNG_REPO="${LIBPNG_REPO:-https://github.com/pnggroup/libpng.git}"
 LIBPNG_VERSION="${LIBPNG_VERSION:-v1.6.59}"
 BZIP2_REPO="${BZIP2_REPO:-https://github.com/libarchive/bzip2.git}"
@@ -122,6 +125,31 @@ fi
   make -j"$(nproc)"
   make install )
 
+# fmfconv.exe, the converter of the movies Fuse records (.fmf) to AVI, WAV
+# and pictures, statically linked like Fuse (only zlib1.dll, which Fuse
+# needs anyway). If it can't be built, the package is made without it
+# Az fmfconv.exe a Fuse filmjeinek (.fmf) átalakítója AVI-ba, WAV-ba és
+# képekbe; ha nem fordítható le, a csomag nélküle készül el
+fmfconv_exe=
+( set -e
+  dir="$WORK/fuse-utils"
+  if [ "$(git -C "$dir" rev-parse HEAD 2>/dev/null)" != "$FUSE_UTILS_REF" ]; then
+    rm -rf "$dir"
+    git init -q "$dir"
+    git -C "$dir" fetch -q --depth 1 "$FUSE_UTILS_REPO" "$FUSE_UTILS_REF"
+    git -C "$dir" checkout -q FETCH_HEAD
+  fi
+  cd "$dir"
+  [ -f configure ] || ./autogen.sh
+  [ -f Makefile ] && make distclean >/dev/null 2>&1 || true
+  PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" \
+  PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
+    ./configure --host=$HOST --without-libjpeg \
+    CPPFLAGS="-I$PREFIX/include -DLIBSPECTRUM_EXPORTS -DBZ_EXPORT" \
+    LDFLAGS="-L$PREFIX/lib -static" LIBS="-lbz2 -lz" >/dev/null
+  make -j"$(nproc)" fmfconv.exe ) && fmfconv_exe="$WORK/fuse-utils/fmfconv.exe"
+[ -n "$fmfconv_exe" ] || echo "Warning / Figyelmeztetés: fmfconv.exe was not built"
+
 # One build per sound output, each in a clean copy of Fuse
 # Hangkimenetenként egy fordítás, mindegyik egy tiszta másolatban
 build_variant() {
@@ -167,6 +195,7 @@ for driver in $DRIVERS; do
     cp "$WORK/fuse-$driver/.libs/fuse.exe" "$NAME/fuse-$driver.exe"
   fi
 done
+[ -z "$fmfconv_exe" ] || cp "$fmfconv_exe" "$NAME/"
 cp "/usr/$HOST/lib/zlib1.dll" "/usr/$HOST/lib/libwinpthread-1.dll" "$NAME/"
 cp roms/*.rom roms/README.copyright "$NAME/roms/"
 cp lib/*.bmp lib/*.png lib/*.jpg lib/*.scr "$NAME/lib/"

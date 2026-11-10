@@ -222,6 +222,22 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   DirectSounddal nincs régi hang ismételt lejátszása akadás után, nincs
   kattogás.
 
+### Filmek
+
+- A **Fájl > Film > Felvétel...** a képet és a hangot egy `.fmf` fájlba
+  (a Fuse saját filmformátumába) rögzíti. A `fuse.exe` melletti
+  `fmfconv.exe` ezt más programokkal is lejátszható videóvá vagy
+  hangfájllá alakítja; a Fuse mappájában megnyitott parancssorban:
+
+  ```
+  fmfconv film.fmf film.avi     (videó hanggal, tömörítetlen)
+  fmfconv film.fmf film.wav     (csak a hang)
+  fmfconv film.fmf film.png     (a képkockák képként)
+  ```
+
+  Az `fmfconv -h` kiírja a többi formátumot és beállítást. Az AVI nagy
+  lesz: egy videószerkesztő vagy az ffmpeg tömörítheti.
+
 ### Hová menti a fájljait a Fuse
 
 Mindent a **Roaming mappán belüli Fuse mappában** tart: írd be az Intéző
@@ -253,7 +269,8 @@ sudo apt install pandoc     # nem kötelező, a doc mappához kell
 ```
 
 A szkript letölti és statikus könyvtárként lefordítja a libspectrumot, a
-libpng-t és a bzip2-t, majd a Fuse-t a
+libpng-t és a bzip2-t, a Fuse segédprogramjai közül az `fmfconv.exe`-t
+(egy rögzített változatból), majd a Fuse-t a
 Windows-felülettel kétszer (WASAPI: `fuse.exe`, DirectSound:
 `fuse-directsound.exe`), és ezeket a két szükséges DLL-lel (`zlib1.dll`,
 `libwinpthread-1.dll`), a ROM-okkal és

@@ -202,6 +202,22 @@ AY sound generator of its own, apart from the emulated machine.
 - Sound output: WASAPI (`fuse.exe`) or DirectSound (`fuse-directsound.exe`).
   With DirectSound no old sound is played again after a hold-up, no clicks.
 
+### Movies
+
+- **File > Movie > Record...** records the screen and the sound to an
+  `.fmf` file (Fuse's own movie format). `fmfconv.exe`, next to `fuse.exe`,
+  converts it to a video or sound file that other programs can play; in a
+  command prompt in the Fuse folder:
+
+  ```
+  fmfconv film.fmf film.avi     (video with sound, uncompressed)
+  fmfconv film.fmf film.wav     (only the sound)
+  fmfconv film.fmf film.png     (the frames as pictures)
+  ```
+
+  `fmfconv -h` lists the other formats and options. The AVI is large: a
+  video editor or ffmpeg can compress it.
+
 ### Where Fuse keeps its files
 
 Everything is kept in the **Fuse folder of your Roaming folder**: type
@@ -233,7 +249,7 @@ sudo apt install pandoc     # optional, for the doc folder
 ```
 
 The script fetches and builds libspectrum, libpng and bzip2 as static
-libraries and then Fuse with the Win32
+libraries, `fmfconv.exe` from the Fuse utilities (at a fixed commit), and then Fuse with the Win32
 user interface twice (WASAPI: `fuse.exe`, DirectSound:
 `fuse-directsound.exe`), and packages them with the two DLLs they need
 (`zlib1.dll`, `libwinpthread-1.dll`), the ROMs and data files

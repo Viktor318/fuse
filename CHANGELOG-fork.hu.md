@@ -53,7 +53,15 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   kapcsolva a *Beállítások > Általános > Írás engedélyezése a ROM-ba*;
   különben szól.
 
-### Billentyűzet
+### Filmek
+
+- **`fmfconv.exe` a csomagban** a Fuse segédprogramjai közül: a *Fájl >
+  Film > Felvétel...* filmjeit (`.fmf`) AVI-vá (hanggal), WAV-vá vagy
+  képekké alakítja, pl. `fmfconv film.fmf film.avi`. Eddig a filmeket
+  Windowson nem lehetett lejátszani. A `build-windows-cross.sh` a
+  fuse-utils egy rögzített változatából, statikusan fordítja; ha ez nem
+  sikerül, a csomag figyelmeztetéssel nélküle készül el.
+
 
 - A *Gépelés a Windows billentyűkiosztása szerint* alapból be van
   kapcsolva, ha a felület magyar (*Nyelv*: Magyar, vagy Automatikus magyar

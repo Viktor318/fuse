@@ -49,7 +49,15 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   can be changed there too. ROM is written only with *Options > General >
   Allow writes to ROM* on; otherwise Fuse says so.
 
-### Keyboard
+### Movies
+
+- **`fmfconv.exe` in the package**, from the Fuse utilities: it converts the
+  movies recorded with *File > Movie > Record...* (`.fmf`) to AVI (with
+  sound), WAV or pictures, e.g. `fmfconv film.fmf film.avi`. Until now the
+  movies could not be played on Windows. `build-windows-cross.sh` builds it
+  statically from a fixed commit of fuse-utils; if that fails, the package
+  is made without it, with a warning.
+
 
 - *Type using the Windows keyboard layout* is on by default when the
   interface is Hungarian (*Language* Magyar, or Automatic on a Hungarian

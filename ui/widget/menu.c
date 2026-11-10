@@ -237,7 +237,33 @@ static widget_menu_entry submenu_type_and_mapping_for_ ## device [] = { \
 };
 
 #ifdef USE_JOYSTICK
-SUBMENU_DEVICE_SELECTIONS( joystick )
+static int *joystick_invert_y;
+
+#ifndef GEKKO
+static void
+set_joystick_invert_y( int action GCC_UNUSED )
+{
+  *joystick_invert_y = !*joystick_invert_y;
+  widget_end_all( WIDGET_FINISHED_OK );
+}
+
+static const char *
+joystick_invert_y_detail( void )
+{
+  return *joystick_invert_y ? "On" : "Off";
+}
+#endif
+
+static widget_menu_entry submenu_type_and_mapping_for_joystick[] = {
+  { "Configure joystick" },
+  { "\012T\011ype", INPUT_KEY_t, submenu_types, NULL, NULL, 0 },
+  { "\012B\011utton Mapping", INPUT_KEY_b, submenu_joystick_buttons, NULL, NULL, 0 },
+#ifndef GEKKO
+  { "\012R\011everse up/down axis", INPUT_KEY_r, NULL,
+    set_joystick_invert_y, joystick_invert_y_detail, 0 },
+#endif
+  { NULL }
+};
 #endif  /* #ifdef USE_JOYSTICK */
 SUBMENU_DEVICE_SELECTIONS( keyboard )
 
@@ -531,6 +557,7 @@ menu_options_joysticks_select( int action )
 
 #ifdef USE_JOYSTICK
   case 0:
+    joystick_invert_y = &settings_current.joystick_1_invert_y;
     current_settings[ 0 ] = &( settings_current.joystick_1_output );
     current_settings[ 1 ] = &( settings_current.joystick_1_fire_1 );
     current_settings[ 2 ] = &( settings_current.joystick_1_fire_2 );
@@ -550,6 +577,7 @@ menu_options_joysticks_select( int action )
     submenu_type_and_mapping_for_joystick[ 1 ].detail = menu_joystick_1_detail;
     break;
   case 1:
+    joystick_invert_y = &settings_current.joystick_2_invert_y;
     current_settings[ 0 ] = &( settings_current.joystick_2_output );
     current_settings[ 1 ] = &( settings_current.joystick_2_fire_1 );
     current_settings[ 2 ] = &( settings_current.joystick_2_fire_2 );

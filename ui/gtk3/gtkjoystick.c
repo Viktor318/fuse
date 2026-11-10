@@ -62,6 +62,8 @@ struct button_info {
 struct joystick_info {
 
   int *type;
+  int *invert_y;
+  GtkWidget *invert_y_button;
   GtkWidget *radio[ JOYSTICK_TYPE_COUNT ];
 
   struct button_info button[NUM_JOY_BUTTONS];
@@ -225,6 +227,15 @@ menu_options_joysticks_select( GtkAction *gtk_action GCC_UNUSED,
 
   g_object_unref( model );
 
+  if( info.invert_y ) {
+    info.invert_y_button =
+      gtk_check_button_new_with_mnemonic( "Reverse _up/down axis" );
+    gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( info.invert_y_button ),
+                                  *info.invert_y );
+    gtk_box_pack_start( GTK_BOX( content_area ), info.invert_y_button,
+                        FALSE, FALSE, 4 );
+  }
+
   gtkstock_create_ok_cancel( dialog, NULL, G_CALLBACK( joystick_done ),
                              &info, DEFAULT_DESTROY, DEFAULT_DESTROY );
 
@@ -241,9 +252,11 @@ setup_info( struct joystick_info *info, int callback_action )
 {
   size_t i;
 
+  info->invert_y = NULL;
   switch( callback_action ) {
 
   case 1:
+    info->invert_y = &settings_current.joystick_1_invert_y;
     info->type = &( settings_current.joystick_1_output );
     info->button[0].setting = &( settings_current.joystick_1_fire_1  );
     info->button[1].setting = &( settings_current.joystick_1_fire_2  );
@@ -265,6 +278,7 @@ setup_info( struct joystick_info *info, int callback_action )
     break;
 
   case 2:
+    info->invert_y = &settings_current.joystick_2_invert_y;
     info->type = &( settings_current.joystick_2_output );
     info->button[0].setting = &( settings_current.joystick_2_fire_1  );
     info->button[1].setting = &( settings_current.joystick_2_fire_2  );
@@ -441,6 +455,10 @@ joystick_done( GtkButton *button GCC_UNUSED, gpointer user_data )
 
   int i;
   GtkToggleButton *toggle;
+
+  if( info->invert_y )
+    *info->invert_y = gtk_toggle_button_get_active(
+      GTK_TOGGLE_BUTTON( info->invert_y_button ) );
 
   for( i = 0; i < NUM_JOY_BUTTONS; i++ )
     if( info->button[i].setting )

@@ -21,6 +21,9 @@ int sdl2joystick_button_event( int which, int button, input_event_type type,
 void sdl2joystick_axis_events( int which, int value, input_key negative,
                                input_key positive, input_event_t *event1,
                                input_event_t *event2 );
+void sdl2joystick_y_axis_events( int which, int value, int invert_1,
+                                int invert_2, input_event_t *event1,
+                                input_event_t *event2 );
 void sdl2joystick_hat_event( int which, int value, int mask,
                              input_key direction, input_event_t *event );
 

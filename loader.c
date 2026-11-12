@@ -205,6 +205,15 @@ static void
 loader_detect_while_playing( libspectrum_dword tstates_diff,
                              libspectrum_byte b_diff )
 {
+  /* Once this read is the loader we are already accelerating, its pattern is
+     known: skip the per-read detector scan and keep the loader marked active.
+     check_for_acceleration() below still performs the acceleration step. */
+  if( acceleration_mode && z80.pc.w == acceleration_pc ) {
+    successive_reads = 0;
+    non_loader_frames = 0;
+    return;
+  }
+
   if( loader_read_detected( z80.pc.w ) ||
       ( !ula_read_is_keyboard_scan( z80.pc.w ) &&
         loader_counter_read_is_plausible( tstates_diff, b_diff ) ) ) {

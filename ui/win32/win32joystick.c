@@ -95,8 +95,20 @@ ui_joystick_init( void )
 void
 ui_joystick_poll( void )
 {
-  /* No action needed; joysticks already handled by the Window messages
-     sent by mmsystem */
+  static int previous_invert[2] = { -1, -1 };
+  int i;
+
+  /* Window messages normally handle motion; setup can change a held axis. */
+  for( i = 0; i < 2; i++ ) {
+    int invert = i ? settings_current.joystick_2_invert_y :
+                     settings_current.joystick_1_invert_y;
+    if( previous_invert[i] != invert ) {
+      JOYINFO position;
+      if( joyGetPos( i ? JOYSTICKID2 : JOYSTICKID1, &position ) == JOYERR_NOERROR )
+        win32joystick_move( i, position.wXpos, position.wYpos );
+    }
+    previous_invert[i] = invert;
+  }
 }
 
 void
@@ -129,8 +141,13 @@ win32joystick_move( int which_joystick, unsigned short pos_x,
 {
   do_axis( which_joystick, pos_x,
     INPUT_JOYSTICK_LEFT, INPUT_JOYSTICK_RIGHT );
-  do_axis( which_joystick, pos_y,
-    INPUT_JOYSTICK_UP,   INPUT_JOYSTICK_DOWN  );
+  if( which_joystick ? settings_current.joystick_2_invert_y :
+                        settings_current.joystick_1_invert_y )
+    do_axis( which_joystick, pos_y,
+             INPUT_JOYSTICK_DOWN, INPUT_JOYSTICK_UP );
+  else
+    do_axis( which_joystick, pos_y,
+             INPUT_JOYSTICK_UP, INPUT_JOYSTICK_DOWN );
 }
 
 static void
@@ -181,6 +198,8 @@ struct joystick_info {
 
   int *type;
   int *autofire;		/* fire pressed and released while held */
+  int *invert_y;
+  HWND invert_y_button;
   HWND radio[ JOYSTICK_TYPE_COUNT ];
 
   struct button_info button[NUM_JOY_BUTTONS];
@@ -269,6 +288,12 @@ dialog_init( HWND hwndDlg, struct joystick_info *info )
   create_joystick_type_selector( info, hwndDlg );
   CheckDlgButton( hwndDlg, IDC_JOYSTICKS_AUTOFIRE,
                   *info->autofire ? BST_CHECKED : BST_UNCHECKED );
+  info->invert_y_button = GetDlgItem( hwndDlg, IDC_JOYSTICKS_INVERT_Y );
+  if( info->invert_y )
+    SendMessage( info->invert_y_button, BM_SETCHECK,
+                 *info->invert_y ? BST_CHECKED : BST_UNCHECKED, 0 );
+  else
+    ShowWindow( info->invert_y_button, SW_HIDE );
 
   for( i = 0; i < NUM_JOY_BUTTONS; i++ ) {
     
@@ -301,9 +326,11 @@ setup_info( struct joystick_info *info, int action )
 {
   size_t i;
 
+  info->invert_y = NULL;
   switch( action ) {
 
   case 1:
+    info->invert_y = &settings_current.joystick_1_invert_y;
     info->type = &( settings_current.joystick_1_output );
     info->autofire = &( settings_current.joystick_1_autofire );
     info->button[0].setting = &( settings_current.joystick_1_fire_1  );
@@ -327,6 +354,7 @@ setup_info( struct joystick_info *info, int action )
     break;
 
   case 2:
+    info->invert_y = &settings_current.joystick_2_invert_y;
     info->type = &( settings_current.joystick_2_output );
     info->autofire = &( settings_current.joystick_2_autofire );
     info->button[0].setting = &( settings_current.joystick_2_fire_1  );
@@ -438,6 +466,9 @@ joystick_done( HWND hwndDlg, LONG_PTR user_data )
 
   *info->autofire =
     IsDlgButtonChecked( hwndDlg, IDC_JOYSTICKS_AUTOFIRE ) == BST_CHECKED;
+  if( info->invert_y )
+    *info->invert_y = SendMessage( info->invert_y_button, BM_GETCHECK,
+                                   0, 0 ) == BST_CHECKED;
 
   for( i = 0; i < NUM_JOY_BUTTONS; i++ )
     if( info->button[i].setting )

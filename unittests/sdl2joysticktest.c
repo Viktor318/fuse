@@ -201,6 +201,38 @@ hat_event_sets_press_and_release( void )
   return 0;
 }
 
+static int
+y_axis_inversion( void )
+{
+  static const int values[] = { -32768, -16385, -16384, 0,
+                                16384, 16385, 32767 };
+  int which, invert_1, invert_2;
+  size_t i;
+  input_event_t a, b;
+
+  for( which = 0; which < 2; which++ )
+    for( invert_1 = 0; invert_1 < 2; invert_1++ )
+      for( invert_2 = 0; invert_2 < 2; invert_2++ )
+        for( i = 0; i < sizeof( values ) / sizeof( values[0] ); i++ ) {
+          int invert = which ? invert_2 : invert_1;
+          sdl2joystick_y_axis_events( which, values[i], invert_1, invert_2,
+                                      &a, &b );
+          if( a.types.joystick.which != which ||
+              b.types.joystick.which != which ) return 1;
+          if( a.types.joystick.button != ( invert ? INPUT_JOYSTICK_DOWN :
+                                                    INPUT_JOYSTICK_UP ) ||
+              b.types.joystick.button != ( invert ? INPUT_JOYSTICK_UP :
+                                                    INPUT_JOYSTICK_DOWN ) )
+            return 1;
+          if( a.type != ( values[i] < -16384 ? INPUT_EVENT_JOYSTICK_PRESS :
+                                              INPUT_EVENT_JOYSTICK_RELEASE ) ||
+              b.type != ( values[i] > 16384 ? INPUT_EVENT_JOYSTICK_PRESS :
+                                             INPUT_EVENT_JOYSTICK_RELEASE ) )
+            return 1;
+        }
+  return 0;
+}
+
 typedef int (*test_fn_t)( void );
 
 struct test_t {
@@ -209,6 +241,7 @@ struct test_t {
 };
 
 static const struct test_t tests[] = {
+  { "y_axis_inversion", y_axis_inversion },
   { "lookup_maps_instance_ids", lookup_maps_instance_ids },
   { "button_event_maps_fire_button", button_event_maps_fire_button },
   { "button_event_maps_first_fire_button",

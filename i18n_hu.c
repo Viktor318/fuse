@@ -889,6 +889,8 @@ const i18n_entry i18n_hu_table[] = {
     "Felvételfájlok (*.rzx)" },
   { "Resume &last session",
     "&Folytatás ott, ahol abbahagytam" },
+  { "Reverse up/down axis",
+    "Függőleges tengely megfordítása" },
   { "Right",
     "Jobb" },
   { "Roll&back",

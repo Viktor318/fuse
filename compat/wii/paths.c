@@ -116,7 +116,7 @@ compat_get_next_path( path_context *ctx )
   case 2:
 
     path2 = "sd:/apps/fuse";
-    strncpy( ctx->path, path2, PATH_MAX ); buffer[ PATH_MAX - 1 ] = '\0';
+    snprintf( ctx->path, PATH_MAX, "%s", path2 );
     return 1;
 
   case 3: return 0;

@@ -84,6 +84,24 @@ ui_joystick_init( void )
 void
 ui_joystick_poll( void )
 {
+  static int previous_invert[2] = { -1, -1 };
+  int i;
+
+  /* Re-read a held axis when setup changes, even without a motion event. */
+  for( i = 0; i < 2; i++ ) {
+    int invert = i ? settings_current.joystick_2_invert_y :
+                     settings_current.joystick_1_invert_y;
+    SDL_Joystick *joystick = i ? joystick2 : joystick1;
+    if( joystick && previous_invert[i] != invert ) {
+      SDL_JoyAxisEvent axis;
+      SDL_JoystickUpdate();
+      axis.which = i ? joystick2_id : joystick1_id;
+      axis.axis = 1;
+      axis.value = SDL_JoystickGetAxis( joystick, 1 );
+      sdl2joystick_axismove( &axis );
+    }
+    previous_invert[i] = invert;
+  }
 #ifndef UI_SDL2
   /* GTK and Xlib have no SDL UI event loop. */
   SDL_Event event;
@@ -154,9 +172,10 @@ sdl2joystick_axismove( SDL_JoyAxisEvent *axisevent )
     input_event( &event1 );
     input_event( &event2 );
   } else if( axisevent->axis == 1 ) {
-    sdl2joystick_axis_events( which, axisevent->value,
-                              INPUT_JOYSTICK_UP, INPUT_JOYSTICK_DOWN,
-                              &event1, &event2 );
+    sdl2joystick_y_axis_events( which, axisevent->value,
+                                settings_current.joystick_1_invert_y,
+                                settings_current.joystick_2_invert_y,
+                                &event1, &event2 );
     input_event( &event1 );
     input_event( &event2 );
   }

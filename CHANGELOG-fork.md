@@ -99,6 +99,12 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   both drives, on the Beta 128 all four, as on the real hardware; a reset
   of the WD1770/1772 stops the motor; the DISCiPLE sets the density
   (DDEN) of the disk controller.
+- From upstream `master`: **Reverse up/down axis** for each PC joystick
+  (*Options > Joysticks > Joystick 1 / 2*), for gamepads whose vertical
+  axis works the other way round.
+- Fixes from upstream `master`: a loader whose acceleration is already on
+  is not detected again at each pattern (faster accelerated loading);
+  screenshots of the Timex hi-res modes use a buffer of the right size.
 
 ## v1.10.1-hu.3 – 2026-11-09
 

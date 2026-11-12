@@ -85,7 +85,7 @@ screenshot_write( const char *filename, scaler_type scaler )
 
   libspectrum_byte *row_pointers[ MAX_SIZE * DISPLAY_SCREEN_HEIGHT ];
   libspectrum_byte *rgb_data_centered;
-  size_t rgb_stride = ( DISPLAY_ASPECT_WIDTH + K_MARGIN * 2 ) * 4,
+  size_t rgb_stride = ( DISPLAY_SCREEN_WIDTH + K_MARGIN * 2 ) * 4,
          scaled_stride = MAX_SIZE * DISPLAY_ASPECT_WIDTH * 4,
          png_stride = MAX_SIZE * DISPLAY_ASPECT_WIDTH * 3;
   size_t y, base_height, base_width, height, width;
@@ -99,11 +99,14 @@ screenshot_write( const char *filename, scaler_type scaler )
     base_width = DISPLAY_ASPECT_WIDTH;
   }
 
-  /* Allocate buffers on demand */
+  /* Allocate buffers on demand. Keep the source large enough for Timex
+     screens, including scaler margins, even when first used on a standard
+     machine: these buffers are reused across machine changes. */
   if( !rgb_data )
     rgb_data =
       libspectrum_new( libspectrum_byte,
-                       ( DISPLAY_SCREEN_HEIGHT + K_MARGIN * 2 ) * rgb_stride );
+                       ( 2 * DISPLAY_SCREEN_HEIGHT + K_MARGIN * 2 ) *
+                       rgb_stride );
 
   if( !scaled_data )
     scaled_data = libspectrum_new( libspectrum_byte,

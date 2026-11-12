@@ -105,6 +105,13 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   motorjele mindkét meghajtót, a Beta 128-é mind a négyet hajtja, mint a
   valódi gépen; a WD1770/1772 alaphelyzetbe állítása leállítja a motort; a
   DISCiPLE beállítja a lemezvezérlő sűrűségjelét (DDEN).
+- Az upstream `master`-ből: **Függőleges tengely megfordítása** a PC
+  joystickonként (*Beállítások > Joystickok > Joystick 1 / 2*) azokhoz a
+  játékvezérlőkhöz, amelyeknek a függőleges tengelye fordítva működik.
+- Javítások az upstream `master` ágból: a már gyorsított betöltőt a Fuse
+  nem ismeri fel újra minden mintánál (gyorsabb gyorsított betöltés); a
+  Timex nagy felbontású módjainak képernyőképe megfelelő méretű pufferrel
+  készül.
 
 ## v1.10.1-hu.3 – 2026-11-09
 

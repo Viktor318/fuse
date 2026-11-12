@@ -56,6 +56,18 @@ sdl2joystick_axis_events( int which, int value, input_key negative,
 }
 
 void
+sdl2joystick_y_axis_events( int which, int value, int invert_1, int invert_2,
+                            input_event_t *event1, input_event_t *event2 )
+{
+  int invert = which ? invert_2 : invert_1;
+
+  sdl2joystick_axis_events( which, value,
+                           invert ? INPUT_JOYSTICK_DOWN : INPUT_JOYSTICK_UP,
+                           invert ? INPUT_JOYSTICK_UP : INPUT_JOYSTICK_DOWN,
+                           event1, event2 );
+}
+
+void
 sdl2joystick_hat_event( int which, int value, int mask,
                         input_key direction, input_event_t *event )
 {

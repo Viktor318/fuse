@@ -24,6 +24,7 @@
 
 */
 
+#define IDC_JOYSTICKS_INVERT_Y        1799
 #define IDD_JOYSTICKS                 1700
 #define IDC_JOYSTICKS_GROUP_JOYTYPE   1701
 

@@ -111,7 +111,7 @@ compat_get_next_path( path_context *ctx )
 #else				/* #ifndef ROMSDIR */
     path2 = ctx->type == UTILS_AUXILIARY_ROM ? ROMSDIR : FUSEDATADIR;
 #endif				/* #ifndef ROMSDIR */
-    strncpy( ctx->path, path2, PATH_MAX ); buffer[ PATH_MAX - 1 ] = '\0';
+    snprintf( ctx->path, PATH_MAX, "%s", path2 );
     return 1;
 
   case 3: return 0;

@@ -39,7 +39,8 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   szürkék, sötét szintjelzővel, és azonnal követik a perifériák és a gép
   változását. Hang nélkül a csúszkák továbbra is állíthatók, a szintjelzők
   sötétek maradnak.
-- *Alaphelyzet*: minden hangerő az alapértékére, semmi sem néma, a
+- *Alaphelyzet*: minden hangerő az alapértékére (fő hangerő 100%, a
+  többi 50%; új telepítésnél is ezek az alapértékek), semmi sem néma, a
   sztereó mód és a hangszóró típusa az alapértékére áll; a két
   jelölőnégyzet marad.
 - Az alsó sor a hangkimenetet (`fuse.exe`-ben WASAPI, a

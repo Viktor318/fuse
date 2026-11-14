@@ -37,7 +37,8 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   Covox) are greyed out, with a dark meter, and follow the changes of the
   peripherals and the machine at once. Without sound the faders can still
   be set and the meters stay dark.
-- *Reset*: every volume to its default, nothing muted, the stereo mode and
+- *Reset*: every volume to its default (master 100%, the others 50%;
+  these are the defaults of a new installation too), nothing muted, the stereo mode and
   the speaker type to their defaults; the two check boxes stay.
 - The bottom line shows the sound output (WASAPI in `fuse.exe`,
   DirectSound in `fuse-directsound.exe`) and its real sample rate.

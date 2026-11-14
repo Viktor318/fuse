@@ -166,14 +166,59 @@ classification before a supported non-terminating lifecycle API is exposed. No
 public lifecycle capability, host-borrowing profile or restart support is
 advertised.
 
+## Private host configuration and ROM preparation
+
+`fuse_host_prepare(config, resources)` is an alternative to
+`fuse_legacy_prepare(argc, argv)`, sharing the same exclusive one-attempt lifetime,
+owner-thread rules, worker execution and shutdown. It remains selected-UI-bound,
+not a toolkit-free core or installed SDK. Do not call both preparation paths.
+
+Allocate an opaque `fuse_host_config` with `fuse_host_config_alloc()`. Its machine
+ID and sound setters accept owned values (the machine string is copied);
+configuration can be freed after preparation returns, including failure. Other
+settings currently retain generated defaults internally. A nonempty but unknown
+machine ID fails during preparation and consumes the attempt; invalid preparation
+arguments do not. Generated settings layouts are not configuration inputs.
+
+Provide `fuse_host_resources` with a synchronous ROM acquisition callback. The
+resources descriptor is copied; its context remains borrowed until preparation
+failure cleanup finishes or successful-session shutdown returns. Each callback
+receives a logical ROM name, not a writable path requirement. Return zero and
+provide bytes, length and explicit `custom` provenance (0 or 1). The engine copies
+valid ROM bytes into its normal ROM storage. A response release function, when
+present, runs exactly once even when acquisition fails or validation rejects the
+bytes. Name and response bytes are borrowed only for acquisition/release; no
+callback may recursively enter the engine. Embedded snapshot ROMs retain priority.
+
+This path does not parse CLI options, read/write preferences, process application
+startup files, execute startup debugger commands, print the application banner or
+drop process privileges. ROM failure does not silently retry filesystem search or
+a default filename: fallback is the provider's policy. The legacy path retains its
+existing behaviour. Selected UI/output startup, scaler/device defaults, RNG
+seeding and process-global library/error handling remain; this is not a general
+host-services abstraction. Preparation can block and its failure is not a
+transaction undoing external effects.
+
+Only ROM acquisition is redirected here. Persistent disks/IDE, serial/network,
+media saves, synchronous decisions and snapshot operations still use their old
+internal interfaces. In particular, the old snapshot machine fallback can abort;
+this addition does not promise nonfatal host snapshot loading or deterministic
+checkpoints. Typed operations and further resource backends are later M3 work.
+
+`check-host-prepare` exercises both archive/source consumers, copied configuration,
+provider release on success/error, custom provenance, snapshot-ROM priority,
+invalid arguments/reentry, blocked preference access and no filesystem ROM fallback.
+
 ## Private host execution recipe
 
 This is a source-local, selected-UI-bound worker-compatible profile. Build the
 host and engine from the same configured revision, using `fuse-internal.h` and
 one of the linking styles below. No installed SDK, feature/version negotiation,
 new thread, command queue or toolkit-free initialization is provided. Preparation
-still initializes the selected UI and reads legacy configuration; only automatic
-preference saving is excluded from the split lifecycle.
+through `fuse_legacy_prepare` still initializes the selected UI and reads legacy
+configuration; only automatic preference saving is excluded from that split
+lifecycle. The alternative host preparation above omits configuration persistence
+and CLI parsing but retains the same execution profile.
 
 Keep all calls on one owner thread compatible with that UI's threading rules.
 Retain the host's existing command transport and scheduling. The following is a

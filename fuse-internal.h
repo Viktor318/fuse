@@ -19,6 +19,8 @@
 #ifndef FUSE_INTERNAL_H
 #define FUSE_INTERNAL_H
 
+#include <stddef.h>
+
 /* Private, UI-bound, exclusive legacy-runtime lifecycle. Not a supported
    embedding API: selected toolkit/fatal-error policy still applies. Calls must
    be serialized on the frontend owner thread; there is no restart promise.
@@ -40,6 +42,46 @@ typedef enum fuse_legacy_init_result {
    when the autosave setting is enabled. Explicit settings operations remain
    available; RNG, platform startup and library management are unchanged. */
 fuse_legacy_init_result fuse_legacy_prepare( int argc, char **argv );
+
+/* Private M3 preparation, still using the selected UI/output adapters. Configuration
+   owns its strings and may be freed after prepare returns. Only one preparation
+   attempt is supported, shared with the legacy entry. No CLI or preference I/O.
+   This first subset configures machine ID and sound only; other values retain
+   generated defaults internally. Use legacy run/shutdown entries after READY.
+   Owner-thread only, no recursion; selected UI, device waits, RNG and process-
+   global library/error policy remain. Not toolkit-free or a public SDK. */
+typedef struct fuse_host_config fuse_host_config;
+fuse_host_config *fuse_host_config_alloc( void );
+void fuse_host_config_free( fuse_host_config *config );
+int fuse_host_config_set_machine( fuse_host_config *config, const char *id );
+int fuse_host_config_set_sound( fuse_host_config *config, int enabled );
+
+/* A synchronous ROM result, not a filesystem path. Provider context remains
+   borrowed through shutdown, including failed-startup cleanup. On every acquire,
+   even failure, release is called once when non-NULL. Bytes are borrowed only
+   until release and copied by the engine. No recursive core entry is permitted.
+   logical_name is borrowed only for the callback; return 0 for success, nonzero
+   for failure. custom must be 0 or 1 and is explicit provenance (affects
+   autoload), not a filename comparison.
+   A failed request never triggers implicit filesystem search/default fallback. */
+typedef struct fuse_host_rom {
+  const unsigned char *data;
+  size_t length;
+  int custom;
+  void *context;
+  void (*release)( void *context );
+} fuse_host_rom;
+typedef struct fuse_host_resources {
+  void *context;
+  int (*acquire_rom)( void *context, const char *logical_name,
+                      fuse_host_rom *rom );
+} fuse_host_resources;
+fuse_legacy_init_result fuse_host_prepare( const fuse_host_config *config,
+                                          const fuse_host_resources *resources );
+
+/* Internal ROM routing only; active also during startup and teardown. */
+int fuse_host_resources_active( void );
+int fuse_host_acquire_rom( const char *name, fuse_host_rom *rom );
 
 typedef enum fuse_legacy_run_result {
   FUSE_LEGACY_RUN_COMPLETED,

@@ -263,7 +263,7 @@ machine_select_machine( fuse_machine_info *machine, libspectrum_snap *snap )
 
 int
 machine_load_rom_bank_from_buffer( memory_page* bank_map, int page_num,
-  unsigned char *buffer, size_t length, int custom )
+  const unsigned char *buffer, size_t length, int custom )
 {
   size_t offset;
   libspectrum_byte *data = memory_pool_allocate( length );
@@ -430,6 +430,20 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
     memory_rom_bank_map( &snapshot_bank->bank, bank_map, page_num );
     if( loaded_length ) *loaded_length = snapshot_bank->bank.length;
     return 0;
+  }
+
+  if( fuse_host_resources_active() ) {
+    fuse_host_rom rom;
+    int error = fuse_host_acquire_rom( filename, &rom );
+    if( !error && ( !rom.data || !rom_length_allowed( rom.length, sizes ) ||
+                   ( rom.custom != 0 && rom.custom != 1 ) ) ) error = 1;
+    if( !error ) {
+      error = machine_load_rom_bank_from_buffer( bank_map, page_num, rom.data,
+                                                 rom.length, rom.custom );
+      if( !error && loaded_length ) *loaded_length = rom.length;
+    }
+    if( rom.release ) rom.release( rom.context );
+    return error;
   }
 
   custom = fallback && strcmp( filename, fallback );

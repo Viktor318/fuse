@@ -124,6 +124,66 @@ static const char * const LIBSPECTRUM_MIN_VERSION = "0.5.0";
 /* Context for the display startup routine */
 static display_startup_context display_context;
 
+struct fuse_host_config {
+  char *machine;
+  int sound;
+};
+
+static struct {
+  int active;
+  fuse_host_resources resources;
+} host_preparation;
+
+fuse_host_config *
+fuse_host_config_alloc( void )
+{
+  settings_info defaults = { 0 };
+  fuse_host_config *config = libspectrum_new0( fuse_host_config, 1 );
+  settings_defaults( &defaults );
+  config->machine = utils_safe_strdup( defaults.start_machine );
+  config->sound = defaults.sound;
+  settings_free( &defaults );
+  return config;
+}
+
+void
+fuse_host_config_free( fuse_host_config *config )
+{
+  if( !config ) return;
+  libspectrum_free( config->machine );
+  libspectrum_free( config );
+}
+
+int
+fuse_host_config_set_machine( fuse_host_config *config, const char *id )
+{
+  if( !config || !id || !*id ) return 1;
+  settings_set_string( &config->machine, id );
+  return 0;
+}
+
+int
+fuse_host_config_set_sound( fuse_host_config *config, int enabled )
+{
+  if( !config || ( enabled != 0 && enabled != 1 ) ) return 1;
+  config->sound = enabled;
+  return 0;
+}
+
+int
+fuse_host_resources_active( void )
+{
+  return host_preparation.active;
+}
+
+int
+fuse_host_acquire_rom( const char *name, fuse_host_rom *rom )
+{
+  memset( rom, 0, sizeof( *rom ) );
+  return host_preparation.resources.acquire_rom(
+    host_preparation.resources.context, name, rom );
+}
+
 typedef enum legacy_phase {
   LEGACY_FRESH, LEGACY_STARTING, LEGACY_READY, LEGACY_RUNNING,
   LEGACY_FINISHED, LEGACY_STOPPING, LEGACY_CLOSED
@@ -164,7 +224,7 @@ fuse_legacy_budget_interrupt( void )
 }
 
 static void fuse_settings_end( void );
-static int fuse_init(int argc, char **argv);
+static int fuse_init( int argc, char **argv, const fuse_host_config *config );
 
 static void creator_register_startup( void );
 
@@ -200,7 +260,7 @@ fuse_legacy_prepare( int argc, char **argv )
   legacy_ownership.previous_error_function = libspectrum_error_function;
   legacy_ownership.callback_owned = 1;
 
-  if(fuse_init(argc,argv)) {
+  if(fuse_init(argc,argv,NULL)) {
     fprintf(stderr,"%s: error initialising -- giving up!\n", fuse_progname);
     fuse_end();
     return FUSE_LEGACY_INIT_FAILED;
@@ -213,6 +273,29 @@ fuse_legacy_prepare( int argc, char **argv )
     return result;
   }
 
+  legacy_ownership.phase = LEGACY_READY;
+  return FUSE_LEGACY_INIT_READY;
+}
+
+fuse_legacy_init_result
+fuse_host_prepare( const fuse_host_config *config,
+                   const fuse_host_resources *resources )
+{
+  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_LEGACY_INIT_CLOSED;
+  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_LEGACY_INIT_BUSY;
+  if( !config || !resources || !resources->acquire_rom )
+    return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
+
+  legacy_ownership.phase = LEGACY_STARTING;
+  legacy_ownership.previous_error_function = libspectrum_error_function;
+  legacy_ownership.callback_owned = 1;
+  host_preparation.active = 1;
+  host_preparation.resources = *resources;
+
+  if( fuse_init( 0, NULL, config ) ) {
+    fuse_end();
+    return FUSE_LEGACY_INIT_FAILED;
+  }
   legacy_ownership.phase = LEGACY_READY;
   return FUSE_LEGACY_INIT_READY;
 }
@@ -436,6 +519,7 @@ fuse_settings_end( void )
 static int
 libxml2_init( void *context )
 {
+  legacy_ownership.xml_owned = 1;
 #ifdef HAVE_LIB_XML2
   LIBXML_TEST_VERSION
 #endif
@@ -457,6 +541,9 @@ setuid_init( void *context )
 {
 #ifdef HAVE_GETEUID
   int error;
+
+  /* Privilege policy belongs to the application, never an embedding host. */
+  if( host_preparation.active ) return 0;
 
   /* Drop root privs if we have them */
   if( !geteuid() ) {
@@ -551,9 +638,12 @@ run_startup_manager( int *argc, char ***argv )
   return startup_manager_run();
 }
 
-static int fuse_init(int argc, char **argv)
+static int
+fuse_init( int argc, char **argv, const fuse_host_config *config )
 {
-  int error, first_arg;
+  int error, first_arg = 0;
+  static char adapter_program[] = "fuse";
+  static char *adapter_argv[] = { adapter_program, NULL };
   char *start_scaler;
   fuse_start_files start_files = { 0 };
 
@@ -569,6 +659,12 @@ static int fuse_init(int argc, char **argv)
   
   libspectrum_error_function = ui_libspectrum_error;
 
+  /* Selected adapters may require argv even without application CLI policy. */
+  if( config ) {
+    argc = 1;
+    argv = adapter_argv;
+  }
+
 #ifdef GEKKO
   /* On the Wii, init the display first so we have a way of outputting
      messages */
@@ -576,8 +672,14 @@ static int fuse_init(int argc, char **argv)
 #endif
 
   /* Config parsing can initialize XML before its manager registration runs. */
-  legacy_ownership.xml_owned = 1;
-  if( settings_init( &first_arg, argc, argv ) ) return 1;
+  if( config ) {
+    settings_init_defaults();
+    settings_set_string( &settings_current.start_machine, config->machine );
+    settings_current.sound = config->sound;
+  } else {
+    legacy_ownership.xml_owned = 1;
+    if( settings_init( &first_arg, argc, argv ) ) return 1;
+  }
 #ifndef UI_NULL
   if( settings_current.unittests ) {
     fprintf( stderr, "--unittests is available only with the null UI\n" );
@@ -598,7 +700,7 @@ static int fuse_init(int argc, char **argv)
 
   start_scaler = utils_safe_strdup( settings_current.start_scaler_mode );
 
-  fuse_show_copyright();
+  if( !config ) fuse_show_copyright();
 
   error = run_startup_manager( &argc, &argv );
   if( error ) goto cleanup;
@@ -614,7 +716,7 @@ static int fuse_init(int argc, char **argv)
   if( error ) goto cleanup;
 
   fuse_start_files_init( &start_files );
-  error = parse_nonoption_args( argc, argv, first_arg, &start_files );
+  error = config ? 0 : parse_nonoption_args( argc, argv, first_arg, &start_files );
   if( !error ) error = do_start_files( &start_files );
   fuse_start_files_end( &start_files );
   if( error ) goto cleanup;
@@ -624,7 +726,7 @@ static int fuse_init(int argc, char **argv)
   }
 
   /* Must do this after all subsytems are initialised */
-  debugger_command_evaluate( settings_current.debugger_command );
+  if( !config ) debugger_command_evaluate( settings_current.debugger_command );
 
   if( ui_mouse_present ) ui_mouse_grabbed = ui_mouse_grab( 1 );
 
@@ -1229,6 +1331,7 @@ static int fuse_end(void)
     libspectrum_error_function = legacy_ownership.previous_error_function;
     legacy_ownership.previous_error_function = NULL;
   }
+  memset( &host_preparation, 0, sizeof( host_preparation ) );
   legacy_ownership.phase = LEGACY_CLOSED;
 
   return 0;

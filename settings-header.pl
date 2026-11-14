@@ -99,6 +99,7 @@ extern settings_info settings_current;
 extern settings_info settings_default;
 
 int settings_init( int *first_arg, int argc, char **argv );
+void settings_init_defaults( void );
 void settings_defaults( settings_info *settings );
 void settings_copy( settings_info *dest, settings_info *src );
 

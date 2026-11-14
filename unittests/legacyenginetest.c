@@ -6,10 +6,13 @@
 #include "fuse-internal.h"
 
 int legacy_lifecycle_test( int argc, char **argv );
+int host_prepare_test( int argc, char **argv );
 
 int
 main( int argc, char **argv )
 {
+  if( argc > 1 && !strcmp( argv[1], "--host-prepare-test" ) )
+    return host_prepare_test( argc - 1, argv + 1 );
   if( argc > 1 && !strcmp( argv[1], "--lifecycle-test" ) )
     return legacy_lifecycle_test( argc - 1, argv + 1 );
   return fuse_legacy_main( argc, argv );

@@ -147,13 +147,20 @@ static int settings_command_line( settings_info *settings, int *first_arg,
 static void settings_copy_internal( settings_info *dest, settings_info *src );
 
 /* Called on emulator startup */
+/* Acquire owned values without application configuration/CLI policy. */
+void
+settings_init_defaults( void )
+{
+  settings_current_owned = 1;
+  settings_defaults( &settings_current );
+}
+
 int
 settings_init( int *first_arg, int argc, char **argv )
 {
   int error;
 
-  settings_current_owned = 1;
-  settings_defaults( &settings_current );
+  settings_init_defaults();
 
 #ifdef ENABLE_AUTOMATION
   if( !automation_options_present( argc, argv ) )

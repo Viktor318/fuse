@@ -264,9 +264,11 @@ check_PROGRAMS += unittests/legacyenginelinktest unittests/legacyenginesourcetes
 unittests_startupownershiptest_SOURCES = unittests/startupownershiptest.c
 unittests_startupownershiptest_LDADD = libfuselegacy.la
 unittests_legacyenginelinktest_SOURCES = unittests/legacyenginetest.c \
+                                       unittests/hostpreparetest.c \
                                        unittests/legacylifecycletest.c
 unittests_legacyenginelinktest_LDADD = libfuselegacy.la
 unittests_legacyenginesourcetest_SOURCES = unittests/legacyenginetest.c \
+                                        unittests/hostpreparetest.c \
                                         unittests/legacylifecycletest.c \
                                         $(libfuselegacy_la_SOURCES)
 unittests_legacyenginesourcetest_CPPFLAGS = $(AM_CPPFLAGS)
@@ -275,8 +277,33 @@ unittests_legacyenginesourcetest_DEPENDENCIES = $(libfuselegacy_la_DEPENDENCIES)
 $(unittests_legacyenginesourcetest_OBJECTS): config.h
 
 LIFECYCLE_CHECK_TARGETS += check-legacy-engine-link check-startup-ownership \
-                           check-legacy-lifecycle
-.PHONY: check-legacy-lifecycle
+                           check-legacy-lifecycle check-host-prepare
+.PHONY: check-legacy-lifecycle check-host-prepare
+
+check-host-prepare: unittests/legacyenginelinktest unittests/legacyenginesourcetest
+	@set -e; root="$(abs_top_builddir)/unittests"; \
+	  rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=blocked USERPROFILE=. WINDIR=. APPDATA=.; \
+	  printf 'not a directory\n' > blocked; cp "$$rom" 48.rom; \
+	  before=$$(find . -type f -exec cksum {} \;); \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    for mode in success custom missing bad-size error-bytes bad-provenance null-bytes; do \
+	      "$$root/$$consumer$(EXEEXT)" --host-prepare-test "$$mode" "$$rom"; \
+	    done; \
+	  done; \
+	  test "$$before" = "$$(find . -type f -exec cksum {} \;)"; \
+	  test -z "$$(find . -mindepth 1 -type d -print)"; \
+	  export XDG_CONFIG_HOME=.; \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    for mode in host-state legacy-state; do \
+	      mkdir "$$consumer-$$mode"; cd "$$consumer-$$mode"; cp "$$rom" 48.rom; \
+	      "$$root/$$consumer$(EXEEXT)" --host-prepare-test "$$mode" "$$rom" > /dev/null; \
+	      cd ..; \
+	    done; \
+	    cmp "$$consumer-host-state/state.szx" "$$consumer-legacy-state/state.szx"; \
+	  done; \
+	  echo 'Private host configuration and ROM lifetimes passed for both consumers'
 
 check-legacy-lifecycle: unittests/legacyenginelinktest unittests/legacyenginesourcetest
 	@set -e; root="$(abs_top_builddir)/unittests"; \

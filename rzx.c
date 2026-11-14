@@ -42,7 +42,6 @@
 #include "debugger/debugger.h"
 #include "event.h"
 #include "fuse.h"
-#include "fuse-internal.h"
 #include "infrastructure/startup_manager.h"
 #include "machine.h"
 #include "movie.h"
@@ -402,7 +401,7 @@ start_playback( libspectrum_rzx *from_rzx )
 
   sentinel_warning = 0;
   specplus3_bus_invalidate();
-  fuse_legacy_budget_interrupt();
+  fuse_budget_interrupt();
   tstates = libspectrum_rzx_tstates( from_rzx );
   rzx_instruction_count = libspectrum_rzx_instructions( from_rzx );
   rzx_playback = 1;
@@ -469,7 +468,7 @@ int rzx_stop_playback( int add_interrupt )
     /* We're no longer doing RZX playback, so tstates now be <= the
        normal frame count */
     if( tstates > machine_current->timings.tstates_per_frame ) {
-      fuse_legacy_budget_rebase( tstates,
+      fuse_budget_rebase( tstates,
                                 machine_current->timings.tstates_per_frame );
       tstates = machine_current->timings.tstates_per_frame;
     }
@@ -478,7 +477,7 @@ int rzx_stop_playback( int add_interrupt )
 
     /* Ensure that tstates will be zero after it is reduced in
        spectrum_frame() */
-    fuse_legacy_budget_rebase( tstates,
+    fuse_budget_rebase( tstates,
                               machine_current->timings.tstates_per_frame );
     tstates = machine_current->timings.tstates_per_frame;
 
@@ -633,7 +632,7 @@ rzx_sentinel( libspectrum_dword ts GCC_UNUSED, int type GCC_UNUSED,
     sentinel_warning = 1;
   }
 
-  fuse_legacy_budget_rebase( tstates, tstates - RZX_SENTINEL_TIME_REDUCE );
+  fuse_budget_rebase( tstates, tstates - RZX_SENTINEL_TIME_REDUCE );
   tstates -= RZX_SENTINEL_TIME_REDUCE;
   z80.interrupts_enabled_at -= RZX_SENTINEL_TIME_REDUCE;
 

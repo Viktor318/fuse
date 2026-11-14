@@ -46,6 +46,7 @@
 #include "event.h"
 #include "fuse.h"
 #include "fuse-internal.h"
+#include "fuse-legacy.h"
 #include "infrastructure/startup_manager.h"
 #include "infrastructure/startup_files.h"
 #include "infrastructure/startup_test.h"
@@ -240,14 +241,14 @@ static struct {
 } legacy_budget;
 
 void
-fuse_legacy_budget_rebase( unsigned long before, unsigned long after )
+fuse_budget_rebase( unsigned long before, unsigned long after )
 {
   if( legacy_budget.active )
     legacy_budget.rebased += (int64_t)before - (int64_t)after;
 }
 
 void
-fuse_legacy_budget_interrupt( void )
+fuse_budget_interrupt( void )
 {
   if( !legacy_budget.active ) return;
   legacy_budget.interrupted = 1;
@@ -270,19 +271,19 @@ static int do_start_files( fuse_start_files *start_files );
 
 static int fuse_end(void);
 
-fuse_legacy_init_result
+fuse_init_result
 fuse_legacy_prepare( int argc, char **argv )
 {
   int i;
-  fuse_legacy_init_result result;
+  fuse_init_result result;
 
-  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_LEGACY_INIT_CLOSED;
-  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_LEGACY_INIT_BUSY;
-  if( argc < 0 || ( argc && !argv ) ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
+  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_INIT_CLOSED;
+  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_INIT_BUSY;
+  if( argc < 0 || ( argc && !argv ) ) return FUSE_INIT_INVALID_ARGUMENT;
   if( argv ) {
     for( i = 0; i < argc; i++ )
-      if( !argv[i] ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
-    if( argv[argc] ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
+      if( !argv[i] ) return FUSE_INIT_INVALID_ARGUMENT;
+    if( argv[argc] ) return FUSE_INIT_INVALID_ARGUMENT;
   }
 
   /* Guard before any library/frontend callback. Preserve the existing RNG,
@@ -294,28 +295,28 @@ fuse_legacy_prepare( int argc, char **argv )
   if(fuse_init(argc,argv,NULL)) {
     fprintf(stderr,"%s: error initialising -- giving up!\n", fuse_progname);
     fuse_end();
-    return FUSE_LEGACY_INIT_FAILED;
+    return FUSE_INIT_FAILED;
   }
 
   if( settings_current.show_help || settings_current.show_version ) {
-    result = settings_current.show_version ? FUSE_LEGACY_INIT_VERSION :
-                                            FUSE_LEGACY_INIT_HELP;
+    result = settings_current.show_version ? FUSE_INIT_VERSION :
+                                            FUSE_INIT_HELP;
     fuse_end();
     return result;
   }
 
   legacy_ownership.phase = LEGACY_READY;
-  return FUSE_LEGACY_INIT_READY;
+  return FUSE_INIT_READY;
 }
 
-fuse_legacy_init_result
+fuse_init_result
 fuse_host_prepare( const fuse_host_config *config,
                    const fuse_host_resources *resources )
 {
-  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_LEGACY_INIT_CLOSED;
-  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_LEGACY_INIT_BUSY;
+  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_INIT_CLOSED;
+  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_INIT_BUSY;
   if( !config || !resources || !resources->acquire_rom )
-    return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
+    return FUSE_INIT_INVALID_ARGUMENT;
 
   legacy_ownership.phase = LEGACY_STARTING;
   legacy_ownership.previous_error_function = libspectrum_error_function;
@@ -325,14 +326,14 @@ fuse_host_prepare( const fuse_host_config *config,
 
   if( fuse_init( 0, NULL, config ) || legacy_ownership.resource_failed ) {
     fuse_end();
-    return FUSE_LEGACY_INIT_FAILED;
+    return FUSE_INIT_FAILED;
   }
   legacy_ownership.phase = LEGACY_READY;
-  return FUSE_LEGACY_INIT_READY;
+  return FUSE_INIT_READY;
 }
 
 void
-fuse_legacy_shutdown( void )
+fuse_shutdown( void )
 {
   if( legacy_ownership.phase == LEGACY_READY ||
       legacy_ownership.phase == LEGACY_FINISHED ||
@@ -508,24 +509,24 @@ fuse_legacy_main( int argc, char **argv )
 {
   int r = 1;
   switch( fuse_legacy_prepare( argc, argv ) ) {
-  case FUSE_LEGACY_INIT_READY:
+  case FUSE_INIT_READY:
     /* Automatic preference persistence belongs to the application wrapper,
        not to core preparation or ordinary resource disposal. */
     legacy_ownership.save_settings = 1;
     if( fuse_legacy_execute( &r ) ) r = 1;
-    fuse_legacy_shutdown();
+    fuse_shutdown();
     return r;
-  case FUSE_LEGACY_INIT_HELP:
-  case FUSE_LEGACY_INIT_VERSION:
+  case FUSE_INIT_HELP:
+  case FUSE_INIT_VERSION:
     return 0;
-  case FUSE_LEGACY_INIT_BUSY:
-  case FUSE_LEGACY_INIT_CLOSED:
+  case FUSE_INIT_BUSY:
+  case FUSE_INIT_CLOSED:
     fprintf( stderr, "Fuse legacy runner supports only one session attempt\n" );
     return 1;
-  case FUSE_LEGACY_INIT_INVALID_ARGUMENT:
+  case FUSE_INIT_INVALID_ARGUMENT:
     fprintf( stderr, "Invalid Fuse legacy startup arguments\n" );
     return 1;
-  case FUSE_LEGACY_INIT_FAILED:
+  case FUSE_INIT_FAILED:
     return 1;
   }
   return 1;
@@ -560,18 +561,18 @@ fuse_execution_start( void )
 #endif
 }
 
-fuse_legacy_run_result
-fuse_legacy_run_frame( void )
+fuse_run_result
+fuse_run_frame( void )
 {
-  fuse_legacy_run_result result;
+  fuse_run_result result;
 
   if( legacy_ownership.phase == LEGACY_STARTING ||
       legacy_ownership.phase == LEGACY_OPERATING ||
       legacy_ownership.phase == LEGACY_RUNNING ||
-      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_LEGACY_RUN_BUSY;
-  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_LEGACY_RUN_NOT_READY;
-  if( fuse_exiting ) return FUSE_LEGACY_RUN_EXITING;
-  if( fuse_emulation_paused ) return FUSE_LEGACY_RUN_PAUSED;
+      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_RUN_BUSY;
+  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_RUN_NOT_READY;
+  if( fuse_exiting ) return FUSE_RUN_EXITING;
+  if( fuse_emulation_paused ) return FUSE_RUN_PAUSED;
 
   legacy_ownership.phase = LEGACY_RUNNING;
   fuse_execution_start();
@@ -581,28 +582,28 @@ fuse_legacy_run_frame( void )
   } while( !fuse_exiting && !fuse_emulation_paused &&
            !spectrum_frame_dispatch_complete );
 
-  result = fuse_exiting ? FUSE_LEGACY_RUN_EXITING :
-           fuse_emulation_paused ? FUSE_LEGACY_RUN_PAUSED :
-                                   FUSE_LEGACY_RUN_COMPLETED;
+  result = fuse_exiting ? FUSE_RUN_EXITING :
+           fuse_emulation_paused ? FUSE_RUN_PAUSED :
+                                   FUSE_RUN_COMPLETED;
   legacy_ownership.phase = LEGACY_READY;
   return result;
 }
 
-fuse_legacy_run_result
-fuse_legacy_run_tstates( unsigned long budget )
+fuse_run_result
+fuse_run_tstates( unsigned long budget )
 {
   unsigned long remaining = budget;
-  fuse_legacy_run_result result;
+  fuse_run_result result;
 
   if( legacy_ownership.phase == LEGACY_OPERATING ||
       legacy_ownership.phase == LEGACY_STARTING ||
       legacy_ownership.phase == LEGACY_RUNNING ||
-      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_LEGACY_RUN_BUSY;
-  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_LEGACY_RUN_NOT_READY;
+      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_RUN_BUSY;
+  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_RUN_NOT_READY;
   if( !budget || budget > 0x7fffffffUL || tstates >= 0x7fffffffUL )
-    return FUSE_LEGACY_RUN_INVALID_ARGUMENT;
-  if( fuse_exiting ) return FUSE_LEGACY_RUN_EXITING;
-  if( fuse_emulation_paused ) return FUSE_LEGACY_RUN_PAUSED;
+    return FUSE_RUN_INVALID_ARGUMENT;
+  if( fuse_exiting ) return FUSE_RUN_EXITING;
+  if( fuse_emulation_paused ) return FUSE_RUN_PAUSED;
 
   legacy_ownership.phase = LEGACY_RUNNING;
   fuse_execution_start();
@@ -636,10 +637,10 @@ fuse_legacy_run_tstates( unsigned long budget )
     }
   } while( remaining && !fuse_exiting && !fuse_emulation_paused );
 
-  result = fuse_exiting ? FUSE_LEGACY_RUN_EXITING :
-           legacy_budget.interrupted ? FUSE_LEGACY_RUN_INTERRUPTED :
-           fuse_emulation_paused ? FUSE_LEGACY_RUN_PAUSED :
-                                   FUSE_LEGACY_RUN_COMPLETED;
+  result = fuse_exiting ? FUSE_RUN_EXITING :
+           legacy_budget.interrupted ? FUSE_RUN_INTERRUPTED :
+           fuse_emulation_paused ? FUSE_RUN_PAUSED :
+                                   FUSE_RUN_COMPLETED;
   legacy_budget.active = 0;
   legacy_ownership.phase = LEGACY_READY;
   return result;

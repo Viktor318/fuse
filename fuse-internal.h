@@ -1,4 +1,4 @@
-/* fuse-internal.h: private application/engine boundary
+/* fuse-internal.h: private host/engine API
    Copyright (c) 2026 Fredrick Meunier
 
    This program is free software; you can redistribute it and/or modify
@@ -22,33 +22,26 @@
 #include <stddef.h>
 #include "input.h"
 
-/* Private, UI-bound, exclusive legacy-runtime lifecycle. Not a supported
-   embedding API: selected toolkit/fatal-error policy still applies. Calls must
-   be serialized on the frontend owner thread; there is no restart promise.
-   An accepted prepare (including help/version or failure) consumes one attempt.
-   Invalid arguments do not consume it. argv and its mutable strings are borrowed
-   through shutdown; argc == 0 with argv == NULL is permitted. */
-typedef enum fuse_legacy_init_result {
-  FUSE_LEGACY_INIT_READY,
-  FUSE_LEGACY_INIT_HELP,
-  FUSE_LEGACY_INIT_VERSION,
-  FUSE_LEGACY_INIT_FAILED,
-  FUSE_LEGACY_INIT_BUSY,
-  FUSE_LEGACY_INIT_CLOSED,
-  FUSE_LEGACY_INIT_INVALID_ARGUMENT
-} fuse_legacy_init_result;
+/* Private, selected-UI-bound engine lifecycle. Not an installed embedding API:
+   toolkit/fatal-error policy still applies. Calls must be serialized on the
+   owner thread; no recursion or restart. An accepted prepare, including failure,
+   consumes one attempt. Invalid arguments do not consume it.
+   HELP/VERSION are shared outcomes used only by the application adapter. */
+typedef enum fuse_init_result {
+  FUSE_INIT_READY,
+  FUSE_INIT_HELP,
+  FUSE_INIT_VERSION,
+  FUSE_INIT_FAILED,
+  FUSE_INIT_BUSY,
+  FUSE_INIT_CLOSED,
+  FUSE_INIT_INVALID_ARGUMENT
+} fuse_init_result;
 
-/* Help/version and failure return after cleanup, without a runnable session.
-   Core preparation/shutdown never authorize automatic preference saving, even
-   when the autosave setting is enabled. Explicit settings operations remain
-   available; RNG, platform startup and library management are unchanged. */
-fuse_legacy_init_result fuse_legacy_prepare( int argc, char **argv );
-
-/* Private M3 preparation, still using the selected UI/output adapters. Configuration
+/* Host preparation uses the selected UI/output adapters. Configuration
    owns its strings and may be freed after prepare returns. Only one preparation
    attempt is supported, shared with the legacy entry. No CLI or preference I/O.
    This subset configures machine ID, sound and input mappings; other values
-   retain generated defaults internally. Use legacy run/shutdown entries after READY.
+   retain generated defaults internally. Use shared run/shutdown entries after READY.
    Owner-thread only, no recursion; selected UI, device waits, RNG and process-
    global library/error policy remain. Not toolkit-free or a public SDK. */
 typedef struct fuse_host_config fuse_host_config;
@@ -77,8 +70,8 @@ typedef struct fuse_host_resources {
   int (*acquire_rom)( void *context, const char *logical_name,
                       fuse_host_rom *rom );
 } fuse_host_resources;
-fuse_legacy_init_result fuse_host_prepare( const fuse_host_config *config,
-                                          const fuse_host_resources *resources );
+fuse_init_result fuse_host_prepare( const fuse_host_config *config,
+                                    const fuse_host_resources *resources );
 
 /* Synchronous value operations, serialized between execution turns (also while
    paused). They do not advance emulated time; NMI is queued for normal dispatch.
@@ -159,24 +152,15 @@ fuse_host_operation_result fuse_host_mouse_event( fuse_host_mouse_button button,
    release-all explicitly for focus loss, retaining existing reset semantics. */
 fuse_host_operation_result fuse_host_release_all( void );
 
-/* Internal outcome collection for legacy void peripheral callbacks: record ROM
-   errors only during host preparation/mutations; never a replacement for fatal
-   recovery or permission to continue a failed session. */
-void fuse_host_resource_error( void );
-
-/* Internal ROM routing only; active also during startup and teardown. */
-int fuse_host_resources_active( void );
-int fuse_host_acquire_rom( const char *name, fuse_host_rom *rom );
-
-typedef enum fuse_legacy_run_result {
-  FUSE_LEGACY_RUN_COMPLETED,
-  FUSE_LEGACY_RUN_PAUSED,
-  FUSE_LEGACY_RUN_EXITING,
-  FUSE_LEGACY_RUN_BUSY,
-  FUSE_LEGACY_RUN_NOT_READY,
-  FUSE_LEGACY_RUN_INVALID_ARGUMENT,
-  FUSE_LEGACY_RUN_INTERRUPTED
-} fuse_legacy_run_result;
+typedef enum fuse_run_result {
+  FUSE_RUN_COMPLETED,
+  FUSE_RUN_PAUSED,
+  FUSE_RUN_EXITING,
+  FUSE_RUN_BUSY,
+  FUSE_RUN_NOT_READY,
+  FUSE_RUN_INVALID_ARGUMENT,
+  FUSE_RUN_INTERRUPTED
+} fuse_run_result;
 
 /* Advance to the next completed frame boundary (not necessarily a whole frame
    from the current position). Repeatable after READY, on the owner thread only.
@@ -185,9 +169,9 @@ typedef enum fuse_legacy_run_result {
    EXITING takes precedence over PAUSED, then COMPLETED. A paused call advances
    no emulated time; the host owns command handling and waiting between calls.
    Ordinary reset may occur during dispatch and does not cancel the turn.
-   Recursive calls are BUSY; before prepare/after legacy execute or shutdown,
+   Recursive calls are BUSY; before preparation/after finalization or shutdown,
    calls are NOT_READY. No automatic shutdown or application result writing. */
-fuse_legacy_run_result fuse_legacy_run_frame( void );
+fuse_run_result fuse_run_frame( void );
 
 /* Advance by a relative emulated T-state budget (1..0x7fffffff), completing
    instructions and due-event/frame dispatch even if they overshoot the budget.
@@ -199,27 +183,11 @@ fuse_legacy_run_result fuse_legacy_run_frame( void );
    advances nothing. Invalid budgets (or a clock >=0x7fffffff) are rejected without
    execution. Phase rejection precedes argument validation; other lifecycle and
    blocking rules are the same as run_frame. */
-fuse_legacy_run_result fuse_legacy_run_tstates( unsigned long budget );
+fuse_run_result fuse_run_tstates( unsigned long budget );
 
-/* Internal budget-accounting hooks, not host operations. Coordinate changes
-   preserve elapsed time; clock replacement invalidates only an active budget.
-   These do nothing during legacy/frame execution or between calls. */
-void fuse_legacy_budget_rebase( unsigned long before, unsigned long after );
-void fuse_legacy_budget_interrupt( void );
-
-/* Run the blocking legacy loop once after READY, optionally after host turns.
-   Zero means accepted; the application exit status is written separately.
-   Rejection leaves it alone. This finalizes application automation output once;
-   subsequent frame/legacy execution is rejected. Not cooperative execution. */
-int fuse_legacy_execute( int *exit_status );
-
-/* End a prepared/completed session. No-op before preparation or after shutdown,
-   and during preparation, execution or cleanup callbacks. Request exit through
-   existing frontend mechanisms rather than tearing down an active operation. */
-void fuse_legacy_shutdown( void );
-
-/* Compatible application runner, without a platform entry point. Authorizes
-   the existing autosave preference behavior only after successful preparation. */
-int fuse_legacy_main( int argc, char **argv );
+/* End a prepared, completed or failed-operation session. No-op before preparation,
+   after shutdown or during active preparation/execution/cleanup callbacks.
+   Does not cancel active work; the host must wait for its return before disposal. */
+void fuse_shutdown( void );
 
 #endif

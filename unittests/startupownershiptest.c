@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "fuse.h"
-#include "fuse-internal.h"
+#include "fuse-legacy.h"
 #include "infrastructure/startup_files.h"
 #include "settings.h"
 #ifdef ENABLE_AUTOMATION

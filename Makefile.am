@@ -153,6 +153,7 @@ noinst_HEADERS = bitmap.h \
 	event.h \
 	fuse.h \
 	fuse-internal.h \
+	fuse-legacy.h \
 	input.h \
 	input_refresh.h \
 	keyboard.h \

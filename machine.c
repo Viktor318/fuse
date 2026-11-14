@@ -220,7 +220,7 @@ machine_select_machine( fuse_machine_info *machine, libspectrum_snap *snap )
   
   /* Replacing the frame clock/event queue invalidates pending audio cuts. */
   sound_suspend_subframe();
-  fuse_legacy_budget_interrupt();
+  fuse_budget_interrupt();
   tstates = 0;
 
   /* Reset the event stack */

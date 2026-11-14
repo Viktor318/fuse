@@ -7,6 +7,7 @@
 #include <string.h>
 #include "fuse.h"
 #include "fuse-internal.h"
+#include "fuse-legacy.h"
 #include "memory_pages.h"
 #include "module.h"
 #include "snapshot.h"
@@ -92,7 +93,7 @@ snapshot_file_test( int argc, char **argv )
   size_t length = 0;
   int flags = 0;
   FILE *file;
-  assert( fuse_legacy_prepare( argc, argv ) == FUSE_LEGACY_INIT_READY );
+  assert( fuse_legacy_prepare( argc, argv ) == FUSE_INIT_READY );
   assert( !module_register( &export_module ) );
   z80.pc.w = 0x8000; z80.sp.w = 0x9000;
   writebyte_internal( 0x8100, 0x5a );
@@ -122,6 +123,6 @@ snapshot_file_test( int argc, char **argv )
   compare_file( "recovered.szx", expected, length );
   assert( z80.pc.w == 0x8000 && z80.sp.w == 0x9000 && readbyte_internal(0x8100) == 0x5a );
   libspectrum_mem_set_vtable( &normal ); libspectrum_free( expected );
-  fuse_legacy_shutdown();
+  fuse_shutdown();
   return 0;
 }

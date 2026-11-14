@@ -49,4 +49,19 @@ void fuse_abort( void ) GCC_NORETURN;	/* Emergency shutdown */
 extern libspectrum_creator *fuse_creator; /* Creator information for file
 					     formats which support this */
 
+/* Engine implementation hooks; not part of the host API. */
+/* Coordinate changes preserve elapsed time; replacement interrupts an active
+   budget. These do nothing during frame/legacy execution or between turns. */
+void fuse_budget_rebase( unsigned long before, unsigned long after );
+void fuse_budget_interrupt( void );
+
+/* Record reported ROM errors during host preparation/mutations, including
+   legacy void callbacks which disable their peripheral. Not fatal recovery. */
+void fuse_host_resource_error( void );
+
+/* Synchronous ROM routing, also active during startup and teardown. */
+struct fuse_host_rom;
+int fuse_host_resources_active( void );
+int fuse_host_acquire_rom( const char *name, struct fuse_host_rom *rom );
+
 #endif			/* #ifndef FUSE_FUSE_H */

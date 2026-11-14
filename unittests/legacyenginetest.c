@@ -3,7 +3,7 @@
    execution API. */
 #include "config.h"
 #include <string.h>
-#include "fuse-internal.h"
+#include "fuse-legacy.h"
 
 int legacy_lifecycle_test( int argc, char **argv );
 int host_prepare_test( int argc, char **argv );

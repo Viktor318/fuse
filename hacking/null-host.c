@@ -79,8 +79,8 @@ frames( unsigned int count, unsigned int *completed )
 {
   unsigned int i;
   for( i = 0; i < count; i++ ) {
-    fuse_legacy_run_result result = fuse_legacy_run_frame();
-    if( result != FUSE_LEGACY_RUN_COMPLETED ) {
+    fuse_run_result result = fuse_run_frame();
+    if( result != FUSE_RUN_COMPLETED ) {
       fprintf( stderr, "host: frame turn stopped (run result %d)\n", (int)result );
       return 1;
     }
@@ -95,8 +95,8 @@ main( int argc, char **argv )
   rom_provider provider = { 0 };
   fuse_host_resources resources = { &provider, acquire_rom };
   fuse_host_config *config;
-  fuse_legacy_init_result init;
-  fuse_legacy_run_result run;
+  fuse_init_result init;
+  fuse_run_result run;
   unsigned int frame_turns = 0, budget_turns = 0;
   int prepared = 0, status = EXIT_FAILURE;
 
@@ -116,7 +116,7 @@ main( int argc, char **argv )
   }
   init = fuse_host_prepare( config, &resources );
   fuse_host_config_free( config ); /* Preparation owns its copied configuration. */
-  if( init != FUSE_LEGACY_INIT_READY ) {
+  if( init != FUSE_INIT_READY ) {
     fprintf( stderr, "host: preparation failed (init result %d)\n", (int)init );
     goto cleanup; /* A rejected prepare does not authorize another session's shutdown. */
   }
@@ -135,8 +135,8 @@ main( int argc, char **argv )
   if( operation( "focus loss", fuse_host_release_all() ) ) goto cleanup;
   puts( "host: focus lost; inputs released" );
 
-  run = fuse_legacy_run_tstates( 997 );
-  if( run != FUSE_LEGACY_RUN_COMPLETED ) {
+  run = fuse_run_tstates( 997 );
+  if( run != FUSE_RUN_COMPLETED ) {
     fprintf( stderr, "host: budget turn stopped (run result %d)\n", (int)run );
     goto cleanup;
   }
@@ -150,7 +150,7 @@ main( int argc, char **argv )
   status = EXIT_SUCCESS;
 
 cleanup:
-  if( prepared ) fuse_legacy_shutdown(); /* Also valid after a failed mutation. */
+  if( prepared ) fuse_shutdown(); /* Also valid after a failed mutation. */
   if( provider.requests != provider.releases || provider.pending ) {
     fprintf( stderr, "host: ROM ownership mismatch\n" );
     status = EXIT_FAILURE;

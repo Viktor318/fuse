@@ -49,9 +49,9 @@ acquire_rom( void *context, const char *name, fuse_host_rom *rom )
   assert( fuse_host_release_all() == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_nmi() == FUSE_HOST_OPERATION_BUSY );
-  assert( fuse_legacy_run_frame() == FUSE_LEGACY_RUN_BUSY );
-  assert( fuse_legacy_run_tstates( 1 ) == FUSE_LEGACY_RUN_BUSY );
-  fuse_legacy_shutdown();
+  assert( fuse_run_frame() == FUSE_RUN_BUSY );
+  assert( fuse_run_tstates( 1 ) == FUSE_RUN_BUSY );
+  fuse_shutdown();
   if( provider.fail || ( provider.fail_name && !strcmp( name, provider.fail_name ) ) ) {
     provider.rejected++;
     return 1;
@@ -253,7 +253,7 @@ host_operations_test( int argc, char **argv )
   assert( !fuse_host_config_set_joystick( config, FUSE_HOST_JOYSTICK_2, FUSE_HOST_JOYSTICK_OUTPUT_FULLER ) );
   assert( fuse_host_config_set_mouse_swap_buttons( config, 2 ) );
   assert( !fuse_host_config_set_mouse_swap_buttons( config, 1 ) );
-  assert( fuse_host_prepare( config, &resources ) == FUSE_LEGACY_INIT_READY );
+  assert( fuse_host_prepare( config, &resources ) == FUSE_INIT_READY );
   fuse_host_config_free( config );
   assert( settings_current.joystick_1_output == JOYSTICK_TYPE_KEMPSTON );
   assert( settings_current.joystick_2_output == JOYSTICK_TYPE_FULLER );
@@ -269,8 +269,8 @@ host_operations_test( int argc, char **argv )
       assert( fuse_host_reset( FUSE_HOST_RESET_HARD ) == FUSE_HOST_OPERATION_FAILED );
     else assert( fuse_host_select_machine( "128" ) == FUSE_HOST_OPERATION_FAILED );
     assert( provider.rejected == 1 );
-    assert( fuse_legacy_run_frame() == FUSE_LEGACY_RUN_NOT_READY );
-    assert( fuse_legacy_run_tstates( 1 ) == FUSE_LEGACY_RUN_NOT_READY );
+    assert( fuse_run_frame() == FUSE_RUN_NOT_READY );
+    assert( fuse_run_tstates( 1 ) == FUSE_RUN_NOT_READY );
     assert( fuse_host_nmi() == FUSE_HOST_OPERATION_NOT_READY );
   } else {
     assert( !fuse_emulation_pause() && !fuse_emulation_pause() );
@@ -287,13 +287,13 @@ host_operations_test( int argc, char **argv )
     assert( ( readport_internal( 0xfadf ) & 3 ) == 0 );
     assert( machine_current->machine == LIBSPECTRUM_MACHINE_128 );
     assert( fuse_emulation_paused == 2 );
-    assert( fuse_legacy_run_frame() == FUSE_LEGACY_RUN_PAUSED );
+    assert( fuse_run_frame() == FUSE_RUN_PAUSED );
     assert( fuse_host_release_all() == OK ); check_released();
     assert( fuse_host_select_machine( "48" ) == OK );
     assert( !fuse_emulation_unpause() && !fuse_emulation_unpause() );
     callback = event_register( active_callback, "Host operation reentry" );
     assert( callback >= 0 ); event_add( tstates, callback );
-    assert( fuse_legacy_run_tstates( 1 ) == FUSE_LEGACY_RUN_COMPLETED );
+    assert( fuse_run_tstates( 1 ) == FUSE_RUN_COMPLETED );
     event_reset(); tstates = 0; z80.pc.w = 0x8000; z80.sp.w = 0x9000;
     writebyte_internal( 0x8000, 0 );
     assert( fuse_host_nmi() == OK );
@@ -303,7 +303,7 @@ host_operations_test( int argc, char **argv )
     assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_EXITING );
   }
   assert( provider.acquired == provider.released );
-  fuse_legacy_shutdown(); fuse_legacy_shutdown();
+  fuse_shutdown(); fuse_shutdown();
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( !fuse_host_resources_active() );
   return 0;

@@ -37,7 +37,12 @@ compile alternative UI/audio adapters together or omit the special scaler rules.
 
 The host API is declared in `fuse-internal.h`; CLI adapter entries are in
 `fuse-legacy.h`, which includes the host header for shared types and operations.
-`fuse.h` contains engine implementation globals/hooks, not the host interface.
+`fuse-host.c` implements host configuration, ROM-provider storage and typed
+operations. `fuse.c` retains lifecycle ownership, admission and execution;
+`fuse-engine.h` connects these implementations without exposing lifecycle state.
+`fuse.h` contains other engine globals/service hooks, not the host interface.
+The implementation header is not a host-consumer dependency.
+
 There is one session attempt per process, with no restart, multiple-instance or
 concurrent-entry support. All mutable engine calls belong to one owner thread compatible with the
 selected frontend. Callbacks must not recursively enter the host API.

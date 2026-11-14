@@ -16,6 +16,51 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   (TOGGLE). A sor elejéig / végéig törlés a Shift + Backspace / Delete-re
   került (eddig Ctrl + Backspace / Delete volt).
 
+### Hangbeállítások
+
+- **Új Hangbeállítások ablak** (*Beállítások > Hang*) a százalékmezős
+  párbeszédablak helyett: felül a *Hang bekapcsolva*, a *Betöltés hangja*,
+  az AY sztereó mód, a hangszóró típusa és az *Alaphelyzet*; alattuk a
+  *Keverés* csoportban egy-egy oszlop a **fő hangerőnek** és minden
+  hangforrásnak – AY, beeper, µSpeech, SpecDrum, Covox –, mindegyikben
+  csúszka, mellette szintjelző (zöld, sárga, piros; -40 dB-től a teljes
+  kivezérlésig, a forrás hangereje után), a hangerő százalékban és egy
+  *Néma* jelölőnégyzet. Az AY oszlop alatti *Keverő* gomb az AY keverőt
+  nyitja meg.
+- Minden változtatás azonnal hallható, a csúszka húzása közben is; nincs
+  Mégse, az *OK* (vagy az Esc, vagy az ablak bezárása) csak bezárja. Az
+  ablak nem állítja meg az emulációt, így a szintjelzők a hanggal együtt
+  mozognak; a helyét megjegyzi (`fuse-windows.ini`, `[sound]`).
+- Csúszkák: húzás közben a hüvelyk fölött látszik a százalék; dupla
+  kattintás: alapérték; az egérgörgő (bármelyik csúszka fölött, akármelyik
+  vezérlőn van a billentyűzetfókusz) és a nyilak 1%-kal, Shifttel 10%-kal
+  mozgatják (Page Up / Down: 10%, Home / End: 100% / 0%).
+- A be nem kapcsolt perifériák oszlopai (µSpeech, SpecDrum, Covox)
+  szürkék, sötét szintjelzővel, és azonnal követik a perifériák és a gép
+  változását. Hang nélkül a csúszkák továbbra is állíthatók, a szintjelzők
+  sötétek maradnak.
+- *Alaphelyzet*: minden hangerő az alapértékére, semmi sem néma, a
+  sztereó mód és a hangszóró típusa az alapértékére áll; a két
+  jelölőnégyzet marad.
+- Az alsó sor a hangkimenetet (`fuse.exe`-ben WASAPI, a
+  `fuse-directsound.exe`-ben DirectSound) és a valódi mintavételi
+  frekvenciát mutatja.
+- Az AY hangerő és a sztereó mód ugyanaz, mint az AY lejátszóban és az AY
+  keverőben: bármelyikben változik, a többi azonnal mutatja.
+- Új beállítások a `fuse.cfg`-ben: `volumemaster` (alapérték 100) és a
+  némítások: `mutemaster`, `muteay`, `mutebeeper`, `muteuspeech`,
+  `mutespecdrum`, `mutecovox` (alapból kikapcsolva); a parancssorban is
+  (`--volume-master`, `--mute-ay`...). A beeper, a SpecDrum, a Covox és a
+  µSpeech hangereje mostantól lejátszás közben változik (eddig csak a
+  párbeszédablak bezárása után).
+- A **fő hangerő** az utolsó fokozat: mindent szabályoz, amit a Fuse
+  lejátszik – az emulációt, az AY lejátszót és a TurboSound lejátszót –,
+  a filmfelvételeket nem. A TurboSound keverő saját fő hangereje továbbra
+  is a TurboSound lejátszó zenéjének hangereje (ahogy az AY hangerő az AY
+  lejátszóé), így a dalai a TurboSound fő hangerő és a Fuse fő hangereje
+  szorzatával szólnak; az AY csúszka és a *Néma* nem hat rájuk.
+- A GTK, az SDL és a widget felület a régi párbeszédablakot tartja meg.
+
 ### Felhasználói felület
 
 - A *Súgó > Névjegy* és a `fuse --version` ennek a kiadásnak a verzióját

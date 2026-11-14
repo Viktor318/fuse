@@ -221,6 +221,20 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
 - Hangkimenet: WASAPI (`fuse.exe`) vagy DirectSound (`fuse-directsound.exe`).
   DirectSounddal nincs régi hang ismételt lejátszása akadás után, nincs
   kattogás.
+- **Hangbeállítások** (*Beállítások > Hang*): keverőablak, mint az
+  EightyOne Hangbeállításai. Felül a *Hang bekapcsolva*, a *Betöltés
+  hangja*, az AY sztereó mód, a hangszóró típusa és az *Alaphelyzet*;
+  alattuk egy-egy oszlop a fő hangerőnek, az AY-nak, a beepernek, a
+  µSpeech-nek, a SpecDrumnak és a Covoxnak, mindegyikben csúszka,
+  szintjelző, a hangerő százalékban és *Néma* (az AY oszlopban az AY
+  keverőt megnyitó *Keverő* gomb is). A változtatások azonnal hallhatók,
+  és a többi beállítással együtt mentődnek; nincs Mégse. Az ablak nem
+  állítja meg az emulációt, a szintjelzők a hanggal együtt mozognak. Dupla
+  kattintás a csúszkát az alapértékére állítja; az egérgörgő és a nyilak
+  1%-kal, Shifttel 10%-kal mozgatják. A be nem kapcsolt perifériák
+  oszlopai szürkék. A fő hangerő mindenre hat, amit a Fuse lejátszik, az
+  AY és a TurboSound lejátszóra is (a TurboSound keverő fő hangereje előtte
+  van), a filmfelvételekre nem.
 
 ### Filmek
 

@@ -15,6 +15,48 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   and lower screen (TOGGLE). Deleting to the start / end of the line moved
   to Shift + Backspace / Delete (it was Ctrl + Backspace / Delete).
 
+### Sound settings
+
+- **New Sound settings window** (*Options > Sound*), in place of the
+  dialog with percentage boxes: at the top *Sound enabled*, *Loading
+  sound*, the AY stereo mode, the speaker type and *Reset*; below them, in
+  the *Mixing* group, a column for the **master volume** and for each
+  source – AY, beeper, µSpeech, SpecDrum, Covox – with a fader, a level
+  meter beside it (green, yellow, red; -40 dB to full scale, after the
+  volume of the source), the volume in percent and a *Mute* box. The *Mixer*
+  button under the AY column opens the AY mixer.
+- Every change is heard at once, also while dragging a fader; there is no
+  Cancel, *OK* (or Esc, or closing the window) just closes it. The window
+  doesn't stop the emulation, so the meters move with the sound; it
+  remembers its place (`fuse-windows.ini`, `[sound]`).
+- Faders: dragging shows the percentage above the thumb; a double click
+  sets the default value; the mouse wheel (over any fader, whichever
+  control has the keyboard focus) and the arrow keys move it by 1%, with
+  Shift by 10% (Page Up / Down: 10%, Home / End: 100% / 0%).
+- The columns of the peripherals which are not on (µSpeech, SpecDrum,
+  Covox) are greyed out, with a dark meter, and follow the changes of the
+  peripherals and the machine at once. Without sound the faders can still
+  be set and the meters stay dark.
+- *Reset*: every volume to its default, nothing muted, the stereo mode and
+  the speaker type to their defaults; the two check boxes stay.
+- The bottom line shows the sound output (WASAPI in `fuse.exe`,
+  DirectSound in `fuse-directsound.exe`) and its real sample rate.
+- The AY volume and the stereo mode are the same as in the AY player and
+  the AY mixer: a change in any of them is shown in the others at once.
+- New settings in `fuse.cfg`: `volumemaster` (default 100) and the mute
+  switches `mutemaster`, `muteay`, `mutebeeper`, `muteuspeech`,
+  `mutespecdrum`, `mutecovox` (default off); also on the command line
+  (`--volume-master`, `--mute-ay`...). The beeper, SpecDrum, Covox and
+  µSpeech volumes now change while playing (before only after closing the
+  dialog).
+- The **master volume** is the last stage: it scales everything Fuse plays
+  – the emulation, the AY player and the TurboSound player – but not
+  movie recordings. The TurboSound mixer's own master volume stays the
+  volume of the TurboSound player's music (as the AY volume is that of the
+  AY player's), so its songs are heard at the TurboSound master times the
+  Fuse master; the AY fader and its *Mute* don't change them.
+- The GTK, SDL and widget user interfaces keep the old dialog.
+
 ### User interface
 
 - *Help > About* and `fuse --version` show the version of this edition

@@ -801,6 +801,7 @@ main( int argc, char **argv )
     settings_current.volume_ay_c = 100;
   settings_current.volume_specdrum = settings_current.volume_covox = 50;
   settings_current.volume_uspeech = 50;
+  settings_current.volume_master = 100;
 #ifdef SOUND_TEST_BACKEND_CADENCE
   test_backend_cadence();
   return 0;

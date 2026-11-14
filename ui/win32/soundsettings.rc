@@ -1,0 +1,83 @@
+/* soundsettings.rc: Win32 Sound settings window
+   Copyright (c) 2026 Viktor (GitHub: Viktor318)
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+*/
+
+/* The controls in the order of the Tab key. Their places are set by the
+   code (soundsettings.c) after the texts are translated, as wide as the
+   texts need */
+
+#include <windows.h>
+#include <commctrl.h>
+
+#include "soundsettings.h"
+
+IDD_SOUNDSETTINGS DIALOGEX DISCARDABLE 30,30,466,262
+CAPTION "Fuse - Sound Settings"
+STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | DS_SETFONT
+FONT 8,"Ms Shell Dlg 2",400,0,1
+BEGIN
+  AUTOCHECKBOX "&Sound enabled", IDC_SND_ENABLED, 7, 6, 80, 10
+  AUTOCHECKBOX "&Loading sound", IDC_SND_LOADING, 96, 6, 80, 10
+  LTEXT "Stereo &mode (AY):", IDC_SND_STEREO_LABEL, 7, 22, 64, 8
+  COMBOBOX IDC_SND_STEREO, 72, 20, 60, 110, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+  LTEXT "Speaker &type:", IDC_SND_SPEAKER_LABEL, 144, 22, 50, 8
+  COMBOBOX IDC_SND_SPEAKER, 196, 20, 70, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+  PUSHBUTTON "R&eset", IDC_SND_RESET, 403, 19, 56, 14
+  GROUPBOX "Mixing", IDC_SND_MIXING, 7, 40, 452, 200
+
+  /* The master volume */
+  GROUPBOX "Master volume", IDC_SND_GROUP1 + 0, 14, 51, 68, 179
+  CONTROL "", IDC_SND_FADER1 + 0, SOUND_FADER_CLASS, WS_CHILD | WS_VISIBLE | WS_TABSTOP, 34, 63, 26, 122
+  CTEXT "", IDC_SND_PERCENT1 + 0, 16, 188, 64, 8, SS_NOPREFIX
+  AUTOCHECKBOX "Mute", IDC_SND_MUTE1 + 0, 28, 198, 50, 10
+
+  /* The AY */
+  GROUPBOX "AY", IDC_SND_GROUP1 + 1, 88, 51, 68, 179
+  CONTROL "", IDC_SND_FADER1 + 1, SOUND_FADER_CLASS, WS_CHILD | WS_VISIBLE | WS_TABSTOP, 108, 63, 26, 122
+  CTEXT "", IDC_SND_PERCENT1 + 1, 90, 188, 64, 8, SS_NOPREFIX
+  AUTOCHECKBOX "Mute", IDC_SND_MUTE1 + 1, 102, 198, 50, 10
+  PUSHBUTTON "Mi&xer", IDC_SND_MIXER, 96, 212, 52, 13
+
+  /* The beeper */
+  GROUPBOX "Beeper", IDC_SND_GROUP1 + 2, 162, 51, 68, 179
+  CONTROL "", IDC_SND_FADER1 + 2, SOUND_FADER_CLASS, WS_CHILD | WS_VISIBLE | WS_TABSTOP, 182, 63, 26, 122
+  CTEXT "", IDC_SND_PERCENT1 + 2, 164, 188, 64, 8, SS_NOPREFIX
+  AUTOCHECKBOX "Mute", IDC_SND_MUTE1 + 2, 176, 198, 50, 10
+
+  /* The uSpeech (its title, with a micro sign, is set by the code) */
+  GROUPBOX "", IDC_SND_GROUP1 + 3, 236, 51, 68, 179
+  CONTROL "", IDC_SND_FADER1 + 3, SOUND_FADER_CLASS, WS_CHILD | WS_VISIBLE | WS_TABSTOP, 256, 63, 26, 122
+  CTEXT "", IDC_SND_PERCENT1 + 3, 238, 188, 64, 8, SS_NOPREFIX
+  AUTOCHECKBOX "Mute", IDC_SND_MUTE1 + 3, 250, 198, 50, 10
+
+  /* The SpecDrum */
+  GROUPBOX "SpecDrum", IDC_SND_GROUP1 + 4, 310, 51, 68, 179
+  CONTROL "", IDC_SND_FADER1 + 4, SOUND_FADER_CLASS, WS_CHILD | WS_VISIBLE | WS_TABSTOP, 330, 63, 26, 122
+  CTEXT "", IDC_SND_PERCENT1 + 4, 312, 188, 64, 8, SS_NOPREFIX
+  AUTOCHECKBOX "Mute", IDC_SND_MUTE1 + 4, 324, 198, 50, 10
+
+  /* The Covox */
+  GROUPBOX "Covox", IDC_SND_GROUP1 + 5, 384, 51, 68, 179
+  CONTROL "", IDC_SND_FADER1 + 5, SOUND_FADER_CLASS, WS_CHILD | WS_VISIBLE | WS_TABSTOP, 404, 63, 26, 122
+  CTEXT "", IDC_SND_PERCENT1 + 5, 386, 188, 64, 8, SS_NOPREFIX
+  AUTOCHECKBOX "Mute", IDC_SND_MUTE1 + 5, 398, 198, 50, 10
+
+  LTEXT "Double-click a slider: default value. Mouse wheel or arrows: 1%, with Shift 10%.", IDC_SND_HINT, 14, 228, 438, 8, SS_NOPREFIX
+  LTEXT "", IDC_SND_OUTPUT, 7, 246, 380, 8, SS_NOPREFIX | SS_ENDELLIPSIS
+  DEFPUSHBUTTON "OK", IDOK, 409, 243, 50, 14
+END

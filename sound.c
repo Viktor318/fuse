@@ -28,6 +28,7 @@
 
 #include "config.h"
 
+#include <limits.h>
 #include <string.h>
 
 #include "ayplay.h"
@@ -67,6 +68,17 @@ int sound_framesiz;
 
 static int sound_channels;
 static sound_silence_noise silence_noise;
+/* The master volume: the gain of the last batch (-1: none yet), and the
+   silence filler of the output after it (the master volume may turn the
+   filler of the recorded PCM into zeros) */
+static int master_gain = -1;
+static sound_silence_noise output_silence_noise;
+/* The level meters, see sound_meter_level() (the AY player may report from
+   its own thread: a lost peak only shows a little less on a meter) */
+static volatile int source_meter_peak[ SOUND_SOURCES ];
+/* The lowest and highest sample of each side heard in this frame: the
+   master level meter (the output may have a level which is not heard) */
+static int output_low[ 2 ], output_high[ 2 ];
 
 /* The main buffers contain sources which bypass speaker processing. */
 Blip_Buffer *left_buf = NULL;
@@ -92,6 +104,8 @@ static blip_sample_t *frame_samples;
 static long frame_sample_count;
 
 static void sound_update_source_routes( void );
+static void sound_output_level_reset( void );
+static void sound_output_level_report( void );
 
 /* Returns the emulation speed adjusted processor speed */
 libspectrum_dword
@@ -174,6 +188,9 @@ sound_init( const char *device )
 
   sound_channels = sound_stereo_ay != SOUND_STEREO_AY_NONE ? 2 : 1;
   sound_silence_noise_reset( &silence_noise );
+  sound_silence_noise_reset( &output_silence_noise );
+  master_gain = -1;
+  sound_output_level_reset();
   hz = ( float )sound_get_effective_processor_speed() /
                 machine_current->timings.tstates_per_frame;
   sound_framesiz = ( float )settings_current.sound_freq / hz + 1;
@@ -182,7 +199,8 @@ sound_init( const char *device )
   if( sound_channels == 2 && !sound_init_buffer( &right_buf ) ) return;
   if( output_mixer_init( sound_get_effective_processor_speed(),
                          settings_current.sound_freq, sound_framesiz,
-                         sound_channels, settings_current.volume_beeper ) ) {
+                         sound_channels,
+                         sound_source_volume( SOUND_SOURCE_BEEPER ) ) ) {
     ui_error( UI_ERROR_ERROR, "could not configure Spectrum output mixer" );
     sound_end();
     return;
@@ -201,7 +219,7 @@ sound_init( const char *device )
 #endif
   if( audio_cut_interval && audio_event < 0 )
     audio_event = event_register( sound_audio_event, "Audio cut" );
-  ay_engine_init( settings_current.volume_ay, sound_stereo_ay );
+  ay_engine_init( sound_source_volume( SOUND_SOURCE_AY ), sound_stereo_ay );
   sound_ay_volume_changed();
   /* The sound generator starts from the registers the AY has now (they
      may have changed while the sound was off, e.g. in the AY player) */
@@ -211,9 +229,9 @@ sound_init( const char *device )
       ay_engine_write( reg, machine_current->ay.registers[ reg ], 0 );
   }
   source_synths_init( left_buf, right_buf, sound_channels == 2,
-                      settings_current.volume_specdrum,
-                      settings_current.volume_covox,
-                      settings_current.volume_uspeech );
+                      sound_source_volume( SOUND_SOURCE_SPECDRUM ),
+                      sound_source_volume( SOUND_SOURCE_COVOX ),
+                      sound_source_volume( SOUND_SOURCE_USPEECH ) );
   samples = libspectrum_new0( blip_sample_t, sound_framesiz * sound_channels );
   frame_samples = libspectrum_new0( blip_sample_t,
                                     sound_framesiz * sound_channels );
@@ -426,10 +444,126 @@ sound_ay_channel_positions( int stereo, int position[3] )
   }
 }
 
+int
+sound_source_volume( int source )
+{
+  int volume, muted;
+
+  switch( source ) {
+  case SOUND_SOURCE_MASTER:
+    volume = settings_current.volume_master;
+    muted = settings_current.mute_master;
+    break;
+  case SOUND_SOURCE_AY:
+    volume = settings_current.volume_ay;
+    muted = settings_current.mute_ay;
+    break;
+  case SOUND_SOURCE_BEEPER:
+    volume = settings_current.volume_beeper;
+    muted = settings_current.mute_beeper;
+    break;
+  case SOUND_SOURCE_USPEECH:
+    volume = settings_current.volume_uspeech;
+    muted = settings_current.mute_uspeech;
+    break;
+  case SOUND_SOURCE_SPECDRUM:
+    volume = settings_current.volume_specdrum;
+    muted = settings_current.mute_specdrum;
+    break;
+  case SOUND_SOURCE_COVOX:
+    volume = settings_current.volume_covox;
+    muted = settings_current.mute_covox;
+    break;
+  default:
+    return 0;
+  }
+
+  if( muted || volume < 0 ) return 0;
+  return volume > 100 ? 100 : volume;
+}
+
+void
+sound_meter_level( int source, int level )
+{
+  if( source < 0 || source >= SOUND_SOURCES ) return;
+  if( level < 0 ) level = -level;
+  if( level > source_meter_peak[ source ] )
+    source_meter_peak[ source ] = level;
+}
+
+int
+sound_meter_take( int source )
+{
+  int peak;
+
+  if( source < 0 || source >= SOUND_SOURCES ) return 0;
+  peak = source_meter_peak[ source ];
+  source_meter_peak[ source ] = 0;
+  return peak;
+}
+
+static void
+sound_output_level_reset( void )
+{
+  output_low[0] = output_low[1] = INT_MAX;
+  output_high[0] = output_high[1] = INT_MIN;
+}
+
+/* End of a frame: how far the output went */
+static void
+sound_output_level_report( void )
+{
+  int channel, level = 0;
+
+  for( channel = 0; channel < 2; channel++ )
+    if( output_high[ channel ] - output_low[ channel ] > 2 * level )
+      level = ( output_high[ channel ] - output_low[ channel ] ) / 2;
+  /* The silence filler alone is not a level */
+  if( level > 1 ) sound_meter_level( SOUND_SOURCE_MASTER, level );
+  sound_output_level_reset();
+}
+
+/* The master volume on the samples going to the sound output, gliding from
+   the gain of the last batch to the new one, so that moving the fader is
+   not heard as steps; then the master level meter */
+static void
+sound_master_volume_apply( blip_sample_t *output, long count )
+{
+  int target = sound_source_volume( SOUND_SOURCE_MASTER );
+  long frames = count / sound_channels, i;
+  int channel;
+
+  if( master_gain < 0 ) master_gain = target;
+
+  if( master_gain != 100 || target != 100 ) {
+    for( i = 0; i < frames; i++ ) {
+      double gain = ( master_gain +
+                      (double)( target - master_gain ) * ( i + 1 ) / frames )
+                    / 100.0;
+      for( channel = 0; channel < sound_channels; channel++ ) {
+        blip_sample_t *sample = &output[ i * sound_channels + channel ];
+        *sample = (blip_sample_t)( *sample * gain );
+      }
+    }
+    master_gain = target;
+    /* Keep the output from going digitally silent, as before the master
+       volume */
+    sound_silence_noise_apply( &output_silence_noise, output, count,
+                               sound_channels );
+  }
+
+  for( i = 0; i < count; i++ ) {
+    channel = i % sound_channels;
+    if( output[i] < output_low[ channel ] ) output_low[ channel ] = output[i];
+    if( output[i] > output_high[ channel ] )
+      output_high[ channel ] = output[i];
+  }
+}
+
 void
 sound_ay_volume_changed( void )
 {
-  ay_engine_set_volume( settings_current.volume_ay );
+  ay_engine_set_volume( sound_source_volume( SOUND_SOURCE_AY ) );
   ay_engine_set_channel_volume( 0, settings_current.volume_ay_a );
   ay_engine_set_channel_volume( 1, settings_current.volume_ay_b );
   ay_engine_set_channel_volume( 2, settings_current.volume_ay_c );
@@ -575,6 +709,9 @@ sound_advance_to( libspectrum_dword endpoint )
   sound_update_source_routes();
   sp0256_advance_to( endpoint );
   ay_engine_render( endpoint );
+  /* Volumes changed meanwhile: at the end of the interval, after its
+     writes */
+  source_synths_update_volumes( elapsed );
 
   blip_buffer_end_frame( left_buf, elapsed );
 
@@ -607,6 +744,8 @@ sound_advance_to( libspectrum_dword endpoint )
           count * sizeof( *samples ) );
   frame_sample_count += count;
   audio_position = endpoint;
+  /* Recordings above, the master volume only for what is heard */
+  if( count ) sound_master_volume_apply( samples, count );
 
   if( settings_current.sound && count )
     sound_lowlevel_frame( samples, count );
@@ -697,6 +836,8 @@ sound_frame( void )
   }
 
   output_mixer_end_frame();
+  source_synths_end_frame();
+  sound_output_level_report();
   if( movie_recording ) movie_add_sound( frame_samples, frame_sample_count );
   ay_engine_end_frame();
   sp0256_end_frame();

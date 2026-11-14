@@ -46,6 +46,7 @@ win32_icon ICON "data/win32/winfuse.ico"
 #include "ui/win32/rollback.rc"         /* reserved ids: 1600 - 1699 */
 #include "ui/win32/roms.rc"             /* reserved ids: 1100 - 1199 */
 #include "ui/win32/select_template.rc"  /* reserved ids: 1000 - 1099 */
+#include "ui/win32/soundsettings.rc"    /* reserved ids: 4500 - 4599 */
 #include "ui/win32/statusbar.rc"        /* reserved ids: 900         */
 #include "ui/win32/win32joystick.rc"    /* reserved ids: 1700 - 1799 */
 

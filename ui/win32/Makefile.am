@@ -40,6 +40,8 @@ ui_win32_files = \
                  ui/win32/ayplaylist.c \
                  ui/win32/aymixer.c \
                  ui/win32/tsmixer.c \
+                 ui/win32/soundsettings.c \
+                 ui/win32/soundsettings.h \
                  ui/win32/winstate.c \
                  ui/win32/winstate.h \
                  ui/win32/ayplayer.h \
@@ -103,6 +105,7 @@ ui_win32_rc_files = \
                  ui/win32/rollback.rc \
                  ui/win32/roms.rc \
                  ui/win32/select_template.rc \
+                 ui/win32/soundsettings.rc \
                  ui/win32/statusbar.rc \
                  ui/win32/win32joystick.rc
 

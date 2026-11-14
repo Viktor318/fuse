@@ -97,8 +97,16 @@ void win32_tsmixer_tick( void );
 
 /* Both player windows and their playlist windows */
 void win32_ayplayer_update( void );
-/* The AY player changed an AY sound setting: show it in Options > Sound
-   if that is open */
+/* The Sound settings window, Options > Sound (soundsettings.c) */
+extern HWND fuse_hSoundWnd;
+void win32_soundsettings_show( void );
+/* Every frame: its level meters, and the settings changed elsewhere */
+void win32_soundsettings_tick( void );
+/* The mouse wheel over one of its faders moves the fader: non-zero if
+   `msg' was taken */
+int win32_soundsettings_wheel( const MSG *msg );
+/* The AY player or mixer changed an AY sound setting: show it in the Sound
+   settings window if that is open */
 void win32_options_sound_sync( void );
 void win32_ayplayer_play_entry( int turbosound, int index );
 HWND win32_ayplayer_window( int turbosound );

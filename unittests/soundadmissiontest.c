@@ -151,6 +151,7 @@ int main( void )
     settings_current.volume_ay_c = 100;
   settings_current.volume_specdrum = settings_current.volume_covox = 50;
   settings_current.volume_uspeech = 50;
+  settings_current.volume_master = 100;
   for( stereo = 0; stereo < 2; stereo++ ) {
     select_stereo( stereo ? SOUND_STEREO_AY_ABC : SOUND_STEREO_AY_NONE );
     for( route = 0; route < 3; route++ ) {

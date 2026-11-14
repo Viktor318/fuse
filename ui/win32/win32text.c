@@ -261,6 +261,13 @@ win32text_guillemet( void )
   return special( 0x00bb, guillemet, sizeof( guillemet ) );
 }
 
+const char*
+win32text_middot( void )
+{
+  static char middot[8];
+  return special( 0x00b7, middot, sizeof( middot ) );
+}
+
 LRESULT
 win32text_statusbar_text( HWND status, WPARAM part, const char *text )
 {

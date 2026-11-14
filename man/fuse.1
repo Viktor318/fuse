@@ -1131,6 +1131,26 @@ Options dialog's
 option.
 .RE
 .PP
+.B \-\-mute\-ay
+.br
+.B \-\-mute\-beeper
+.br
+.B \-\-mute\-covox
+.br
+.B \-\-mute\-master
+.br
+.B \-\-mute\-specdrum
+.br
+.B \-\-mute\-uspeech
+.RS
+Silence the AY, the beeper, the Covox, the whole output, the SpecDrum or
+the \(mcSpeech, keeping its volume setting. (Disabled by default; use
+.RB ` \-\-no\-mute\-ay '
+and so on to turn it off again.) Same as the
+.I "Mute"
+boxes of the Sound settings window of the Windows user interface.
+.RE
+.PP
 .B \-\-opus
 .RS
 Emulate an Opus Discovery interface. Same as the Disk Peripherals Options
@@ -2101,6 +2121,16 @@ Sets the relative volume of the Covox from a range of 0\(en100%.
 Same as the Sound Options dialog's
 .I "Covox volume"
 option.
+.RE
+.PP
+.B \-\-volume\-master
+.I volume
+.RS
+Sets the master volume from a range of 0\(en100% (100 by default). It
+acts on everything Fuse plays, the AY and TurboSound music players too,
+but not on movie recordings. Same as the
+.I "Master volume"
+fader of the Sound settings window of the Windows user interface.
 .RE
 .PP
 .B \-\-volume\-specdrum

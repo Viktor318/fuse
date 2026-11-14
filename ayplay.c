@@ -23,6 +23,7 @@
 
 #include "config.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -355,6 +356,9 @@ render_frame( void )
   /* Channels with tone and noise off: the lowest and highest level in the
      frame (digital music changes it all the time), per chip */
   int dc_low[ CHIPS ][ CHANNELS ], dc_high[ CHIPS ][ CHANNELS ];
+  /* The lowest and highest sum of the channels as heard: the AY level
+     meter of the Sound settings window */
+  int heard_low = INT_MAX, heard_high = INT_MIN;
 
   for( n = 0; n < CHIPS; n++ )
     for( channel = 0; channel < CHANNELS; channel++ ) {
@@ -367,6 +371,8 @@ render_frame( void )
   song_frame();
 
   for( f = next_tick; f < AYSOURCE_FRAME_TSTATES; f += AY_STEP ) {
+    int heard_sum = 0;
+
     while( position < count && writes[ position ].tstates <= f ) {
       chip_write( &ay[ writes[ position ].chip ], writes[ position ].reg,
                   writes[ position ].value );
@@ -391,6 +397,7 @@ render_frame( void )
           channel_output( c, n, channel, envelope_level, tone_count ),
           chips );
 
+        heard_sum += output;
         if( ( ( c->registers[7] >> channel ) & 9 ) == 9 ) {
           if( level < dc_low[ n ][ channel ] ) dc_low[ n ][ channel ] = level;
           if( level > dc_high[ n ][ channel ] )
@@ -414,7 +421,15 @@ render_frame( void )
 
       clock_noise( c, noise_count );
     }
+
+    if( heard_sum < heard_low ) heard_low = heard_sum;
+    if( heard_sum > heard_high ) heard_high = heard_sum;
   }
+
+  /* A song of the AY player is heard with the AY volume; those of the
+     TurboSound player have a mixer and meters of their own */
+  if( !turbosound_mix && heard_high > heard_low )
+    sound_meter_level( SOUND_SOURCE_AY, ( heard_high - heard_low ) / 2 );
 
   /* Writes after the last step */
   while( position < count ) {
@@ -449,6 +464,14 @@ void
 ayplay_render( short *dest, int frames, int channels, int rate )
 {
   int i, side;
+#ifdef HAVE_WASAPI_AUDIO
+  /* The music has a sound stream of its own: the master volume of Fuse is
+     applied here (otherwise sound.c applies it to the mix) */
+  double gain = sound_source_volume( SOUND_SOURCE_MASTER ) / 100.0;
+#else
+  const double gain = 1.0;
+#endif
+  double peak_level = 0;
 
   if( !active || paused || rate <= 0 ) return;
 
@@ -470,7 +493,9 @@ ayplay_render( short *dest, int frames, int channels, int rate )
     for( side = 0; side < 2; side++ ) {
       double in = pending_position < pending_count ?
                   pending[ side ][ pending_position ] : 0;
-      out[ side ] = dc_filter_apply( &dc[ side ], in );
+      out[ side ] = dc_filter_apply( &dc[ side ], in ) * gain;
+      if( out[ side ] > peak_level ) peak_level = out[ side ];
+      else if( -out[ side ] > peak_level ) peak_level = -out[ side ];
     }
     if( pending_position < pending_count ) pending_position++;
 
@@ -486,6 +511,13 @@ ayplay_render( short *dest, int frames, int channels, int rate )
     }
   }
   UNLOCK();
+
+#ifdef HAVE_WASAPI_AUDIO
+  /* What this stream adds to the output (mixed into the sound of the
+     emulator, sound.c measures the mix) */
+  sound_meter_level( SOUND_SOURCE_MASTER, peak_level > 32767 ? 32767 :
+                                          (int)peak_level );
+#endif
 }
 
 /* Without sound output: the song goes on silently, a frame at a time */
@@ -563,7 +595,8 @@ ayplay_update_mix( void )
       }
   } else {
     int stereo = sound_ay_stereo_setting();
-    master = settings_current.volume_ay;
+    /* The AY volume, 0 when the AY is muted */
+    master = sound_source_volume( SOUND_SOURCE_AY );
     for( n = 0; n < CHIPS; n++ )
       for( channel = 0; channel < CHANNELS; channel++ ) {
         volume[ n ][ channel ] = channel == 0 ? settings_current.volume_ay_a :

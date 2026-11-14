@@ -138,6 +138,10 @@ CODE
 	}
     }
 
+    # Options > Sound is a window of its own (soundsettings.c); only its
+    # combo values are needed from here
+    next if $_->{name} eq 'sound';
+
     my $idcname = uc( "IDC_OPT_$_->{name}" );
     my $optname = uc( "OPT_$_->{name}" );
 
@@ -336,102 +340,6 @@ CODE
     }
     print "}\n\n";
 
-    if( $_->{name} eq 'sound' ) {
-      print << "CODE";
-/* The AY volume, which the AY player and mixer windows can change too, is
-   applied while this dialog is open, so that the windows show the same;
-   Cancel restores it */
-static HWND sound_options_window = NULL;
-static int sound_options_syncing = 0;
-static int sound_options_original_volume;
-static char *sound_options_original_stereo;
-static int sound_options_original_pan[3];
-
-/* The AY volume and the stereo mode, which the AY player and mixer windows
-   can change too, are applied while this dialog is open, so that the
-   windows show the same; Cancel restores them */
-static void
-sound_options_live( HWND hwndDlg, int id )
-{
-  char buffer[80];
-  int n;
-
-  if( sound_options_syncing || !sound_options_window ) return;
-  if( id == IDC_OPT_SOUND_STEREO_AY ) {
-    n = SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_STEREO_AY, CB_GETCURSEL,
-                            0, 0 );
-    if( n >= 0 && n < sound_stereo_ay_combo_count )
-      aymix_set_stereo( sound_stereo_ay_combo[n] );
-    return;
-  }
-  buffer[0] = '\\0';
-  SendDlgItemMessage( hwndDlg, IDC_OPT_SOUND_VOLUME_AY, WM_GETTEXT, 80,
-                      (LPARAM) buffer );
-  if( buffer[0] ) settings_current.volume_ay = atoi( buffer );
-  sound_ay_volume_changed();
-  win32_ayplayer_update();
-}
-
-static void
-sound_options_open( HWND hwndDlg )
-{
-  sound_options_window = hwndDlg;
-  sound_options_original_volume = settings_current.volume_ay;
-  sound_options_original_stereo = settings_current.stereo_ay ?
-    utils_safe_strdup( settings_current.stereo_ay ) : NULL;
-  sound_options_original_pan[0] = settings_current.pan_ay_a;
-  sound_options_original_pan[1] = settings_current.pan_ay_b;
-  sound_options_original_pan[2] = settings_current.pan_ay_c;
-}
-
-static void
-sound_options_close( int cancel )
-{
-  if( cancel ) {
-    settings_current.volume_ay = sound_options_original_volume;
-    settings_set_string( &settings_current.stereo_ay,
-                         sound_options_original_stereo );
-    settings_current.pan_ay_a = sound_options_original_pan[0];
-    settings_current.pan_ay_b = sound_options_original_pan[1];
-    settings_current.pan_ay_c = sound_options_original_pan[2];
-    sound_options_window = NULL;
-    sound_ay_stereo_changed();
-    aymix_changed();
-  }
-  libspectrum_free( sound_options_original_stereo );
-  sound_options_original_stereo = NULL;
-  sound_options_window = NULL;
-}
-
-/* The AY player or mixer changed the AY volume or the stereo mode: show it
-   here too */
-void
-win32_options_sound_sync( void )
-{
-  char buffer[80];
-  int stereo = sound_ay_stereo_setting(), n;
-
-  if( !sound_options_window ) return;
-  sound_options_syncing = 1;
-  snprintf( buffer, sizeof( buffer ), "%d", settings_current.volume_ay );
-  SendDlgItemMessage( sound_options_window, IDC_OPT_SOUND_VOLUME_AY,
-                      WM_SETTEXT, 0, (LPARAM) buffer );
-  for( n = 0; n < sound_stereo_ay_combo_count; n++ ) {
-    char *saved = settings_current.stereo_ay;
-    int same;
-    /* The mode the name of the combo means */
-    settings_current.stereo_ay = (char *)sound_stereo_ay_combo[n];
-    same = sound_ay_stereo_setting() == stereo;
-    settings_current.stereo_ay = saved;
-    if( same )
-      SendDlgItemMessage( sound_options_window, IDC_OPT_SOUND_STEREO_AY,
-                          CB_SETCURSEL, n, 0 );
-  }
-  sound_options_syncing = 0;
-}
-
-CODE
-    }
 
     print << "CODE";
 static BOOL CALLBACK
@@ -450,7 +358,6 @@ menu_options_$_->{name}_proc( HWND hwndDlg, UINT msg, WPARAM wParam GCC_UNUSED,
       menu_options_$_->{name}_init( hwndDlg );
       menu_options_$_->{name}_dependencies( hwndDlg );
 CODE
-    print "      sound_options_open( hwndDlg );\n" if $_->{name} eq 'sound';
     print << "CODE";
 
       return TRUE;
@@ -461,13 +368,6 @@ CODE
           HIWORD( wParam ) == CBN_SELCHANGE )
         menu_options_$_->{name}_dependencies( hwndDlg );
 CODE
-    print << "CODE" if $_->{name} eq 'sound';
-      if( ( HIWORD( wParam ) == EN_CHANGE &&
-            LOWORD( wParam ) == IDC_OPT_SOUND_VOLUME_AY ) ||
-          ( HIWORD( wParam ) == CBN_SELCHANGE &&
-            LOWORD( wParam ) == IDC_OPT_SOUND_STEREO_AY ) )
-        sound_options_live( hwndDlg, LOWORD( wParam ) );
-CODE
     print << "CODE";
 
       switch( LOWORD( wParam ) )
@@ -476,13 +376,11 @@ CODE
           /* Read the controls and apply the settings */
           menu_options_$_->{name}_done( hwndDlg );
 CODE
-    print "          sound_options_close( 0 );\n" if $_->{name} eq 'sound';
     print << "CODE";
           return 0;
 
         case IDCANCEL:
 CODE
-    print "          sound_options_close( 1 );\n" if $_->{name} eq 'sound';
     print << "CODE";
           EndDialog( hwndDlg, 0 );
           return 0;
@@ -491,7 +389,6 @@ CODE
 
     case WM_CLOSE:
 CODE
-    print "      sound_options_close( 1 );\n" if $_->{name} eq 'sound';
     print << "CODE";
       EndDialog( hwndDlg, 0 );
       return 0;

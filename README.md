@@ -201,6 +201,19 @@ AY sound generator of its own, apart from the emulated machine.
 - The menu bar is drawn with a clearly visible selection.
 - Sound output: WASAPI (`fuse.exe`) or DirectSound (`fuse-directsound.exe`).
   With DirectSound no old sound is played again after a hold-up, no clicks.
+- **Sound settings** (*Options > Sound*): a mixer window, like the Sound
+  settings of EightyOne. At the top *Sound enabled*, *Loading sound*, the
+  AY stereo mode, the speaker type and *Reset*; below them a column for the
+  master volume and for the AY, beeper, µSpeech, SpecDrum and Covox, each
+  with a fader, a level meter, the volume in percent and *Mute* (the AY
+  column also has a *Mixer* button for the AY mixer). Changes are heard at
+  once and saved like the other settings; there is no Cancel. The window
+  doesn't stop the emulation, the meters move with the sound. A double
+  click sets a fader to its default; the mouse wheel and the arrow keys
+  move it by 1%, with Shift by 10%. The columns of peripherals which are
+  not on are greyed out. The master volume acts on everything Fuse plays,
+  the AY and TurboSound players too (the TurboSound mixer's master volume
+  comes before it), but not on movie recordings.
 
 ### Movies
 

@@ -690,3 +690,14 @@ extra	TurboSound mixer	Load TurboSound mixer settings	TurboSound keverőbeállí
 4 Üzenetek	hibaüzenet	The value must be a number from 0 to 255 ($FF).	Az érték 0 és 255 ($FF) közötti szám lehet.
 4 Üzenetek	hibaüzenet	This address is in ROM. To change it, turn on Options > General > Allow writes to ROM.	Ez a cím a ROM-ban van. A módosításához kapcsold be: Beállítások > Általános > Írás engedélyezése a ROM-ba.
 4 Üzenetek	hibaüzenet	There is no memory at this address.	Ezen a címen nincs memória.
+extra	Sound settings	Fuse - Sound Settings	Fuse - Hangbeállítások
+extra	Sound settings	Stereo &mode (AY):	Sztereó &mód (AY):
+extra	Sound settings	Speaker &type:	Hangszóró &típusa:
+extra	Sound settings	Mixing	Keverés
+extra	Sound settings	Mute	Néma
+extra	Sound settings	Mi&xer	&Keverő
+extra	Sound settings	Double-click a slider: default value. Mouse wheel or arrows: 1%, with Shift 10%.	Dupla kattintás egy csúszkán: alapérték. Egérgörgő vagy nyilak: 1%, Shifttel 10%.
+extra	Sound settings	Output: %s, %d Hz	Kimenet: %s, %d Hz
+extra	Sound settings	Output: %s	Kimenet: %s
+extra	Sound settings	changes are heard at once	a változtatások azonnal hallhatók
+extra	Sound settings	the sound is off	a hang ki van kapcsolva

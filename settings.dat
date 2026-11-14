@@ -123,6 +123,13 @@ volume_beeper, numeric, 100
 volume_specdrum, numeric, 100
 volume_covox, numeric, 100
 volume_uspeech, numeric, 100
+volume_master, numeric, 100
+mute_master, boolean, 0
+mute_ay, boolean, 0
+mute_beeper, boolean, 0
+mute_uspeech, boolean, 0
+mute_specdrum, boolean, 0
+mute_covox, boolean, 0
 
 joystick_1_output, numeric, 0
 joystick_1_autofire, boolean, 0

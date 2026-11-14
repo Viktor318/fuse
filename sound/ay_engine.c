@@ -10,6 +10,7 @@
 
 #include "config.h"
 
+#include <limits.h>
 #include <string.h>
 
 #include "machine.h"
@@ -73,6 +74,9 @@ static int channel_muted[AY_CHANNELS];
 static int channel_volume[AY_CHANNELS] = { 100, 100, 100 };
 /* Highest level (0-15) of each channel since the last query */
 static int meter_peak[AY_CHANNELS];
+/* The lowest and highest sum of the channels as heard since the last
+   frame: the level meter of the Sound settings window */
+static int heard_low = INT_MAX, heard_high = INT_MIN;
 
 static void
 ay_state_reset( void )
@@ -120,6 +124,8 @@ ay_engine_init( int volume, int stereo )
   memset( previous, 0, sizeof( previous ) );
   ay_levels_init();
   ay_engine_set_volume( volume );
+  heard_low = INT_MAX;
+  heard_high = INT_MIN;
   /* Every channel has a right side synth too, so the stereo mode can be
      changed while playing */
   for( i = 0; i < AY_CHANNELS; i++ ) {
@@ -427,10 +433,16 @@ ay_engine_render( libspectrum_dword endpoint )
       if( level > meter_peak[channel] ) meter_peak[channel] = level;
     }
 
-    for( channel = 0; channel < AY_CHANNELS; channel++ )
-      ay_emit_channel(
-        channel, sound_interval_time( f ),
-        ay_channel_output( channel, envelope_level, tone_count ) );
+    {
+      int heard = 0;
+      for( channel = 0; channel < AY_CHANNELS; channel++ ) {
+        int output = ay_channel_output( channel, envelope_level, tone_count );
+        ay_emit_channel( channel, sound_interval_time( f ), output );
+        heard += output;
+      }
+      if( heard < heard_low ) heard_low = heard;
+      if( heard > heard_high ) heard_high = heard;
+    }
     ay_clock_noise( noise_count );
   }
   next_tick = f;
@@ -496,4 +508,10 @@ ay_engine_end_frame( void )
   }
   change_position = 0;
   memset( previous, 0, sizeof( previous ) );
+
+  /* How far the sum went (a level that stays is not heard) */
+  if( heard_high > heard_low )
+    sound_meter_level( SOUND_SOURCE_AY, ( heard_high - heard_low ) / 2 );
+  heard_low = INT_MAX;
+  heard_high = INT_MIN;
 }

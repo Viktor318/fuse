@@ -975,6 +975,9 @@ ui_event( void )
   win32ui_process_messages( 1 );
   display_timing_input_end();
 
+  /* The level meters of the Sound settings follow the sound */
+  win32_soundsettings_tick();
+
   return 0;
 }
 
@@ -2131,7 +2134,7 @@ win32ui_process_messages( int process_queue_once )
 {
   MSG msg;
   int i, processMsg;
-  HWND hModelessDlgs[9];
+  HWND hModelessDlgs[10];
 
   while( 1 ) {
     while( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) ) {
@@ -2145,6 +2148,10 @@ win32ui_process_messages( int process_queue_once )
       hModelessDlgs[6] = fuse_hTSWnd;
       hModelessDlgs[7] = fuse_hTSListWnd;
       hModelessDlgs[8] = fuse_hTSMixWnd;
+      hModelessDlgs[9] = fuse_hSoundWnd;
+
+      /* The wheel over a fader of the Sound settings moves that fader */
+      if( win32_soundsettings_wheel( &msg ) ) continue;
 
       /* FIXME: rethink this loop, IsDialogMessage in particular */
       processMsg = TRUE;

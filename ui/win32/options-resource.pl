@@ -43,6 +43,9 @@ CODE
 
 foreach( @dialogs ) {
 
+    # Options > Sound is a window of its own (soundsettings.rc)
+    next if $_->{name} eq 'sound';
+
     my $buffer = ""; # needed because we find out the height at the end at the end
     my $optname = uc( "OPT_$_->{name}" );
     my $y = 5;

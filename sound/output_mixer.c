@@ -43,6 +43,11 @@ static ula_filter_t ula_filter;
 static int beeper_filter_active;
 static int filter_speaker_type = -1;
 static int synth_speaker_type = -1;
+/* The beeper volume the ULA synth plays at, and the lowest and highest
+   level of the ULA output since the last frame (the level meter: before
+   the TV filter it may have a level which is not heard) */
+static int ula_volume;
+static double ula_low, ula_high;
 
 typedef struct ula_levels_tag {
   int mic;
@@ -70,6 +75,9 @@ output_mixer_init( libspectrum_dword clock_rate, int sample_rate,
                   beeper_volume > 100 ? 1.0 : beeper_volume / 100.0;
 
   channels = output_channels;
+  ula_volume = beeper_volume;
+  ula_low = 1e9;
+  ula_high = -1e9;
   if( output_buffer_init( &ula_buf, clock_rate, sample_rate ) ||
       output_buffer_init( &tv_left_buf, clock_rate, sample_rate ) ||
       ( channels == 2 &&
@@ -243,16 +251,36 @@ mix_output( blip_sample_t *main_samples, long count )
     double ula_sample = filter_ula_sample( ula_samples[i], filter_ula,
                                            filter_speaker );
     int channel;
+
+    if( ula_sample < ula_low ) ula_low = ula_sample;
+    if( ula_sample > ula_high ) ula_high = ula_sample;
     for( channel = 0; channel < channels; channel++ )
       mix_channel( main_samples, i * channels + channel, channel, speaker_type,
                    ula_sample );
   }
 }
 
+/* The beeper volume changed: heard from the end of the interval, after its
+   writes. The level goes back to zero at the old volume and up again at the
+   new one, so no step is left behind */
+static void
+update_beeper_volume( libspectrum_dword elapsed )
+{
+  int volume = sound_source_volume( SOUND_SOURCE_BEEPER ), level;
+
+  if( volume == ula_volume ) return;
+  ula_volume = volume;
+  level = ula_synth->impl.last_amp;
+  if( level ) blip_synth_update( ula_synth, elapsed, 0 );
+  blip_synth_set_volume( ula_synth, volume / 100.0 );
+  if( level ) blip_synth_update( ula_synth, elapsed, level );
+}
+
 void
 output_mixer_advance( libspectrum_dword elapsed,
                       blip_sample_t *main_samples, long count )
 {
+  update_beeper_volume( elapsed );
   blip_buffer_end_frame( tv_left_buf, elapsed );
   blip_buffer_end_frame( ula_buf, elapsed );
   if( channels == 2 ) {
@@ -278,6 +306,12 @@ output_mixer_advance( libspectrum_dword elapsed,
 void
 output_mixer_end_frame( void )
 {
+  /* How far the level went; a filter may leave a sample or two of noise */
+  if( ula_high - ula_low > 4 )
+    sound_meter_level( SOUND_SOURCE_BEEPER, ( ula_high - ula_low ) / 2 );
+  ula_low = 1e9;
+  ula_high = -1e9;
+
   memcpy( ula_published, ula_frame, ula_frame_count * sizeof( *ula_frame ) );
   ula_published_count = ula_frame_count;
   ula_published_speaker_type = synth_speaker_type;

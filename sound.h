@@ -150,10 +150,36 @@ extern int sound_long_buffer;
 void sound_set_long_buffer( int on );
 void sound_request_restart( void );
 
-/* settings_current.stereo_ay / volume_ay(_a/_b/_c) changed: apply while
-   playing */
+/* settings_current.stereo_ay / volume_ay(_a/_b/_c) / mute_ay changed: apply
+   while playing */
 void sound_ay_stereo_changed( void );
 void sound_ay_volume_changed( void );
+
+/* The sources of the Sound settings window. The master volume is the last
+   stage: it scales everything Fuse plays (the emulation, the AY player and
+   the TurboSound player), but not movie recordings */
+enum sound_source {
+  SOUND_SOURCE_MASTER,
+  SOUND_SOURCE_AY,
+  SOUND_SOURCE_BEEPER,
+  SOUND_SOURCE_USPEECH,
+  SOUND_SOURCE_SPECDRUM,
+  SOUND_SOURCE_COVOX,
+
+  SOUND_SOURCES
+};
+
+/* The volume (0-100) a source is heard at: its setting (volume_master,
+   volume_ay...), 0 when it is muted (mute_master, mute_ay...). The
+   beeper, SpecDrum, Covox and uSpeech volumes and the master volume are
+   followed while playing; the AY volume after sound_ay_volume_changed() */
+int sound_source_volume( int source );
+
+/* Level meters: the highest level of a source since the last
+   sound_meter_take(), after its volume (and after the master volume for
+   SOUND_SOURCE_MASTER), in 16-bit sample units (32767: full scale) */
+void sound_meter_level( int source, int level );
+int sound_meter_take( int source );
 
 /* The low-level sound interface */
 

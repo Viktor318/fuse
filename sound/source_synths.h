@@ -14,6 +14,11 @@ void source_synths_init( Blip_Buffer *left, Blip_Buffer *right, int stereo,
                          int uspeech_volume );
 void source_synths_end( void );
 void source_synths_set_speech_output( Blip_Buffer *left, Blip_Buffer *right );
+/* The volumes of the sources changed: heard from `time' (in the current
+   interval, after its writes) */
+void source_synths_update_volumes( blip_time_t time );
+/* End of a frame: the level meters */
+void source_synths_end_frame( void );
 void source_synths_sp0256_write( libspectrum_dword at_tstates,
                                  libspectrum_signed_word val );
 

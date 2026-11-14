@@ -98,6 +98,9 @@ infobox_proc( HWND dialog, UINT msg, WPARAM wParam, LPARAM lParam )
 void
 win32ui_infobox( const char *message )
 {
+  /* No frames under the message (see ui_error_specific()) */
+  win32ui_modal_emulation_hold();
   DialogBoxParam( fuse_hInstance, MAKEINTRESOURCE( IDD_INFOBOX ), fuse_hWnd,
                   infobox_proc, (LPARAM)message );
+  win32ui_modal_emulation_release();
 }

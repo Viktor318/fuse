@@ -175,8 +175,9 @@ AY sound generator of its own, apart from the emulated machine.
 - The music goes on while a menu or a dialog box is open, while a window is
   moved or when Fuse is minimized. With WASAPI (`fuse.exe`) the music has a
   sound stream of its own and does not need the emulation at all; with
-  DirectSound it is mixed into the sound of the emulator, which then keeps
-  running in menus and while a window is moved (but not in dialog boxes).
+  DirectSound it is mixed into the sound of the emulator, which keeps
+  running in menus, while a window is moved and in the dialog boxes which
+  don't stop it (see *Window and sound*).
 
 ### Window and sound
 
@@ -188,6 +189,11 @@ AY sound generator of its own, apart from the emulated machine.
   next start.
 - The main window, the keyboard picture and the AY player windows open where
   they were last time.
+- **The emulation goes on in menus and dialogs**: the picture and the
+  sound don't stop while a menu is open, while a window is moved or
+  resized, or while a dialog of the *Options* menu is open (its changes
+  take effect with *OK*). Choosing a file, the questions, *Machine > Pause*
+  and the debugger still stop it.
 - **Turbo** (F12, *Machine > Turbo*): the emulation runs as fast as it
   can, without sound (as when fastloading a tape); F12 again goes back to
   the normal speed. The status bar shows the speed. It is not saved.

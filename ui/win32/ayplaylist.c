@@ -745,14 +745,8 @@ playlist_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     }
     break;
 
-  case WM_ENTERSIZEMOVE:
-  case WM_ENTERMENULOOP:
-    win32ui_modal_enter();
-    return 0;
-
   case WM_EXITSIZEMOVE:
   case WM_EXITMENULOOP:
-    win32ui_modal_exit();
     remember_place( l );
     return 0;
 

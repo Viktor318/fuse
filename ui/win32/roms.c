@@ -63,9 +63,8 @@ menu_select_roms_with_title( const char *title, size_t start, size_t n,
 {
   struct callback_info info;
 
-  /* Firstly, stop emulation */
-  fuse_emulation_pause();
-
+  /* The emulation goes on: the ROMs chosen are only stored with OK, and
+     loaded at the next reset */
   _sntprintf( info.title, 256, "Fuse - Select ROMs - %s", title );
   info.start = start;
   info.n = n;
@@ -73,9 +72,6 @@ menu_select_roms_with_title( const char *title, size_t start, size_t n,
 
   DialogBoxParam( fuse_hInstance, MAKEINTRESOURCE( IDD_ROMS ), fuse_hWnd,
                   ( DLGPROC ) roms_proc, ( LPARAM ) &info );
-
-  /* And then carry on with emulation again */
-  fuse_emulation_unpause();
 
   return 0;
 }
@@ -239,7 +235,10 @@ select_new_rom( HWND hedit )
 {
   TCHAR *filename;
 
+  /* The emulation stops for the file selector, as with all of them */
+  fuse_emulation_pause();
   filename = ui_get_open_filename( "Fuse - Select ROM" );
+  fuse_emulation_unpause();
   if( !filename ) return;
 
   SendMessage( hedit, WM_SETTEXT, 0, ( LPARAM ) filename );

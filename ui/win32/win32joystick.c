@@ -223,14 +223,11 @@ menu_options_joysticks_select( int action )
 {
   struct joystick_info info;
 
-  fuse_emulation_pause();
-
+  /* The emulation goes on: the settings change only with OK */
   setup_info( &info, action );
   
   DialogBoxParam( fuse_hInstance, MAKEINTRESOURCE( IDD_JOYSTICKS ),
                   fuse_hWnd, dialog_proc, ( LPARAM ) &info );
-
-  fuse_emulation_unpause();
 }
 
 static INT_PTR CALLBACK

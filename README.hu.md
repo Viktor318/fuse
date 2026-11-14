@@ -191,9 +191,9 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
 - A zene akkor is szól tovább, ha egy menü vagy párbeszédablak nyitva van, ha
   egy ablakot mozgatsz, vagy ha a Fuse kis méretre van állítva. WASAPI-val
   (`fuse.exe`) a zenének saját hangfolyama van, és egyáltalán nem kell hozzá
-  az emuláció; DirectSounddal a zene az emulátor hangjába keveredik, ezért az
-  emuláció menükben és ablakmozgatás közben fut tovább (párbeszédablakokban
-  nem).
+  az emuláció; DirectSounddal a zene az emulátor hangjába keveredik, az
+  pedig menükben, ablakmozgatás közben és azokban a párbeszédablakokban fut
+  tovább, amelyek nem állítják meg (lásd *Ablakok és hang*).
 
 ### Ablakok és hang
 
@@ -205,6 +205,11 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   következő indításkor visszaállítja.
 - A főablak, a billentyűzetkép és az AY lejátszó ablakai ott nyílnak meg,
   ahol legutóbb voltak.
+- **Az emuláció menük és párbeszédablakok alatt is fut**: a kép és a hang
+  nem áll meg, amíg egy menü nyitva van, amíg egy ablakot mozgatsz vagy
+  átméretezel, vagy amíg a *Beállítások* menü egy párbeszédablaka nyitva
+  van (a változások az *OK*-ra lépnek életbe). A fájlválasztás, a kérdések,
+  a *Gép > Szünet* és a hibakereső továbbra is megállítja.
 - **Turbó** (F12, *Gép > Turbó*): az emuláció olyan gyorsan fut, ahogy
   csak tud, hang nélkül (mint a kazetta gyorsbetöltésekor); az F12 újra
   megnyomva visszavált a normál sebességre. Az állapotsor mutatja a

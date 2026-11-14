@@ -1227,15 +1227,8 @@ ayplayer_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     }
     break;
 
-  /* Moving the window: the music goes on */
-  case WM_ENTERSIZEMOVE:
-  case WM_ENTERMENULOOP:
-    win32ui_modal_enter();
-    return 0;
-
   case WM_EXITSIZEMOVE:
   case WM_EXITMENULOOP:
-    win32ui_modal_exit();
     remember_position( p );
     return 0;
 
@@ -1412,7 +1405,6 @@ open_window( player *p, int with_list, int with_mixer, int activate )
   }
 
   ayplayer_set_frame_hook( tick_all );
-  win32ui_ayplayer_timer_start();
   resume_if_paused();
   if( with_list ) win32_ayplaylist_show( p->turbosound );
   /* Owned by the player, as it exists by now */

@@ -62,6 +62,29 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   szorzatával szólnak; az AY csúszka és a *Néma* nem hat rájuk.
 - A GTK, az SDL és a widget felület a régi párbeszédablakot tartja meg.
 
+### Emuláció menük és párbeszédablakok alatt
+
+- Az emuláció (a kép és a hang) **tovább fut, amíg egy menü nyitva van**
+  (a menüsor vagy az ablakmenü), amíg a főablakot vagy a Fuse egy másik
+  ablakát mozgatod vagy átméretezed, és amíg a *Beállítások* menü egy
+  párbeszédablaka nyitva van (Általános, Média, Perifériák, RZX, Videó,
+  Joystickok, Gépek ROM-jai / Perifériák ROM-jai). Eddig ezek
+  megállították. Amíg a Windows a saját ciklusát futtatja, egy időzítő
+  futtatja a képkockákat a gép sebességével (turbóban és gyorsbetöltéskor
+  olyan gyorsan, ahogy csak tudja), és egy fennakadás után nem próbálja
+  behozni a lemaradást.
+- A *Beállítások* párbeszédablakaiban a változás az *OK*-ra lép életbe,
+  mint eddig; ekkor a hangkimenet az új beállításokkal újra megnyílik. A
+  *Mégse* nem nyúl az emulációhoz.
+- Ezek ugyanúgy megállítják az emulációt, mint eddig: a fájlválasztás
+  (*Fájl > Megnyitás*, a mentések, a ROM-fájl a ROM-ablakokban...), a
+  kérdések, a *Gép > Szünet* (a menükben is szünetel), a hibakereső, a
+  memóriaböngésző, a *Poke-memória*, a *Kazetta > Tallózás*, a gép- és a
+  szűrőválasztó. Amíg egy hibaüzenet látszik, nem futnak képkockák.
+- Ez váltja fel az AY lejátszó saját időzítőjét (DirectSoundhoz, menük
+  alatt és ablakmozgatás közben); DirectSounddal a zenéje most már a
+  *Beállítások* párbeszédablakaiban is szól.
+
 ### Felhasználói felület
 
 - A *Súgó > Névjegy* és a `fuse --version` ennek a kiadásnak a verzióját

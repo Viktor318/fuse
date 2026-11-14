@@ -58,6 +58,28 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   Fuse master; the AY fader and its *Mute* don't change them.
 - The GTK, SDL and widget user interfaces keep the old dialog.
 
+### Emulation in menus and dialogs
+
+- The emulation (the picture and the sound) **goes on while a menu is
+  open** (the menu bar or the window menu), while the main window or
+  another Fuse window is moved or resized, and while a dialog of the
+  *Options* menu is open (General, Media, Peripherals, RZX, Movie,
+  Joysticks, Machine ROMs / Peripheral ROMs). Until now these stopped it.
+  While Windows runs a loop of its own, a timer runs the frames at the
+  speed of the machine (in turbo and when fastloading, as fast as they
+  can), and doesn't try to catch up after a hold-up.
+- A change in an *Options* dialog takes effect with *OK*, as before; the
+  sound output is then opened again with the new settings. *Cancel*
+  leaves the emulation alone.
+- These stop the emulation as before: choosing a file (*File > Open*,
+  saving, the ROM file in the ROM dialogs...), the questions, *Machine >
+  Pause* (it stays paused in the menus too), the debugger, the memory
+  browser, *Poke Memory*, *Tape > Browse*, the machine and the filter
+  selectors. While an error message is shown, no frames are run.
+- This replaces the AY player's own timer (for DirectSound, in menus and
+  while moving a window); with DirectSound its music now goes on in the
+  *Options* dialogs too.
+
 ### User interface
 
 - *Help > About* and `fuse --version` show the version of this edition

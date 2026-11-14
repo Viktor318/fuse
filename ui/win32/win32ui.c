@@ -40,6 +40,7 @@
 #include "input.h"
 #include "keyboard.h"
 #include "keyboard_refresh.h"
+#include "machine.h"
 #include "menu.h"
 #include "peripherals/joystick.h"
 #include "peripherals/keypad128.h"
@@ -64,6 +65,13 @@
 #define MODAL_EMULATION_TIMER 0x4f55
 /* Frames are being run from a timer inside a modal loop */
 static int modal_emulating = 0;
+/* The main loop is in the message pump at the end of a frame (ui_event()):
+   the only place the timer may run frames from */
+static int at_frame_end = 0;
+/* Message boxes and the like during which no frames may be run */
+static int modal_emulation_holds = 0;
+static void modal_emulation_init( void );
+static void modal_emulation_running( void );
 static void modal_emulation_tick( void );
 /* When the main loop last ran */
 static LARGE_INTEGER main_loop_time;
@@ -559,14 +567,7 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     case WM_ENTERMENULOOP:
       /* Opened with Alt (e.g. Alt+F) */
       if( GetKeyState( VK_MENU ) & 0x8000 ) menubar_keyboard = 1;
-      win32ui_modal_enter();
       return 0;
-
-    case WM_ENTERSIZEMOVE:
-    {
-      win32ui_modal_enter();
-      return 0;
-    }
 
     case WM_TIMER:
       if( wParam == MODAL_EMULATION_TIMER ) {
@@ -580,15 +581,8 @@ fuse_window_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
         menubar_keyboard = 0;
         DrawMenuBar( hWnd );
       }
-      win32ui_modal_exit();
       return 0;
 
-    case WM_EXITSIZEMOVE:
-    {
-      win32ui_modal_exit();
-      return 0;
-    }
-    
     case WM_LBUTTONUP:
       win32mouse_button( 1, 0 );
       return 0;
@@ -917,6 +911,9 @@ ui_init( int *argc, char ***argv )
   /* window will accept dragging and dropping */
   DragAcceptFiles( fuse_hWnd, TRUE );
 
+  /* the emulation goes on while Windows runs a loop of its own */
+  modal_emulation_init();
+
   /* the key messages can be taken when the machine reads its keyboard */
   read_time_init();
   input_dispatch_set_popup_filter( win32ui_popup_key );
@@ -946,15 +943,23 @@ win32ui_make_menu( void )
 int
 ui_event( void )
 {
+  int was_at_frame_end;
+
   /* Frames run from inside a Windows modal loop: its messages are its own */
   if( modal_emulating ) return 0;
   QueryPerformanceCounter( &main_loop_time );
+  modal_emulation_running();
 
   /* An action left by a key taken while the machine read its keyboard */
   input_dispatch_deferred();
 
+  /* Here, between two frames, a modal loop started by a message may have
+     frames run by its timer; nowhere else */
   display_timing_input_begin();
+  was_at_frame_end = at_frame_end;
+  at_frame_end = 1;
   win32ui_process_messages( 1 );
+  at_frame_end = was_at_frame_end;
   display_timing_input_end();
 
   /* The level meters of the Sound settings follow the sound */
@@ -971,6 +976,7 @@ ui_end( void )
   keyboard_refresh_set_frontend( NULL, NULL );
   input_dispatch_set_popup_filter( NULL );
   read_time_end();
+  KillTimer( fuse_hWnd, MODAL_EMULATION_TIMER );
 
   win32keyboard_end();
   win32i18n_end();
@@ -993,6 +999,10 @@ ui_error_specific( ui_error_level severity, const char *message )
   /* If we don't have a UI yet, we can't output widgets */
   if( !display_ui_initialised ) return 0;
 
+  /* The error may come from the middle of a frame, or from a command which
+     has not finished yet: no frames under the message */
+  win32ui_modal_emulation_hold();
+
   switch( severity ) {
 
   case UI_ERROR_INFO:
@@ -1013,6 +1023,8 @@ ui_error_specific( ui_error_level severity, const char *message )
     break;
 
   }
+
+  win32ui_modal_emulation_release();
 
   return 0;
 }
@@ -1136,92 +1148,159 @@ win32ui_machine_paused( void )
 }
 
 /* While Windows runs a loop of its own (a menu is open, a window is moved
-   or resized, a list opens...), the main loop does not run. Normally the
-   emulation is paused meanwhile. While the AY player plays and its music is
-   mixed into the sound of the emulator (not with WASAPI, where it has a
-   stream of its own), a timer notices when the main loop has not run for a
-   while and runs the frames itself, so the music goes on */
-static int modal_depth = 0;
-static int modal_running = 0;
+   or resized, a dialog box which does not pause the emulation is open...),
+   the main loop does not run: it waits in the message pump of ui_event(),
+   at the end of a frame, for the message which started that loop to be
+   dispatched. A timer notices when the main loop has not run for a frame's
+   time and then runs the frames itself, so the picture and the sound go on.
+
+   It does so only while the main loop waits in that pump (`at_frame_end'),
+   never when the hold-up is inside a frame (an error message from a tape or
+   snapshot being loaded, the debugger at a breakpoint), under a message box
+   (`modal_emulation_holds'), or under itself (`modal_emulating'). Machine >
+   Pause and the dialogs which pause the emulation stop it as before */
 static LARGE_INTEGER stall_start, counter_frequency;
 static int stalled = 0;
 static long stall_frames;
 
-void
-win32ui_modal_enter( void )
-{
-  if( modal_depth++ ) return;
+/* Not more than this many frames from one tick of the timer... */
+#define MODAL_FRAMES_PER_TICK 4
+/* ...nor more than this many frames behind (no catch-up after a hold-up) */
+#define MODAL_FRAMES_BEHIND 4
+/* With turbo or fastloading, frames are run for this long in each tick */
+#define MODAL_FAST_MS 8
 
-  modal_running = ayplayer_needs_emulation() && !paused;
-  if( !modal_running ) fuse_emulation_pause();
-}
-
-void
-win32ui_modal_exit( void )
-{
-  if( modal_depth <= 0 ) return;
-  if( --modal_depth ) return;
-
-  if( !modal_running ) fuse_emulation_unpause();
-  modal_running = 0;
-}
-
-/* The AY player started: the timer that keeps the music going */
-void
-win32ui_ayplayer_timer_start( void )
+static void
+modal_emulation_init( void )
 {
   QueryPerformanceFrequency( &counter_frequency );
   QueryPerformanceCounter( &main_loop_time );
   SetTimer( fuse_hWnd, MODAL_EMULATION_TIMER, 10, NULL );
 }
 
+/* The main loop runs: no hold-up */
+static void
+modal_emulation_running( void )
+{
+  stalled = 0;
+}
+
+/* A message box or the like is shown: no frames until it is closed */
+void
+win32ui_modal_emulation_hold( void )
+{
+  modal_emulation_holds++;
+}
+
+void
+win32ui_modal_emulation_release( void )
+{
+  if( modal_emulation_holds > 0 ) modal_emulation_holds--;
+}
+
+static int
+modal_emulation_allowed( void )
+{
+  return at_frame_end && !modal_emulating && !modal_emulation_holds &&
+         !paused && !fuse_exiting && !fuse_emulation_paused &&
+         debugger_mode != DEBUGGER_MODE_HALTED;
+}
+
+/* Run the emulation up to the end of the next frame, as the main loop
+   would */
+static void
+modal_emulation_frame( void )
+{
+  int was_complete = spectrum_frame_dispatch_complete;
+
+  spectrum_frame_dispatch_complete = 0;
+  while( !spectrum_frame_dispatch_complete && !fuse_exiting &&
+         !fuse_emulation_paused ) {
+    z80_do_opcodes();
+    event_do_events();
+  }
+  spectrum_frame_dispatch_complete = was_complete;
+}
+
+/* The frame rate of the machine at the emulation speed */
+static double
+modal_frame_rate( void )
+{
+  double speed = settings_current.emulation_speed < 1 ?
+                 1.0 : settings_current.emulation_speed / 100.0;
+
+  return (double)machine_current->timings.processor_speed /
+         machine_current->timings.tstates_per_frame * speed;
+}
+
 static void
 modal_emulation_tick( void )
 {
   LARGE_INTEGER now;
-  double since;
+  LONGLONG frame_ticks;
   long due;
   int run = 0;
 
-  if( modal_emulating || paused || fuse_exiting || fuse_emulation_paused ||
-      !counter_frequency.QuadPart || !ayplayer_needs_emulation() ) {
+  if( !modal_emulation_allowed() || !counter_frequency.QuadPart ||
+      !machine_current ) {
     stalled = 0;
     return;
   }
 
-  /* Has the main loop run lately? */
   QueryPerformanceCounter( &now );
-  since = (double)( now.QuadPart - main_loop_time.QuadPart ) /
-          counter_frequency.QuadPart;
-  if( since < 0.04 ) {
-    stalled = 0;
-    return;
-  }
+  frame_ticks = (LONGLONG)( counter_frequency.QuadPart / modal_frame_rate() );
+  if( frame_ticks < 1 ) frame_ticks = 1;
 
   if( !stalled ) {
+    /* Frames are due from when the main loop last ran, but not from
+       further back than a couple of frames: when the emulation was paused
+       meanwhile (a file selector), it goes on without catching up */
     stalled = 1;
     stall_start = main_loop_time;
+    if( now.QuadPart - stall_start.QuadPart > 2 * frame_ticks )
+      stall_start.QuadPart = now.QuadPart - 2 * frame_ticks;
     stall_frames = 0;
   }
 
-  /* 50 frames a second since the main loop stopped; the sound output (or
-     the timer without sound) holds the emulation back if it runs ahead */
-  due = (long)( (double)( now.QuadPart - stall_start.QuadPart ) * 50.0 /
-                counter_frequency.QuadPart );
+  due = (long)( ( now.QuadPart - stall_start.QuadPart ) / frame_ticks );
+  if( stall_frames >= due && !timer_fastloading_active() ) return;
 
   modal_emulating = 1;
-  while( stall_frames < due && run < 4 && !fuse_exiting ) {
-    libspectrum_dword frame = spectrum_get_frame_count();
-    while( spectrum_get_frame_count() == frame && !fuse_exiting ) {
-      z80_do_opcodes();
-      event_do_events();
+  at_frame_end = 0;
+
+  if( timer_fastloading_active() ) {
+    /* Turbo or fastloading: as many frames as fit in a few milliseconds,
+       so the menu or the window still answers */
+    LONGLONG end = now.QuadPart +
+                   counter_frequency.QuadPart * MODAL_FAST_MS / 1000;
+    LARGE_INTEGER current;
+
+    do {
+      modal_emulation_frame();
+      QueryPerformanceCounter( &current );
+    } while( current.QuadPart < end && !fuse_exiting &&
+             !fuse_emulation_paused && !modal_emulation_holds );
+    stall_frames = due;
+  } else {
+    /* The frames due at the speed of the machine; the sound output (or the
+       timer without sound) holds the emulation back if it runs ahead */
+    while( stall_frames < due && run < MODAL_FRAMES_PER_TICK &&
+           !fuse_exiting && !fuse_emulation_paused &&
+           !modal_emulation_holds ) {
+      modal_emulation_frame();
+      stall_frames++;
+      run++;
     }
-    stall_frames++;
-    run++;
+    /* After a long hold-up do not try to catch up */
+    if( stall_frames < due - MODAL_FRAMES_BEHIND )
+      stall_frames = due - MODAL_FRAMES_BEHIND;
   }
-  /* After a long hold-up do not try to catch up */
-  if( stall_frames < due - 10 ) stall_frames = due - 10;
+
+  at_frame_end = 1;
   modal_emulating = 0;
+
+  /* The level meters of the Sound settings follow the sound */
+  win32_soundsettings_tick();
 }
 
 /* Machine > Turbo was switched: its tick in the menu */

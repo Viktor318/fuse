@@ -144,11 +144,11 @@ int win32ui_machine_paused( void );
 /* Machine > Turbo was switched on or off */
 void win32ui_turbo_changed( void );
 
-/* A Windows modal loop (menu, moving or resizing a window) starts / ends */
-void win32ui_modal_enter( void );
-void win32ui_modal_exit( void );
-/* The AY player started: keep the music going during such loops */
-void win32ui_ayplayer_timer_start( void );
+/* While Windows runs a loop of its own (a menu, moving or resizing a
+   window, a dialog box), the emulation goes on; not under a message box
+   shown between these two */
+void win32ui_modal_emulation_hold( void );
+void win32ui_modal_emulation_release( void );
 
 /*
  * Display routines (win32display.c)

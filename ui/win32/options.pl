@@ -322,7 +322,8 @@ CODE
   win32statusbar_set_visibility( settings_current.statusbar );
   display_refresh_all();
 
-  EndDialog( hwndDlg, 0 );
+  /* Applied */
+  EndDialog( hwndDlg, 1 );
 }
 
 CODE
@@ -397,15 +398,17 @@ CODE
   return FALSE;
 }
 
+/* The emulation goes on while the dialog is open: the settings change only
+   with OK. Then the sound output is opened again with them, as it was when
+   the emulation was paused for the dialog */
 void
 menu_options_$_->{name}( int action GCC_UNUSED )
 {
-  fuse_emulation_pause();
-
-  DialogBox( fuse_hInstance, MAKEINTRESOURCE( IDD_$optname ),
-             fuse_hWnd, (DLGPROC) menu_options_$_->{name}_proc );
-
-  fuse_emulation_unpause();
+  if( DialogBox( fuse_hInstance, MAKEINTRESOURCE( IDD_$optname ),
+                 fuse_hWnd, (DLGPROC) menu_options_$_->{name}_proc ) == 1 ) {
+    fuse_emulation_pause();
+    fuse_emulation_unpause();
+  }
 }
 
 CODE

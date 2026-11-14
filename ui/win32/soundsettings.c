@@ -1177,13 +1177,7 @@ sound_proc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
     command( LOWORD( wParam ), HIWORD( wParam ) );
     return 0;
 
-  /* Moving the window: the sound goes on */
-  case WM_ENTERSIZEMOVE:
-    win32ui_modal_enter();
-    return 0;
-
   case WM_EXITSIZEMOVE:
-    win32ui_modal_exit();
     remember_position();
     return 0;
 

@@ -158,6 +158,9 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   nem ismeri fel újra minden mintánál (gyorsabb gyorsított betöltés); a
   Timex nagy felbontású módjainak képernyőképe megfelelő méretű pufferrel
   készül.
+- Az upstream `master`-ből: a Fuse indulásának és leállásának belső
+  átszervezése, az emulátor magja belső könyvtárként fordul. A
+  felhasználók számára semmi sem változik.
 
 ## v1.10.1-hu.3 – 2026-11-09
 

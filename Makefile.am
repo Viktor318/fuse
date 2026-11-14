@@ -25,8 +25,16 @@ ACLOCAL_AMFLAGS = -I m4
 bin_PROGRAMS = fuse
 
 noinst_PROGRAMS =
+check_PROGRAMS =
 
-fuse_SOURCES = display.c \
+# Configured, UI-bound legacy engine; no installed library or SDK.
+noinst_LTLIBRARIES = libfuselegacy.la
+fuse_SOURCES = fuse-main.c
+FUSE_APP_LIBS =
+fuse_LDADD = libfuselegacy.la $(FUSE_APP_LIBS)
+fuse_DEPENDENCIES = libfuselegacy.la
+
+libfuselegacy_la_SOURCES = display.c \
 	display_border.c \
 	display_dirty.c \
 	display_internal.h \
@@ -105,7 +113,7 @@ fuse_SOURCES = display.c \
 	utils.c \
 	utils_string.c
 
-fuse_LDADD = \
+FUSE_LEGACY_LIBS = \
              $(PTHREAD_LIBS) \
              $(LIBSPECTRUM_LIBS) \
              $(GTK_LIBS) \
@@ -115,10 +123,12 @@ fuse_LDADD = \
              $(XML_LIBS)
 
 if USE_SDL2
-fuse_LDADD += $(SDL2_LIBS)
+FUSE_LEGACY_LIBS += $(SDL2_LIBS)
 endif
 
-fuse_DEPENDENCIES =
+LEGACY_ENGINE_OBJECTS = $(SOUND_LIBADD) $(TIMER_LIBADD) $(LEGACY_SCALER_OBJECTS)
+libfuselegacy_la_LIBADD = $(LEGACY_ENGINE_OBJECTS) $(FUSE_LEGACY_LIBS)
+libfuselegacy_la_DEPENDENCIES = $(LEGACY_ENGINE_OBJECTS)
 
 if EMSCRIPTEN
 fuse_LDFLAGS = -sUSE_SDL=2 -sASYNCIFY
@@ -138,12 +148,12 @@ clean-local:
 	-rm -rf emscripten-data emscripten-data.stamp
 endif
 
-EXTRA_fuse_SOURCES =
+EXTRA_libfuselegacy_la_SOURCES =
 
 BUILT_SOURCES = options.h settings.c settings.h
 
 # Rebuild even sources without config.h when the assertion policy changes.
-$(fuse_OBJECTS): config.h
+$(fuse_OBJECTS) $(libfuselegacy_la_OBJECTS) $(SOUND_LIBADD) $(TIMER_LIBADD): config.h
 
 settings.c: settings.pl settings.dat
 	$(AM_V_GEN)$(PERL) -I$(srcdir)/perl $(srcdir)/settings.pl $(srcdir)/settings.dat > $@.tmp && mv $@.tmp $@
@@ -173,6 +183,7 @@ noinst_HEADERS = bitmap.h \
 	display.h \
 	event.h \
 	fuse.h \
+	fuse-internal.h \
 	input.h \
 	input_refresh.h \
 	keyboard.h \
@@ -283,6 +294,14 @@ metrics:
 check-metrics:
 	python3 $(srcdir)/tools/test_metrics.py
 
+# Inspect the configured source/object boundary without a separate manifest.
+# Special objects retain their recipes (notably the two scaler data sizes).
+.PHONY: print-legacy-engine-inputs
+print-legacy-engine-inputs:
+	@printf '%s\n' 'Sources:' $(libfuselegacy_la_SOURCES) \
+	  'Special objects:' $(LEGACY_ENGINE_OBJECTS) \
+	  'External link flags:' '$(FUSE_LEGACY_LIBS)'
+
 .PHONY: metrics check-metrics check-sfifo check-coreaudio
 .PHONY: install-win32 install-win32-strip dist-win32 dist-win32-dir \
 	dist-win32-zip dist-win32-7z dist-win32-exe distclean-win32
@@ -293,7 +312,8 @@ if COMPAT_WIN32
 
 fuse_LDFLAGS = -mwindows
 fuse_SOURCES += windres.rc
-fuse_LDADD += -lcomctl32 -lwinmm -lole32 -lgdiplus windres.o
+FUSE_LEGACY_LIBS += -lcomctl32 -lwinmm -lole32 -lgdiplus
+FUSE_APP_LIBS += windres.o
 fuse_DEPENDENCIES += windres.o
 
 windres.o: windres.rc data/win32/winfuse.ico data/win32/fuse.manifest $(ui_win32_res)
@@ -331,7 +351,7 @@ include unittests/Makefile.am
 include z80/Makefile.am
 
 if UI_NULL
-check-local: $(INPUT_CHECK_TARGETS) check-widget-utf8 $(AUDIO_CHECK_TARGETS) fuse unittests/displaytest unittests/sdl2displaytest unittests/sdl2scalerstatetest unittests/sdl2joysticktest unittests/sdl2mousetest unittests/win32fullscreentest unittests/palcompositetest unittests/scalerexpandtest z80/coretest
+check-local: $(LIFECYCLE_CHECK_TARGETS) $(INPUT_CHECK_TARGETS) check-widget-utf8 $(AUDIO_CHECK_TARGETS) fuse unittests/displaytest unittests/sdl2displaytest unittests/sdl2scalerstatetest unittests/sdl2joysticktest unittests/sdl2mousetest unittests/win32fullscreentest unittests/palcompositetest unittests/scalerexpandtest z80/coretest
 	@test -e $(top_builddir)/roms || ln -sf "$(abs_top_srcdir)/roms" $(top_builddir)/roms
 	FUSE_TEST_SRCDIR="$(abs_top_srcdir)" $(top_builddir)/fuse --unittests
 	$(top_builddir)/unittests/displaytest
@@ -348,6 +368,6 @@ endif
 	$(top_builddir)/z80/coretest $(srcdir)/z80/tests/tests.in > $(top_builddir)/z80/tests.actual
 	cmp $(top_builddir)/z80/tests.actual $(srcdir)/z80/tests/tests.expected
 else
-check-local: $(INPUT_CHECK_TARGETS) check-widget-utf8 $(AUDIO_CHECK_TARGETS)
+check-local: $(LIFECYCLE_CHECK_TARGETS) $(INPUT_CHECK_TARGETS) check-widget-utf8 $(AUDIO_CHECK_TARGETS)
 	@echo "SKIP: internal unit tests require a null-UI build"
 endif

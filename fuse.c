@@ -26,32 +26,16 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <time.h>
 
-#ifdef WIN32
-#include <windows.h>
-#endif				/* #ifdef WIN32 */
-
 #include <unistd.h>
 
-/* We need to include SDL.h on Mac O X and Windows to do some magic
-   bootstrapping by redefining main. As we now allow SDL joystick code to be
-   used in the GTK and Xlib UIs we need to also do the magic when that code is
-   in use, feel free to look away for the next line */
-#if defined UI_SDL2 || (defined USE_JOYSTICK && (defined UI_X || defined UI_GTK) )
-#include <SDL.h>		/* Needed on MacOS X and Windows */
-#endif /* SDL 2 UI or joystick support */
-
-#ifdef GEKKO
-/* #include <fat.h>
- that requires disc_io.h which does not exist for wii? */
-#endif				/* #ifdef GEKKO */
-
 #ifdef HAVE_LIB_XML2
-#include <libxml/encoding.h>
+#include <libxml/parser.h>
 #endif
 
 #ifdef ENABLE_AUTOMATION
@@ -62,6 +46,7 @@
 #include "event.h"
 #include "fork_version.h"
 #include "fuse.h"
+#include "fuse-internal.h"
 #include "ayplayer.h"
 #include "ayplaylist.h"
 #include "recent_files.h"
@@ -70,6 +55,8 @@
 void win32_ayplayer_show_for( int turbosound );
 #endif
 #include "infrastructure/startup_manager.h"
+#include "infrastructure/startup_files.h"
+#include "infrastructure/startup_test.h"
 #include "keyboard.h"
 #include "keyboard_refresh.h"
 #include "machine.h"
@@ -144,37 +131,52 @@ libspectrum_creator *fuse_creator;
 /* The earliest version of libspectrum we need */
 static const char * const LIBSPECTRUM_MIN_VERSION = "0.5.0";
 
-/* The various types of file we may want to run on startup */
-typedef struct start_files_t {
-
-  utils_file disk_plus3;
-  utils_file disk_opus;
-  utils_file disk_plusd;
-  utils_file disk_beta;
-  utils_file disk_didaktik80;
-  utils_file disk_disciple;
-  utils_file dock;
-  utils_file if2;
-  utils_file playback;
-  const char *recording;
-  utils_file snapshot;
-  utils_file tape;
-
-  const char *simpleide_master, *simpleide_slave;
-  const char *zxatasp_master, *zxatasp_slave;
-  const char *zxcf;
-  const char *divide_master, *divide_slave;
-  const char *divmmc;
-  const char *zxmmc;
-  utils_file mdr[8];
-
-  const char *ay;		/* AY music file, played by the AY player */
-
-} start_files_t;
-
 /* Context for the display startup routine */
 static display_startup_context display_context;
 
+typedef enum legacy_phase {
+  LEGACY_FRESH, LEGACY_STARTING, LEGACY_READY, LEGACY_RUNNING,
+  LEGACY_FINISHED, LEGACY_STOPPING, LEGACY_CLOSED
+} legacy_phase;
+
+/* Configured legacy-engine ownership, not independent emulation contexts. */
+static struct {
+  legacy_phase phase;
+  int manager_started;
+  int save_settings;
+  /* Hungarian Windows edition: the application runner restores the last
+     session at startup and saves it at exit; split core lifecycles don't. */
+  int app_session;
+  int execution_started;
+  int xml_owned;
+  int libspectrum_owned;
+  int callback_owned;
+  libspectrum_error_function_t previous_error_function;
+} legacy_ownership;
+
+/* Only the current budget turn/dispatch, not a persistent machine clock. */
+static struct {
+  int active, interrupted;
+  libspectrum_dword deadline;
+  int64_t rebased;
+} legacy_budget;
+
+void
+fuse_legacy_budget_rebase( unsigned long before, unsigned long after )
+{
+  if( legacy_budget.active )
+    legacy_budget.rebased += (int64_t)before - (int64_t)after;
+}
+
+void
+fuse_legacy_budget_interrupt( void )
+{
+  if( !legacy_budget.active ) return;
+  legacy_budget.interrupted = 1;
+  legacy_budget.deadline = 0; /* End an active CPU batch after clock edits. */
+}
+
+static void fuse_settings_end( void );
 static int fuse_init(int argc, char **argv);
 
 static void creator_register_startup( void );
@@ -184,38 +186,218 @@ static void fuse_show_version( void );
 static void fuse_show_test_build_info( void );
 static void fuse_show_help( void );
 
-static int setup_start_files( start_files_t *start_files );
 static int parse_nonoption_args( int argc, char **argv, int first_arg,
-				 start_files_t *start_files );
-static int do_start_files( start_files_t *start_files );
-static void free_start_files( start_files_t *start_files );
-static int start_files_given( const start_files_t *start_files );
+                                 fuse_start_files *start_files );
+static int do_start_files( fuse_start_files *start_files );
+static int start_files_given( const fuse_start_files *start_files );
+static int fuse_app_session_wanted( void );
+static void fuse_app_session_start( const fuse_start_files *start_files );
+static void fuse_app_session_end( void );
 
 static int fuse_end(void);
 
-#ifdef UI_WIN32
-int fuse_main(int argc, char **argv)
-#else
-int main(int argc, char **argv)
-#endif
+fuse_legacy_init_result
+fuse_legacy_prepare( int argc, char **argv )
 {
-  int r;
+  int i;
+  fuse_legacy_init_result result;
 
-#ifdef WIN32
-  SetErrorMode( SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX );
-#endif
-
-#ifdef GEKKO
-  fatInitDefault();
-#endif				/* #ifdef GEKKO */
-  
-  if(fuse_init(argc,argv)) {
-    fprintf(stderr,"%s: error initialising -- giving up!\n", fuse_progname);
-    return 1;
+  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_LEGACY_INIT_CLOSED;
+  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_LEGACY_INIT_BUSY;
+  if( argc < 0 || ( argc && !argv ) ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
+  if( argv ) {
+    for( i = 0; i < argc; i++ )
+      if( !argv[i] ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
+    if( argv[argc] ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
   }
 
-  if( settings_current.show_help ||
-      settings_current.show_version ) return 0;
+  /* Guard before any library/frontend callback. Preserve the existing RNG,
+     platform startup and library initialization ordering inside fuse_init. */
+  legacy_ownership.phase = LEGACY_STARTING;
+  legacy_ownership.previous_error_function = libspectrum_error_function;
+  legacy_ownership.callback_owned = 1;
+
+  if(fuse_init(argc,argv)) {
+    fprintf(stderr,"%s: error initialising -- giving up!\n", fuse_progname);
+    fuse_end();
+    return FUSE_LEGACY_INIT_FAILED;
+  }
+
+  if( settings_current.show_help || settings_current.show_version ) {
+    result = settings_current.show_version ? FUSE_LEGACY_INIT_VERSION :
+                                            FUSE_LEGACY_INIT_HELP;
+    fuse_end();
+    return result;
+  }
+
+  legacy_ownership.phase = LEGACY_READY;
+  return FUSE_LEGACY_INIT_READY;
+}
+
+void
+fuse_legacy_shutdown( void )
+{
+  if( legacy_ownership.phase == LEGACY_READY ||
+      legacy_ownership.phase == LEGACY_FINISHED ) fuse_end();
+}
+
+int
+fuse_legacy_main( int argc, char **argv )
+{
+  int r = 1;
+
+  /* Like automatic preference saving, the last-session restore/save belongs
+     to the application runner. Only claim it for a fresh attempt. */
+  if( legacy_ownership.phase == LEGACY_FRESH ) legacy_ownership.app_session = 1;
+
+  switch( fuse_legacy_prepare( argc, argv ) ) {
+  case FUSE_LEGACY_INIT_READY:
+    /* Automatic preference persistence belongs to the application wrapper,
+       not to core preparation or ordinary resource disposal. */
+    legacy_ownership.save_settings = 1;
+    if( fuse_legacy_execute( &r ) ) r = 1;
+    /* After the automation result, before shutdown and settings saving */
+    fuse_app_session_end();
+    fuse_legacy_shutdown();
+    return r;
+  case FUSE_LEGACY_INIT_HELP:
+  case FUSE_LEGACY_INIT_VERSION:
+    return 0;
+  case FUSE_LEGACY_INIT_BUSY:
+  case FUSE_LEGACY_INIT_CLOSED:
+    fprintf( stderr, "Fuse legacy runner supports only one session attempt\n" );
+    return 1;
+  case FUSE_LEGACY_INIT_INVALID_ARGUMENT:
+    legacy_ownership.app_session = 0;   /* The attempt was not consumed */
+    fprintf( stderr, "Invalid Fuse legacy startup arguments\n" );
+    return 1;
+  case FUSE_LEGACY_INIT_FAILED:
+    return 1;
+  }
+  return 1;
+}
+
+/* One legacy dispatch iteration. Keep the CPU batch and all due events
+   together: a frame event also delivers its interrupt and runs the RZX, input
+   and UI companions before control returns here. This is not necessarily one
+   instruction or one frame, and callbacks may block. Session limits are
+   observed after dispatch; result finalization stays in the legacy runner. */
+static void
+fuse_dispatch_once( const libspectrum_dword *deadline )
+{
+  z80_do_opcodes_until( deadline );
+  event_do_events();
+#ifdef ENABLE_AUTOMATION
+  if( automation_active() &&
+      automation_frame_limit_reached( spectrum_get_frame_count() ) )
+    fuse_exiting = 1;
+#endif
+}
+
+/* Host turns and the legacy runner share one automation session. Resuming
+   through the legacy runner must not re-arm its deadline after host turns. */
+static void
+fuse_execution_start( void )
+{
+  if( legacy_ownership.execution_started ) return;
+  legacy_ownership.execution_started = 1;
+#ifdef ENABLE_AUTOMATION
+  if( automation_active() ) automation_arm( spectrum_get_frame_count() );
+#endif
+}
+
+fuse_legacy_run_result
+fuse_legacy_run_frame( void )
+{
+  fuse_legacy_run_result result;
+
+  if( legacy_ownership.phase == LEGACY_STARTING ||
+      legacy_ownership.phase == LEGACY_RUNNING ||
+      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_LEGACY_RUN_BUSY;
+  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_LEGACY_RUN_NOT_READY;
+  if( fuse_exiting ) return FUSE_LEGACY_RUN_EXITING;
+  if( fuse_emulation_paused ) return FUSE_LEGACY_RUN_PAUSED;
+
+  legacy_ownership.phase = LEGACY_RUNNING;
+  fuse_execution_start();
+  spectrum_frame_dispatch_complete = 0;
+  do {
+    fuse_dispatch_once( NULL );
+  } while( !fuse_exiting && !fuse_emulation_paused &&
+           !spectrum_frame_dispatch_complete );
+
+  result = fuse_exiting ? FUSE_LEGACY_RUN_EXITING :
+           fuse_emulation_paused ? FUSE_LEGACY_RUN_PAUSED :
+                                   FUSE_LEGACY_RUN_COMPLETED;
+  legacy_ownership.phase = LEGACY_READY;
+  return result;
+}
+
+fuse_legacy_run_result
+fuse_legacy_run_tstates( unsigned long budget )
+{
+  unsigned long remaining = budget;
+  fuse_legacy_run_result result;
+
+  if( legacy_ownership.phase == LEGACY_STARTING ||
+      legacy_ownership.phase == LEGACY_RUNNING ||
+      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_LEGACY_RUN_BUSY;
+  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_LEGACY_RUN_NOT_READY;
+  if( !budget || budget > 0x7fffffffUL || tstates >= 0x7fffffffUL )
+    return FUSE_LEGACY_RUN_INVALID_ARGUMENT;
+  if( fuse_exiting ) return FUSE_LEGACY_RUN_EXITING;
+  if( fuse_emulation_paused ) return FUSE_LEGACY_RUN_PAUSED;
+
+  legacy_ownership.phase = LEGACY_RUNNING;
+  fuse_execution_start();
+  legacy_budget.active = 1;
+  legacy_budget.interrupted = 0;
+  do {
+    libspectrum_dword before = tstates;
+    int64_t elapsed;
+
+    /* Bound addition and leave headroom for instruction completion. Normal
+       frame/RZX coordinates stay far below this cap. */
+    if( tstates >= 0x7fffffffUL ) {
+      legacy_budget.interrupted = 1;
+      break;
+    }
+    legacy_budget.deadline = tstates +
+      ( remaining < 0x7fffffffUL - tstates ? remaining :
+                                            0x7fffffffUL - tstates );
+    legacy_budget.rebased = 0;
+    fuse_dispatch_once( &legacy_budget.deadline );
+    if( legacy_budget.interrupted ) break;
+    elapsed = (int64_t)tstates - before + legacy_budget.rebased;
+    if( elapsed < 0 ) {
+      legacy_budget.interrupted = 1;
+      break;
+    }
+    if( (uint64_t)elapsed >= remaining ) {
+      remaining = 0;
+    } else {
+      remaining -= (unsigned long)elapsed;
+    }
+  } while( remaining && !fuse_exiting && !fuse_emulation_paused );
+
+  result = fuse_exiting ? FUSE_LEGACY_RUN_EXITING :
+           legacy_budget.interrupted ? FUSE_LEGACY_RUN_INTERRUPTED :
+           fuse_emulation_paused ? FUSE_LEGACY_RUN_PAUSED :
+                                   FUSE_LEGACY_RUN_COMPLETED;
+  legacy_budget.active = 0;
+  legacy_ownership.phase = LEGACY_READY;
+  return result;
+}
+
+int
+fuse_legacy_execute( int *exit_status )
+{
+  int r;
+  if( legacy_ownership.phase != LEGACY_READY || !exit_status ) return 1;
+  legacy_ownership.phase = LEGACY_RUNNING;
+#ifdef FUSE_STARTUP_TEST
+  fuse_startup_test_running();
+#endif
 
 #ifdef UI_NULL
   if( settings_current.unittests ) {
@@ -223,17 +405,9 @@ int main(int argc, char **argv)
   } else
 #endif
   {
-#ifdef ENABLE_AUTOMATION
-    if( automation_active() ) automation_arm( spectrum_get_frame_count() );
-#endif
+    fuse_execution_start();
     while( !fuse_exiting ) {
-      z80_do_opcodes();
-      event_do_events();
-#ifdef ENABLE_AUTOMATION
-      if( automation_active() &&
-          automation_frame_limit_reached( spectrum_get_frame_count() ) )
-        fuse_exiting = 1;
-#endif
+      fuse_dispatch_once( NULL );
     }
     r = debugger_get_exit_code();
 #ifdef ENABLE_AUTOMATION
@@ -244,26 +418,9 @@ int main(int argc, char **argv)
 #ifdef ENABLE_AUTOMATION
   if( automation_active() && automation_write_result() ) r = 1;
 #endif
-
-  if( 1
-#ifdef UI_NULL
-      && !settings_current.unittests
-#endif
-#ifdef ENABLE_AUTOMATION
-      && !automation_active()
-#endif
-    ) {
-    /* The program that was running before the AY player comes back */
-    ayplayer_close();
-    session_save();
-  }
-
-  fuse_end();
-#ifdef ENABLE_AUTOMATION
-  if( automation_active() ) automation_end();
-#endif
-
-  return r;
+  legacy_ownership.phase = LEGACY_FINISHED;
+  *exit_status = r;
+  return 0;
 }
 
 static int
@@ -271,6 +428,7 @@ fuse_libspectrum_init( void *context )
 {
   if( libspectrum_check_version( LIBSPECTRUM_MIN_VERSION ) ) {
     if( libspectrum_init() ) return 1;
+    legacy_ownership.libspectrum_owned = 1;
   } else {
     ui_error( UI_ERROR_ERROR,
               "libspectrum version %s found, but %s required",
@@ -290,6 +448,14 @@ libspectrum_register_startup( void )
   startup_manager_register( STARTUP_MANAGER_MODULE_LIBSPECTRUM, dependencies,
                             ARRAY_SIZE( dependencies ), fuse_libspectrum_init,
                             NULL, NULL );
+}
+
+/* Keep settings at their existing teardown position. Process-global XML
+   cleanup runs only after all owned XML users (including SVG) have ended. */
+static void
+fuse_settings_end( void )
+{
+  settings_end( legacy_ownership.save_settings );
 }
 
 static int
@@ -346,6 +512,7 @@ static int
 run_startup_manager( int *argc, char ***argv )
 {
   startup_manager_init();
+  legacy_ownership.manager_started = 1;
 
   display_context.argc = argc;
   display_context.argv = argv;
@@ -387,7 +554,7 @@ run_startup_manager( int *argc, char ***argv )
   rzx_register_startup();
   scld_register_startup();
   screenshot_register_startup();
-  settings_register_startup();
+  settings_register_startup( fuse_settings_end );
   setuid_register_startup();
   simpleide_register_startup();
   slt_register_startup();
@@ -414,7 +581,7 @@ static int fuse_init(int argc, char **argv)
 {
   int error, first_arg;
   char *start_scaler;
-  start_files_t start_files;
+  fuse_start_files start_files = { 0 };
 
   /* Seed the bad but widely-available random number
      generator with the current time */
@@ -434,6 +601,8 @@ static int fuse_init(int argc, char **argv)
   if( display_init(&argc,&argv) ) return 1;
 #endif
 
+  /* Config parsing can initialize XML before its manager registration runs. */
+  legacy_ownership.xml_owned = 1;
   if( settings_init( &first_arg, argc, argv ) ) return 1;
 #ifndef UI_NULL
   if( settings_current.unittests ) {
@@ -457,45 +626,29 @@ static int fuse_init(int argc, char **argv)
 
   fuse_show_copyright();
 
-  if( run_startup_manager( &argc, &argv ) ) return 1;
+  error = run_startup_manager( &argc, &argv );
+  if( error ) goto cleanup;
 
   error = machine_select_id( settings_current.start_machine );
-  if( error ) return error;
-
-  error = scaler_select_id( start_scaler ); libspectrum_free( start_scaler );
-  if( error ) return error;
-
-  if( setup_start_files( &start_files ) ) return 1;
-  if( parse_nonoption_args( argc, argv, first_arg, &start_files ) ) {
-    free_start_files( &start_files );
-    return 1;
+  if( error ) goto cleanup;
+  if( FUSE_STARTUP_FAIL( "machine.selected" ) ) {
+    error = 1;
+    goto cleanup;
   }
-  error = do_start_files( &start_files );
 
-  /* Carry on from where the last session stopped, unless something to
-     open was given */
-  if( !error && !start_files_given( &start_files )
-#ifdef UI_NULL
-      && !settings_current.unittests
-#endif
-#ifdef ENABLE_AUTOMATION
-      && !automation_active()
-#endif
-    )
-    session_restore();
+  error = scaler_select_id( start_scaler );
+  if( error ) goto cleanup;
 
-#ifdef UI_WIN32
-  /* The AY player, playlist, mixer and keyboard windows open at the exit */
-  if( !error && settings_current.resume_last_session
-#ifdef ENABLE_AUTOMATION
-      && !automation_active()
-#endif
-    )
-    win32ui_reopen_windows();
-#endif
-
-  free_start_files( &start_files );
-  if( error ) return 1;
+  fuse_start_files_init( &start_files );
+  error = parse_nonoption_args( argc, argv, first_arg, &start_files );
+  if( !error ) error = do_start_files( &start_files );
+  if( !error ) fuse_app_session_start( &start_files );
+  fuse_start_files_end( &start_files );
+  if( error ) goto cleanup;
+  if( FUSE_STARTUP_FAIL( "startup.files" ) ) {
+    error = 1;
+    goto cleanup;
+  }
 
   /* Must do this after all subsytems are initialised */
   debugger_command_evaluate( settings_current.debugger_command );
@@ -513,7 +666,12 @@ static int fuse_init(int argc, char **argv)
   );
 #endif
 
-  return 0;
+  error = 0;
+
+cleanup:
+  fuse_start_files_end( &start_files );
+  libspectrum_free( start_scaler );
+  return error;
 }
 
 static int
@@ -715,105 +873,10 @@ int fuse_emulation_unpause(void)
   return 0;
 }
 
-static int
-setup_start_files( start_files_t *start_files )
-{
-  utils_file_init( &start_files->disk_plus3, settings_current.plus3disk_file );
-  utils_file_init( &start_files->disk_opus, settings_current.opusdisk_file );
-  utils_file_init( &start_files->disk_plusd, settings_current.plusddisk_file );
-  utils_file_init( &start_files->disk_didaktik80, settings_current.didaktik80disk_file );
-  utils_file_init( &start_files->disk_disciple, settings_current.discipledisk_file );
-  utils_file_init( &start_files->disk_beta, settings_current.betadisk_file );
-  utils_file_init( &start_files->dock, settings_current.dck_file );
-  utils_file_init( &start_files->if2, settings_current.if2_file );
-  utils_file_init( &start_files->playback, settings_current.playback_file );
-  start_files->recording = settings_current.record_file;
-  start_files->ay = NULL;
-  utils_file_init( &start_files->snapshot, settings_current.snapshot );
-  utils_file_init( &start_files->tape, settings_current.tape_file );
-
-  start_files->simpleide_master =
-    utils_safe_strdup( settings_current.simpleide_master_file );
-  start_files->simpleide_slave = 
-    utils_safe_strdup( settings_current.simpleide_slave_file );
-
-  start_files->zxatasp_master =
-    utils_safe_strdup( settings_current.zxatasp_master_file );
-  start_files->zxatasp_slave =
-    utils_safe_strdup( settings_current.zxatasp_slave_file );
-
-  start_files->zxcf = utils_safe_strdup( settings_current.zxcf_pri_file );
-
-  start_files->divide_master =
-    utils_safe_strdup( settings_current.divide_master_file );
-  start_files->divide_slave =
-    utils_safe_strdup( settings_current.divide_slave_file );
-
-  start_files->divmmc =
-    utils_safe_strdup( settings_current.divmmc_file );
-
-  start_files->zxmmc = utils_safe_strdup( settings_current.zxmmc_file );
-
-  utils_file_init( &start_files->mdr[0], settings_current.mdr_file );
-  utils_file_init( &start_files->mdr[1], settings_current.mdr_file2 );
-  utils_file_init( &start_files->mdr[2], settings_current.mdr_file3 );
-  utils_file_init( &start_files->mdr[3], settings_current.mdr_file4 );
-  utils_file_init( &start_files->mdr[4], settings_current.mdr_file5 );
-  utils_file_init( &start_files->mdr[5], settings_current.mdr_file6 );
-  utils_file_init( &start_files->mdr[6], settings_current.mdr_file7 );
-  utils_file_init( &start_files->mdr[7], settings_current.mdr_file8 );
-
-  return 0;
-}
-
-static int
-start_files_given( const start_files_t *start_files )
-{
-  size_t i;
-
-  if( start_files->disk_plus3.filename || start_files->disk_opus.filename ||
-      start_files->disk_plusd.filename || start_files->disk_beta.filename ||
-      start_files->disk_didaktik80.filename ||
-      start_files->disk_disciple.filename || start_files->dock.filename ||
-      start_files->if2.filename || start_files->playback.filename ||
-      start_files->recording || start_files->snapshot.filename ||
-      start_files->tape.filename ||
-      start_files->simpleide_master || start_files->simpleide_slave ||
-      start_files->zxatasp_master || start_files->zxatasp_slave ||
-      start_files->zxcf || start_files->divide_master ||
-      start_files->divide_slave || start_files->divmmc ||
-      start_files->zxmmc || start_files->ay )
-    return 1;
-
-  for( i = 0; i < 8; i++ )
-    if( start_files->mdr[i].filename ) return 1;
-
-  return 0;
-}
-
-static void
-free_start_files( start_files_t *start_files )
-{
-  int i;
-
-  utils_file_free( &start_files->disk_plus3 );
-  utils_file_free( &start_files->disk_opus );
-  utils_file_free( &start_files->disk_plusd );
-  utils_file_free( &start_files->disk_beta );
-  utils_file_free( &start_files->disk_didaktik80 );
-  utils_file_free( &start_files->disk_disciple );
-  utils_file_free( &start_files->dock );
-  utils_file_free( &start_files->if2 );
-  utils_file_free( &start_files->playback );
-  utils_file_free( &start_files->snapshot );
-  utils_file_free( &start_files->tape );
-  for( i = 0; i < 8; i++ ) utils_file_free( &start_files->mdr[i] );
-}
-
 /* Make 'best guesses' as to what to do with non-option arguments */
 static int
 parse_nonoption_args( int argc, char **argv, int first_arg,
-		      start_files_t *start_files )
+                      fuse_start_files *start_files )
 {
   size_t i, j;
   const char *filename;
@@ -834,7 +897,7 @@ parse_nonoption_args( int argc, char **argv, int first_arg,
 
     /* AY music files are not known to libspectrum */
     if( ayplayer_is_ay_file( filename ) ) {
-      start_files->ay = filename;
+      settings_set_string( &start_files->ay, filename );
       recent_files_add( filename );
       continue;
     }
@@ -861,21 +924,21 @@ parse_nonoption_args( int argc, char **argv, int first_arg,
 
     case LIBSPECTRUM_CLASS_HARDDISK:
       if( settings_current.zxcf_active ) {
-	start_files->zxcf = filename;
+        settings_set_string( &start_files->zxcf, filename );
       } else if( settings_current.zxatasp_active ) {
-	start_files->zxatasp_master = filename;
+        settings_set_string( &start_files->zxatasp_master, filename );
       } else if( settings_current.simpleide_active ) {
-	start_files->simpleide_master = filename;
+        settings_set_string( &start_files->simpleide_master, filename );
       } else if( settings_current.divide_enabled ) {
-	start_files->divide_master = filename;
+        settings_set_string( &start_files->divide_master, filename );
       } else if( settings_current.divmmc_enabled ) {
-	start_files->divmmc = filename;
+        settings_set_string( &start_files->divmmc, filename );
       } else if( settings_current.zxmmc_enabled ) {
-	start_files->zxmmc = filename;
+        settings_set_string( &start_files->zxmmc, filename );
       } else {
 	/* No IDE interface active, so activate the ZXCF */
 	settings_current.zxcf_active = 1;
-	start_files->zxcf = filename;
+        settings_set_string( &start_files->zxcf, filename );
       }
       break;
 
@@ -963,7 +1026,7 @@ parse_nonoption_args( int argc, char **argv, int first_arg,
 }
 
 static int
-do_start_files( start_files_t *start_files )
+do_start_files( fuse_start_files *start_files )
 {
   int autoload, error, i, check_snapshot;
 
@@ -1167,25 +1230,132 @@ do_start_files( start_files_t *start_files )
   return 0;
 }
 
-/* Tidy-up function called at end of emulation */
-static int fuse_end(void)
+static int
+start_files_given( const fuse_start_files *start_files )
 {
-  movie_stop();		/* stop movie recording */
+  size_t i;
 
-  startup_manager_run_end();
+  if( start_files->disk_plus3.filename || start_files->disk_opus.filename ||
+      start_files->disk_plusd.filename || start_files->disk_beta.filename ||
+      start_files->disk_didaktik80.filename ||
+      start_files->disk_disciple.filename || start_files->dock.filename ||
+      start_files->if2.filename || start_files->playback.filename ||
+      start_files->recording || start_files->snapshot.filename ||
+      start_files->tape.filename ||
+      start_files->simpleide_master || start_files->simpleide_slave ||
+      start_files->zxatasp_master || start_files->zxatasp_slave ||
+      start_files->zxcf || start_files->divide_master ||
+      start_files->divide_slave || start_files->divmmc ||
+      start_files->zxmmc || start_files->ay )
+    return 1;
 
-  periph_end();
-  ui_end();
-  ui_media_drive_end();
-  module_end();
-  pokemem_end();
-
-  svg_capture_end();
-
-  libspectrum_end();
+  for( i = 0; i < 8; i++ )
+    if( start_files->mdr[i].filename ) return 1;
 
   return 0;
 }
+
+/* The last session is restored and saved only by the application runner,
+   and not for unit tests or automation runs */
+static int
+fuse_app_session_wanted( void )
+{
+  if( !legacy_ownership.app_session ) return 0;
+#ifdef UI_NULL
+  if( settings_current.unittests ) return 0;
+#endif
+#ifdef ENABLE_AUTOMATION
+  if( automation_active() ) return 0;
+#endif
+  return 1;
+}
+
+/* After the start files: carry on from where the last session stopped,
+   unless something to open was given, and reopen the windows that were
+   open at the exit */
+static void
+fuse_app_session_start( const fuse_start_files *start_files )
+{
+  if( !fuse_app_session_wanted() ) return;
+
+  if( !start_files_given( start_files ) ) session_restore();
+
+#ifdef UI_WIN32
+  /* The AY player, playlist, mixer and keyboard windows open at the exit */
+  if( settings_current.resume_last_session ) win32ui_reopen_windows();
+#endif
+}
+
+/* At the exit, before shutdown */
+static void
+fuse_app_session_end( void )
+{
+  if( !fuse_app_session_wanted() ) return;
+
+  /* The program that was running before the AY player comes back */
+  ayplayer_close();
+  session_save();
+}
+
+/* Tidy-up function called at end of emulation */
+static int fuse_end(void)
+{
+  if( legacy_ownership.phase == LEGACY_FRESH ||
+      legacy_ownership.phase == LEGACY_STOPPING ||
+      legacy_ownership.phase == LEGACY_CLOSED ) return 0;
+  /* Internal unwind/emergency cleanup may end STARTING/RUNNING; the ordinary
+     shutdown entry deliberately cannot. Disarm before invoking callbacks. */
+  legacy_ownership.phase = LEGACY_STOPPING;
+
+  movie_stop();
+  /* Active trainer restoration needs live machine memory/maps. */
+  pokemem_end();
+
+  if( legacy_ownership.manager_started ) {
+    legacy_ownership.manager_started = 0;
+    startup_manager_run_end();
+  }
+  /* The settings callback may not have become a completed registration. */
+  fuse_settings_end();
+
+  periph_end();
+  display_end();
+  ui_media_drive_end();
+  module_end();
+  svg_capture_end();
+#ifdef ENABLE_AUTOMATION
+  automation_end();
+#endif
+
+  if( legacy_ownership.xml_owned ) {
+    legacy_ownership.xml_owned = 0;
+#ifdef HAVE_LIB_XML2
+    xmlCleanupParser();
+#endif
+  }
+  if( legacy_ownership.libspectrum_owned ) {
+    legacy_ownership.libspectrum_owned = 0;
+    libspectrum_end();
+  }
+  legacy_ownership.save_settings = 0;
+  legacy_ownership.app_session = 0;
+  if( legacy_ownership.callback_owned ) {
+    legacy_ownership.callback_owned = 0;
+    libspectrum_error_function = legacy_ownership.previous_error_function;
+    legacy_ownership.previous_error_function = NULL;
+  }
+  legacy_ownership.phase = LEGACY_CLOSED;
+
+  return 0;
+}
+
+#ifdef FUSE_STARTUP_TEST
+void
+fuse_startup_test_shutdown( void )
+{
+  fuse_end();
+}
+#endif
 
 /* Emergency shutdown */
 void

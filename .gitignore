@@ -5,6 +5,7 @@
 .grepai
 .vscode
 /aclocal.m4
+/ar-lib
 /autom4te.cache
 /compile
 /config.cache
@@ -52,6 +53,8 @@
 /missing
 /mkinstalldirs
 *.o
+*.lo
+*.la
 /options.h
 /roms/didaktik80.rom
 /roms/opus.rom
@@ -97,6 +100,11 @@ tags
 /unittests/inputdispatchtest
 /unittests/inputrefreshtest
 /unittests/keyboardrefreshtest
+/unittests/legacyenginelinktest
+/unittests/legacyenginesourcetest
+/unittests/startupmanagertest
+/unittests/startupownershiptest
+/unittests/startupunwindtest
 /unittests/sdl2eventstest
 /tools/__pycache__/
 /unittests/pcm_fifotest

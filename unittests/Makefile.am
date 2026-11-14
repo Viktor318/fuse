@@ -20,10 +20,23 @@
 ##
 ## E-mail: philip-fuse@shadowmagic.org.uk
 
-fuse_SOURCES += unittests/helpers.c unittests/floatingbus.c
+libfuselegacy_la_SOURCES += unittests/helpers.c unittests/floatingbus.c
 noinst_HEADERS += unittests/helpers.h
 EXTRA_DIST += unittests/fixtures/floatingbus/README.md \
 	unittests/fixtures/floatingbus/.gitignore
+
+LIFECYCLE_CHECK_TARGETS = check-startup-manager
+.PHONY: $(LIFECYCLE_CHECK_TARGETS) check-legacy-engine-link check-startup-ownership
+
+# Per-test CPPFLAGS give shared sources distinct non-Libtool object names.
+noinst_PROGRAMS += unittests/startupmanagertest
+unittests_startupmanagertest_SOURCES = unittests/startupmanagertest.c \
+                                     infrastructure/startup_manager.c
+unittests_startupmanagertest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_startupmanagertest_LDADD = $(LIBSPECTRUM_LIBS) $(GLIB_LIBS)
+
+check-startup-manager: unittests/startupmanagertest
+	$(top_builddir)/unittests/startupmanagertest
 
 INPUT_CHECK_TARGETS = check-input-refresh check-input-dispatch \
                       check-keyboard-refresh check-sdl2-events
@@ -41,6 +54,7 @@ check-keyboard-refresh: unittests/keyboardrefreshtest
 if USE_SDL2
 noinst_PROGRAMS += unittests/sdl2eventstest
 unittests_sdl2eventstest_SOURCES = unittests/sdl2eventstest.c ui/sdl2/sdl2_events.c
+unittests_sdl2eventstest_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_sdl2eventstest_LDADD = $(SDL2_LIBS)
 check-sdl2-events: unittests/sdl2eventstest
 	$(top_builddir)/unittests/sdl2eventstest
@@ -52,6 +66,7 @@ endif
 noinst_PROGRAMS += unittests/inputdispatchtest
 unittests_inputdispatchtest_SOURCES = unittests/inputdispatchtest.c input.c \
                                       unittests/fork_input_stubs.c
+unittests_inputdispatchtest_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_inputdispatchtest_LDADD =
 
 check-input-dispatch: unittests/inputdispatchtest
@@ -59,6 +74,7 @@ check-input-dispatch: unittests/inputdispatchtest
 
 noinst_PROGRAMS += unittests/inputrefreshtest
 unittests_inputrefreshtest_SOURCES = unittests/inputrefreshtest.c input_refresh.c
+unittests_inputrefreshtest_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_inputrefreshtest_LDADD =
 
 check-input-refresh: unittests/inputrefreshtest
@@ -69,6 +85,7 @@ EXTRA_DIST += unittests/emscriptenwaittest.c
 
 noinst_PROGRAMS += unittests/widgetutf8test
 unittests_widgetutf8test_SOURCES = unittests/widgetutf8test.c ui/widget/utf8.c
+unittests_widgetutf8test_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_widgetutf8test_LDADD =
 noinst_HEADERS += ui/widget/utf8.h
 
@@ -164,6 +181,8 @@ unittests_wasapitoolchaintest_LDADD = -lole32 -lavrt -luuid
 unittests_win32audiowaittest_SOURCES = unittests/win32audiowaittest.c \
                                     compat/win32/wait.c
 unittests_win32audiowaittest_LDADD =
+# Own object names: the engine library compiles compat/win32/wait.c too
+unittests_win32audiowaittest_CPPFLAGS = $(AM_CPPFLAGS)
 check-wasapi-native: unittests/wasapitoolchaintest$(EXEEXT) \
                      unittests/win32audiowaittest$(EXEEXT)
 	$(top_builddir)/unittests/wasapitoolchaintest$(EXEEXT)
@@ -290,10 +309,131 @@ endif
 
 if UI_NULL
 
-fuse_SOURCES += unittests/unittests.c
+libfuselegacy_la_SOURCES += unittests/unittests.c
 noinst_HEADERS += unittests/unittests.h
 
 ## Standalone internal test programs
+
+# Both consumers use the selected legacy UI/backends. The source form links no
+# engine archive: it reuses the canonical sources and configured special objects.
+check_PROGRAMS += unittests/legacyenginelinktest unittests/legacyenginesourcetest \
+                  unittests/startupownershiptest
+unittests_startupownershiptest_SOURCES = unittests/startupownershiptest.c
+unittests_startupownershiptest_LDADD = libfuselegacy.la
+unittests_legacyenginelinktest_SOURCES = unittests/legacyenginetest.c \
+                                       unittests/legacylifecycletest.c
+unittests_legacyenginelinktest_LDADD = libfuselegacy.la
+unittests_legacyenginesourcetest_SOURCES = unittests/legacyenginetest.c \
+                                        unittests/legacylifecycletest.c \
+                                        $(libfuselegacy_la_SOURCES)
+unittests_legacyenginesourcetest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_legacyenginesourcetest_LDADD = $(libfuselegacy_la_LIBADD)
+unittests_legacyenginesourcetest_DEPENDENCIES = $(libfuselegacy_la_DEPENDENCIES)
+$(unittests_legacyenginesourcetest_OBJECTS): config.h
+
+LIFECYCLE_CHECK_TARGETS += check-legacy-engine-link check-startup-ownership \
+                           check-legacy-lifecycle
+.PHONY: check-legacy-lifecycle
+
+check-legacy-lifecycle: unittests/legacyenginelinktest unittests/legacyenginesourcetest
+	@set -e; root="$(abs_top_builddir)/unittests"; \
+	  rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    mkdir "$$consumer"; cd "$$consumer"; program="$$root/$$consumer$(EXEEXT)"; \
+	    for kind in arguments help version both failure; do \
+	      "$$program" --lifecycle-test $$kind > /dev/null; \
+	    done; \
+	    "$$program" --lifecycle-test zero "$$rom" > /dev/null; \
+	    for kind in frame-contract frame-shutdown budget-contract; do \
+	      "$$program" --lifecycle-test "$$kind" --machine 48 --rom-48 "$$rom" \
+	        --no-autosave-settings --no-sound > /dev/null; \
+	    done; \
+	    "$$program" --lifecycle-test prepare --machine 48 --rom-48 "$$rom" \
+	      --no-autosave-settings > /dev/null; \
+	    $(LEGACY_LIFECYCLE_EXECUTION_CHECK) \
+	    test -z "$$(find . -type f \( -name fuserc -o -name fuse.cfg \) -print)"; \
+	    mkdir empty-preferences; cd empty-preferences; \
+	    "$$program" --lifecycle-test core-preferences "$$rom" > /dev/null; \
+	    "$$program" --lifecycle-test core-executed-preferences "$$rom" > /dev/null; \
+	    "$$program" --lifecycle-test app-no-preferences "$$rom" > /dev/null; \
+	    test -z "$$(find . -type f -print)"; cd ..; \
+	    mkdir saved-preferences; cd saved-preferences; \
+	    "$$program" --lifecycle-test app-preferences "$$rom" > /dev/null; \
+	    test -n "$$(find . -type f -print)"; \
+	    before=$$(find . -type f -exec cksum {} \;); \
+	    "$$program" --lifecycle-test core-preferences "$$rom" > /dev/null; \
+	    test "$$before" = "$$(find . -type f -exec cksum {} \;)"; \
+	    "$$program" --lifecycle-test core-executed-preferences "$$rom" > /dev/null; \
+	    test "$$before" = "$$(find . -type f -exec cksum {} \;)"; \
+	    "$$program" --lifecycle-test app-no-preferences "$$rom" > /dev/null; \
+	    test "$$before" = "$$(find . -type f -exec cksum {} \;)"; \
+	    cd ../..; \
+	  done; \
+	  echo 'Private lifecycle, preference persistence and shutdown passed for both consumers'
+
+# Keep every preference read/write inside an isolated child-process sandbox.
+check-startup-ownership: unittests/startupownershiptest
+	@set -e; program="$(abs_top_builddir)/unittests/startupownershiptest$(EXEEXT)"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  "$$program" storage; "$$program" no-save; \
+	  test -z "$$(find . -type f -print)"; \
+	  "$$program" save; test -n "$$(find . -type f -print)"; \
+	  before=$$(find . -type f -exec cksum {} \;); \
+	  "$$program" help > /dev/null; "$$program" version > /dev/null; \
+	  $(STARTUP_OWNERSHIP_FAILURE_CHECK) \
+	  test "$$before" = "$$(find . -type f ! -path './output/*' -exec cksum {} \;)"; \
+	  echo 'Startup storage, settings policy and early-runner ownership passed'
+
+if ENABLE_AUTOMATION
+LEGACY_LIFECYCLE_EXECUTION_CHECK = mkdir prepared-output; \
+  "$$program" --lifecycle-test prepare --machine 48 --rom-48 "$$rom" \
+  --no-autosave-settings --automation-output prepared-output --automation-frames 1 > /dev/null; \
+  test -z "$$(find prepared-output -type f -print)"; mkdir output; \
+  "$$program" --lifecycle-test run --machine 48 --rom-48 "$$rom" \
+  --no-autosave-settings --automation-output output --automation-frames 1 > /dev/null; \
+  mkdir failed-output; "$$program" --lifecycle-test run-failure --machine 48 \
+  --rom-48 "$$rom" --no-autosave-settings --automation-output failed-output \
+  --automation-max-frames 1 --automation-success-pc 65535 > /dev/null; \
+  mkdir frame-reference; "$$program" --lifecycle-test run --machine 48 \
+  --rom-48 "$$rom" --no-autosave-settings --automation-output frame-reference \
+  --automation-frames 10 > /dev/null; \
+  for mode in frames frames-prefix budgets budgets-wide budgets-mixed budgets-prefix; do mkdir "$$mode"; \
+    "$$program" --lifecycle-test "$$mode" --machine 48 --rom-48 "$$rom" \
+    --no-autosave-settings --automation-output "$$mode" --automation-frames 10 > /dev/null; \
+    cmp frame-reference/result.json "$$mode/result.json"; \
+  done; \
+  mkdir frame-failure; "$$program" --lifecycle-test frames-failure --machine 48 \
+  --rom-48 "$$rom" --no-autosave-settings --automation-output frame-failure \
+  --automation-max-frames 1 --automation-success-pc 65535 > /dev/null; \
+  cmp failed-output/result.json frame-failure/result.json; \
+  mkdir budget-failure; "$$program" --lifecycle-test budgets-failure --machine 48 \
+  --rom-48 "$$rom" --no-autosave-settings --automation-output budget-failure \
+  --automation-max-frames 1 --automation-success-pc 65535 > /dev/null; \
+  cmp failed-output/result.json budget-failure/result.json; \
+  "$$program" --lifecycle-test budget-rzx-fixture "$$rom" budget-fixture.rzx > /dev/null; \
+  for mode in run frames budgets-rzx budgets-wide budgets-mixed; do mkdir "rzx-$$mode"; \
+    "$$program" --lifecycle-test "$$mode" --machine 48 --rom-48 "$$rom" \
+    --no-autosave-settings --no-sound --playback budget-fixture.rzx \
+    --automation-output "rzx-$$mode" --automation-until-rzx-end \
+    --automation-max-frames 100 > /dev/null; \
+    cmp rzx-run/result.json "rzx-$$mode/result.json"; \
+  done;
+STARTUP_OWNERSHIP_FAILURE_CHECK = "$$program" settings-failure; \
+  mkdir output; "$$program" session --machine 48 \
+  --rom-48 "$(abs_top_srcdir)/roms/48.rom" \
+  --automation-output output --automation-frames 1 > /dev/null;
+else
+LEGACY_LIFECYCLE_EXECUTION_CHECK =
+STARTUP_OWNERSHIP_FAILURE_CHECK =
+endif
+check-legacy-engine-link: unittests/legacyenginelinktest unittests/legacyenginesourcetest
+	$(top_builddir)/unittests/legacyenginelinktest --help > /dev/null
+	$(top_builddir)/unittests/legacyenginelinktest --version > /dev/null
+	$(top_builddir)/unittests/legacyenginesourcetest --help > /dev/null
+	$(top_builddir)/unittests/legacyenginesourcetest --version > /dev/null
 
 noinst_PROGRAMS += unittests/displaytest
 noinst_PROGRAMS += unittests/sdl2displaytest
@@ -309,33 +449,33 @@ if ENABLE_AUTOMATION
 AUDIO_TEST_BINARIES = unittests/fuse-audio-0 unittests/fuse-audio-35000 \
                      unittests/fuse-audio-17500 unittests/fuse-audio-8750 \
                      unittests/fuse-audio-997 unittests/fuse-audio-1
-AUDIO_TEST_OBJECTS = unittests/audio-cut-0.$(OBJEXT) \
-                    unittests/audio-cut-35000.$(OBJEXT) \
-                    unittests/audio-cut-17500.$(OBJEXT) \
-                    unittests/audio-cut-8750.$(OBJEXT) \
-                    unittests/audio-cut-997.$(OBJEXT) \
-                    unittests/audio-cut-1.$(OBJEXT)
+AUDIO_TEST_OBJECTS = unittests/audio-cut-0.lo \
+                    unittests/audio-cut-35000.lo \
+                    unittests/audio-cut-17500.lo \
+                    unittests/audio-cut-8750.lo \
+                    unittests/audio-cut-997.lo \
+                    unittests/audio-cut-1.lo
 CLEANFILES += $(AUDIO_TEST_BINARIES) $(AUDIO_TEST_OBJECTS)
 
-$(AUDIO_TEST_OBJECTS): $(srcdir)/sound.c $(fuse_OBJECTS)
+$(AUDIO_TEST_OBJECTS): $(srcdir)/sound.c $(fuse_OBJECTS) $(libfuselegacy_la_OBJECTS)
 	$(AM_V_CC)interval=$@; interval=$${interval#unittests/audio-cut-}; \
-	  interval=$${interval%.$(OBJEXT)}; \
-	  $(COMPILE) -DFUSE_SOUND_TEST_INTERVAL=$$interval -c -o $@ $(srcdir)/sound.c
+	  interval=$${interval%.lo}; \
+	  $(LTCOMPILE) -DFUSE_SOUND_TEST_INTERVAL=$$interval -c -o $@ $(srcdir)/sound.c
 
-unittests/fuse-audio-0: unittests/audio-cut-0.$(OBJEXT)
-unittests/fuse-audio-35000: unittests/audio-cut-35000.$(OBJEXT)
-unittests/fuse-audio-17500: unittests/audio-cut-17500.$(OBJEXT)
-unittests/fuse-audio-8750: unittests/audio-cut-8750.$(OBJEXT)
-unittests/fuse-audio-997: unittests/audio-cut-997.$(OBJEXT)
-unittests/fuse-audio-1: unittests/audio-cut-1.$(OBJEXT)
+unittests/fuse-audio-0: unittests/audio-cut-0.lo
+unittests/fuse-audio-35000: unittests/audio-cut-35000.lo
+unittests/fuse-audio-17500: unittests/audio-cut-17500.lo
+unittests/fuse-audio-8750: unittests/audio-cut-8750.lo
+unittests/fuse-audio-997: unittests/audio-cut-997.lo
+unittests/fuse-audio-1: unittests/audio-cut-1.lo
 
-$(AUDIO_TEST_BINARIES): $(fuse_OBJECTS) $(fuse_DEPENDENCIES)
-	$(AM_V_CCLD)objects=; for object in $(fuse_OBJECTS); do \
-	  case $$object in sound.$(OBJEXT)) ;; \
+$(AUDIO_TEST_BINARIES): $(fuse_OBJECTS) $(fuse_DEPENDENCIES) $(libfuselegacy_la_OBJECTS) $(libfuselegacy_la_DEPENDENCIES)
+	$(AM_V_CCLD)objects=; for object in $(libfuselegacy_la_OBJECTS); do \
+	  case $$object in sound.lo) ;; \
 	    *) objects="$$objects $$object" ;; esac; \
 	  done; \
 	  interval=$@; interval=$${interval#unittests/fuse-audio-}; \
-	  $(fuse_LINK) $$objects unittests/audio-cut-$$interval.$(OBJEXT) $(fuse_LDADD) $(LIBS)
+	  $(fuse_LINK) $(fuse_OBJECTS) $$objects unittests/audio-cut-$$interval.lo $(libfuselegacy_la_LIBADD) $(FUSE_APP_LIBS) $(LIBS)
 
 check-sound-engine-equivalence: fuse$(EXEEXT) $(AUDIO_TEST_BINARIES)
 	python3 $(srcdir)/unittests/audio-frame-equivalence.py \
@@ -345,6 +485,7 @@ check-sound-engine-equivalence: fuse$(EXEEXT) $(AUDIO_TEST_BINARIES)
 	  ./unittests/fuse-audio-1
 
 noinst_PROGRAMS += unittests/automation_json_test
+unittests_automation_json_test_CPPFLAGS = $(AM_CPPFLAGS)
 unittests_automation_json_test_SOURCES = \
 	unittests/automation_json.c \
 	automation/json.c \
@@ -395,16 +536,68 @@ unittests_palcompositetest_SOURCES = \
         unittests/palcompositetest.c \
         ui/scaler/snes_ntsc.c
 unittests_palcompositetest_LDADD = $(LIBSPECTRUM_LIBS) \
-        ui/scaler/scalers16.o ui/scaler/scalers32.o
+        ui/scaler/scalers16.lo ui/scaler/scalers32.lo
 unittests_palcompositetest_CPPFLAGS = $(AM_CPPFLAGS)
 
 unittests_scalerexpandtest_SOURCES = \
         unittests/scalerexpandtest.c \
         ui/scaler/scaler.c
 unittests_scalerexpandtest_LDADD = $(LIBSPECTRUM_LIBS) \
-        ui/scaler/scalers16.o ui/scaler/scalers32.o ui/scaler/snes_ntsc.o
+        ui/scaler/scalers16.lo ui/scaler/scalers32.lo ui/scaler/snes_ntsc.o
 unittests_scalerexpandtest_CPPFLAGS = $(AM_CPPFLAGS)
 
+else
+check-startup-ownership:
+	@echo "SKIP: startup ownership tests require a null-UI build"
+endif
+
+# A compile-time-instrumented source consumer; production has no failure switch.
+unittests_startupunwindtest_SOURCES = unittests/startupunwindtest.c \
+                                    $(libfuselegacy_la_SOURCES)
+unittests_startupunwindtest_CPPFLAGS = $(AM_CPPFLAGS) -DFUSE_STARTUP_TEST
+unittests_startupunwindtest_LDADD = $(libfuselegacy_la_LIBADD)
+unittests_startupunwindtest_DEPENDENCIES = $(libfuselegacy_la_DEPENDENCIES)
+$(unittests_startupunwindtest_OBJECTS): config.h
+.PHONY: check-startup-unwind
+
+if UI_NULL
+if ENABLE_AUTOMATION
+check_PROGRAMS += unittests/startupunwindtest
+LIFECYCLE_CHECK_TARGETS += check-startup-unwind
+check-startup-unwind: unittests/startupunwindtest
+	@set -e; program="$(abs_top_builddir)/unittests/startupunwindtest$(EXEEXT)"; \
+	  rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  run() { kind=$$1; target=$$2; shift 2; status=0; \
+	    "$$program" "$$kind" "$$target" "$$rom" "$$@" > /dev/null || status=$$?; \
+	    if test "$$status" -ne 0 && test "$$status" -ne 77; then \
+	      echo "FAILED: startup unwind $$kind $$target ($$status)" >&2; return 1; \
+	    fi; }; \
+	  count=$$("$$program" count); module=0; \
+	  while test $$module -lt $$count; do \
+	    run before $$module; run after $$module; module=$$((module + 1)); \
+	  done; \
+	  count=$$("$$program" models none "$$rom" | tail -n 1); test -n "$$count"; \
+	  test "$$count" -gt 0; model=1; \
+	  while test $$model -le $$count; do \
+	    run point machine.model $$model; model=$$((model + 1)); \
+	  done; \
+	  for point in display.ui display.ready machine.selected startup.files \
+	    sound.backend sound.left sound.right sound.mixer.buffers sound.samples; do \
+	    run point $$point; \
+	  done; \
+	  run media none; run record none; \
+	  for failure in rom scaler snapshot; do run natural $$failure; done; \
+	  test -z "$$(find . -type f \( -name fuserc -o -name fuse.cfg \) -print)"; \
+	  echo 'Manager acquisition/reverse-unwind, partial setup and repeated shutdown passed'
+else
+check-startup-unwind:
+	@echo "SKIP: startup unwind matrix requires automation"
+endif
+else
+check-startup-unwind:
+	@echo "SKIP: startup unwind matrix requires a null-UI build"
 endif
 
 check-audio: $(AUDIO_CHECK_TARGETS)

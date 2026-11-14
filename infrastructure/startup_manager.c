@@ -30,6 +30,7 @@
 #include "libspectrum.h"
 
 #include "startup_manager.h"
+#include "startup_test.h"
 #include "ui/ui.h"
 
 typedef struct registered_module_t {
@@ -42,7 +43,15 @@ typedef struct registered_module_t {
 
 static GArray *registered_modules;
 
+typedef struct completed_module_t {
+  startup_manager_module module;
+  startup_manager_end_fn end_fn;
+} completed_module_t;
+
 static GArray *end_functions;
+
+/* End callbacks may themselves reach emergency shutdown. */
+static int ending;
 
 void
 startup_manager_init( void )
@@ -50,17 +59,30 @@ startup_manager_init( void )
   registered_modules =
     g_array_new( FALSE, FALSE, sizeof( registered_module_t ) );
   end_functions =
-    g_array_new( FALSE, FALSE, sizeof( startup_manager_end_fn ) );
+    g_array_new( FALSE, FALSE, sizeof( completed_module_t ) );
 }
 
 static void
 startup_manager_end( void )
 {
-  g_array_free( registered_modules, TRUE );
-  registered_modules = NULL;
+  guint i;
 
-  g_array_free( end_functions, TRUE );
-  end_functions = NULL;
+  if( registered_modules ) {
+    /* Failed initialization (or a dependency cycle) leaves registrations whose
+       dependency arrays have not yet been released. */
+    for( i = 0; i < registered_modules->len; i++ ) {
+      registered_module_t *registered_module =
+        &g_array_index( registered_modules, registered_module_t, i );
+      g_array_free( registered_module->dependencies, TRUE );
+    }
+    g_array_free( registered_modules, TRUE );
+    registered_modules = NULL;
+  }
+
+  if( end_functions ) {
+    g_array_free( end_functions, TRUE );
+    end_functions = NULL;
+  }
 }
 
 void
@@ -134,6 +156,11 @@ startup_manager_run( void )
 
       if( registered_module->dependencies->len == 0 ) {
 
+#ifdef FUSE_STARTUP_TEST
+        if( fuse_startup_test_checkpoint( registered_module->module, 0,
+                                          registered_module->end_fn != NULL ) )
+          return 1;
+#endif
         if( registered_module->init_fn ) {
           error = registered_module->init_fn(
             registered_module->init_context
@@ -141,8 +168,17 @@ startup_manager_run( void )
           if( error ) return error;
         }
 
-        if( registered_module->end_fn )
-          g_array_append_val( end_functions, registered_module->end_fn );
+        if( registered_module->end_fn ) {
+          completed_module_t completed = {
+            registered_module->module, registered_module->end_fn
+          };
+          g_array_append_val( end_functions, completed );
+        }
+#ifdef FUSE_STARTUP_TEST
+        if( fuse_startup_test_checkpoint( registered_module->module, 1,
+                                          registered_module->end_fn != NULL ) )
+          return 1;
+#endif
 
         remove_dependency( registered_module->module );
 
@@ -169,15 +205,22 @@ startup_manager_run( void )
 void
 startup_manager_run_end( void )
 {
-  guint i;
+  if( ending ) return;
+  ending = 1;
 
-  for( i = end_functions->len; i-- != 0; )
-  {
-    startup_manager_end_fn end_fn = 
-      g_array_index( end_functions, startup_manager_end_fn, i );
+  while( end_functions && end_functions->len ) {
+    guint last = end_functions->len - 1;
+    completed_module_t completed =
+      g_array_index( end_functions, completed_module_t, last );
 
-    end_fn();
+    /* Consume ownership before calling out; recursive teardown is a no-op. */
+    g_array_set_size( end_functions, last );
+#ifdef FUSE_STARTUP_TEST
+    fuse_startup_test_cleanup( completed.module );
+#endif
+    completed.end_fn();
   }
 
   startup_manager_end();
+  ending = 0;
 }

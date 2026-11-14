@@ -113,6 +113,9 @@ print hashline( __LINE__ ), << 'CODE';
 /* The current settings of options, etc */
 settings_info settings_current;
 
+/* Defaults acquire strings before configuration/argument parsing can fail. */
+static int settings_current_owned;
+
 /* The default settings of options, etc */
 settings_info settings_default = {
 CODE
@@ -150,6 +153,7 @@ settings_init( int *first_arg, int argc, char **argv )
 {
   int error;
 
+  settings_current_owned = 1;
   settings_defaults( &settings_current );
 
 #ifdef ENABLE_AUTOMATION
@@ -157,18 +161,23 @@ settings_init( int *first_arg, int argc, char **argv )
 #endif
   {
     error = read_config_file( &settings_current );
-    if( error ) return error;
+    if( error ) goto failed;
   }
 
   error = settings_command_line( &settings_current, first_arg, argc, argv );
-  if( error ) return error;
+  if( error ) goto failed;
 
 #ifdef ENABLE_AUTOMATION
-  if( automation_validate_scenario() ) return 1;
+  error = automation_validate_scenario();
+  if( error ) goto failed;
   if( automation_capture_audio_enabled() ) settings_current.sound = 1;
 #endif
 
   return 0;
+
+failed:
+  settings_end( 0 );
+  return error;
 }
 
 /* Fill the settings structure with sensible defaults */
@@ -1070,6 +1079,7 @@ CODE
 foreach my $name ( sort keys %options ) {
     if( $options{$name}->{type} eq 'string' ) {
 	print "  if( settings->$name ) libspectrum_free( settings->$name );\n";
+	print "  settings->$name = NULL;\n";
     }
 }
 
@@ -1078,21 +1088,20 @@ print hashline( __LINE__ ), << 'CODE';
   return 0;
 }
 
-static void
-settings_end( void )
+void
+settings_end( int save )
 {
-  if( settings_current.autosave_settings )
+  if( !settings_current_owned ) return;
+  settings_current_owned = 0;
+
+  if( save && settings_current.autosave_settings )
     settings_write_config( &settings_current );
 
   settings_free( &settings_current );
-
-#ifdef HAVE_LIB_XML2
-  xmlCleanupParser();
-#endif				/* #ifdef HAVE_LIB_XML2 */
 }
 
 void
-settings_register_startup( void )
+settings_register_startup( void (*end_fn)( void ) )
 {
   /* settings_init not yet managed by the startup manager */
 
@@ -1104,7 +1113,7 @@ settings_register_startup( void )
   };
   startup_manager_register( STARTUP_MANAGER_MODULE_SETTINGS_END, dependencies,
                             ARRAY_SIZE( dependencies ), NULL, NULL,
-                            settings_end );
+                            end_fn );
 }
 
 CODE

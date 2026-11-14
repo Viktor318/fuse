@@ -283,7 +283,7 @@ periph_end( void )
   g_slist_free( ports );
   ports = NULL;
 
-  g_hash_table_destroy( peripherals );
+  if( peripherals ) g_hash_table_destroy( peripherals );
   peripherals = NULL;
 }
 

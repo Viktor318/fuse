@@ -148,6 +148,9 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - Fixes from upstream `master`: a loader whose acceleration is already on
   is not detected again at each pattern (faster accelerated loading);
   screenshots of the Timex hi-res modes use a buffer of the right size.
+- From upstream `master`: internal restructuring of how Fuse starts up and
+  shuts down, with the emulator core built as an internal library. Nothing
+  changes for users.
 
 ## v1.10.1-hu.3 – 2026-11-09
 

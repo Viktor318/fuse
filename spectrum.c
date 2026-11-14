@@ -31,6 +31,7 @@
 #include "debugger/debugger.h"
 #include "display.h"
 #include "event.h"
+#include "fuse-internal.h"
 #include "keyboard.h"
 #include "input.h"
 #include "keyboard_refresh.h"
@@ -69,8 +70,9 @@ libspectrum_dword tstates;
 static int contention_pattern_65432100[] = { 5, 4, 3, 2, 1, 0, 0, 6 };
 static int contention_pattern_76543210[] = { 5, 4, 3, 2, 1, 0, 7, 6 };
 
-/* Event */
+/* Event and private host-turn completion flag. */
 int spectrum_frame_event;
+int spectrum_frame_dispatch_complete;
 
 /* Debugger variable prefix */
 static const char * const debugger_type_string = "spectrum";
@@ -112,6 +114,7 @@ spectrum_frame_event_fn( libspectrum_dword last_tstates, int type,
   debugger_add_time_events();
   ui_event();
   ui_error_frame();
+  spectrum_frame_dispatch_complete = 1;
 }
 
 libspectrum_dword
@@ -162,6 +165,7 @@ spectrum_frame( void )
   event_frame( frame_length );
   debugger_breakpoint_reduce_tstates( frame_length );
   specplus3_bus_frame( frame_length, tstates );
+  fuse_legacy_budget_rebase( tstates, tstates - frame_length );
   tstates -= frame_length;
   if( z80.interrupts_enabled_at >= 0 )
     z80.interrupts_enabled_at -= frame_length;

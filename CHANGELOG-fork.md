@@ -251,6 +251,11 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   *File > Open* shows every supported file, as before.
 - Each dialog remembers the type chosen last (while Fuse runs).
 
+### AY stereo default
+
+- The AY stereo mode defaults to ABC (it was Mono). An explicit choice in
+  `fuse.cfg` stays; *Reset* in the Sound settings sets ABC.
+
 ### Keyboard
 
 - **Read the keyboard when the program does** (*Options > General*, on by

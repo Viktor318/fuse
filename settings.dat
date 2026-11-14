@@ -105,7 +105,7 @@ phantom_typist_mode, string, "Auto"
 sound_device, string, NULL, 'd'
 sound, boolean, 1
 sound_load, boolean, 1,, loading-sound
-stereo_ay, string, NULL,, separation
+stereo_ay, string, "ABC",, separation
 stereo_ay_a, string, "Left",, ay-channel-a
 stereo_ay_b, string, "Centre",, ay-channel-b
 stereo_ay_c, string, "Right",, ay-channel-c

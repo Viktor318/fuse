@@ -268,6 +268,12 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   mutat.
 - Minden ablak megjegyzi a legutóbb választott típust (amíg a Fuse fut).
 
+### AY sztereó alapérték
+
+- Az AY sztereó mód alapértéke ABC (eddig Mono). A `fuse.cfg`-ben
+  kifejezetten megadott választás marad; a Hangbeállítások *Alaphelyzet*
+  gombja ABC-re állít.
+
 ### Billentyűzet
 
 - **Billentyűzet beolvasása, amikor a program olvassa** (*Beállítások >

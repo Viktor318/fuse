@@ -268,6 +268,46 @@ direct matrix input, mouse swapping/wrap/button state, release-all and synthetic
 typing, retained held keys/buttons across reset/selection, nested pause, provider
 reentry, execution-time rejection, deferred NMI and failed-operation shutdown.
 
+## Direct null-backed host
+
+[null-host.c](null-host.c) is a small runnable consumer with its own `main`, not a
+mode of the legacy test/CLI dispatcher. In a configured null-UI build:
+
+```sh
+make unittests/nullhostlink unittests/nullhostsource
+./unittests/nullhostlink /path/to/fuse/roms
+# Same host compiled with canonical engine sources instead of the archive:
+./unittests/nullhostsource /path/to/fuse/roms
+make check-null-host
+```
+
+It includes only standard C headers and `fuse-internal.h`. It configures machine
+48, disables sound and chooses a logical joystick slot mapping, supplies a
+host-owned ROM directory provider, calls `fuse_host_prepare`, then runs a fixed
+sequence of frame/budget turns, input, focus-loss release, reset, machine selection
+to 128 and shutdown. It never calls `fuse_legacy_prepare`, `fuse_legacy_execute` or
+`fuse_legacy_main`, synthesizes engine CLI options, or accesses core globals or
+generated settings. ROM request/release accounting includes failed acquisition
+and wrong-size validation; the provider treats its directory as standard ROMs.
+The directory needs 48.rom, 128-0.rom and 128-1.rom for the complete scenario.
+
+The main thread is the owner thread in this example; there is no mandatory worker
+thread, host event transport or command interpreter. Holding execution means not
+calling another run entry while delivering commands. This is deliberately not a
+nested core pause: pause-count controls are not in this boundary header. The sample
+adds no API to hide that gap. Its frame counter counts completed host calls, not
+monotonic machine frame IDs across reset/selection. It checks returned outcomes
+and resource ownership, not CPU/video state through private globals.
+
+This remains a selected-null-adapter, worker-compatible example. The archive and
+canonical sources still include legacy application/UI services; calls may block,
+and a finite turn sequence is not a hard wall-clock bound for arbitrary ROMs.
+No toolkit-free/cooperative, snapshot/media, output-sink or public SDK capability
+is advertised. The ordinary null CLI/automation runner and null UI callbacks are
+unchanged. `check-null-host` compares both consumers' bounded transcripts and tests
+missing/invalid ROMs, failed 128 selection and usage errors in an isolated,
+configuration-blocked sandbox without changing preferences.
+
 ## Private host execution recipe
 
 This is a source-local, selected-UI-bound worker-compatible profile. Build the

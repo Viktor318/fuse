@@ -280,6 +280,55 @@ unittests_legacyenginesourcetest_LDADD = $(libfuselegacy_la_LIBADD)
 unittests_legacyenginesourcetest_DEPENDENCIES = $(libfuselegacy_la_DEPENDENCIES)
 $(unittests_legacyenginesourcetest_OBJECTS): config.h
 
+# A separate own-main consumer: no legacy CLI/test dispatcher or core globals.
+check_PROGRAMS += unittests/nullhostlink unittests/nullhostsource
+unittests_nullhostlink_SOURCES = hacking/null-host.c
+unittests_nullhostlink_LDADD = libfuselegacy.la
+unittests_nullhostsource_SOURCES = hacking/null-host.c $(libfuselegacy_la_SOURCES)
+unittests_nullhostsource_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_nullhostsource_LDADD = $(libfuselegacy_la_LIBADD)
+unittests_nullhostsource_DEPENDENCIES = $(libfuselegacy_la_DEPENDENCIES)
+$(unittests_nullhostsource_OBJECTS): config.h
+LIFECYCLE_CHECK_TARGETS += check-null-host
+.PHONY: check-null-host
+
+check-null-host: unittests/nullhostlink unittests/nullhostsource
+	@set -e; root="$(abs_top_builddir)/unittests"; roms="$(abs_top_srcdir)/roms"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=config-blocker USERPROFILE=. WINDIR=. APPDATA=.; \
+	  printf 'not a configuration directory\n' > config-blocker; \
+	  mkdir empty invalid only48; printf x > invalid/48.rom; \
+	  cp "$$roms/48.rom" 48.rom; cp "$$roms/48.rom" only48/48.rom; \
+	  printf '%s\n' 'host: prepared 48' \
+	    'host: holding execution; delivering Space and joystick 1 fire' \
+	    'host: resuming execution' 'host: focus lost; inputs released' \
+	    'host: completed relative 997-T-state budget' 'host: reset 48' \
+	    'host: selected 128' \
+	    'host: shutdown; frame turns=5; budget turns=1; ROM requests=4; releases=4' > expected; \
+	  before=$$(find . -type f -exec cksum {} \; | sort); directories=$$(find . -type d | sort); \
+	  for consumer in nullhostlink nullhostsource; do \
+	    program="$$root/$$consumer$(EXEEXT)"; \
+	    "$$program" "$$roms" > "$$consumer-valid.out" 2> "$$consumer-valid.err"; \
+	    cmp expected "$$consumer-valid.out"; \
+	    for mode in empty invalid only48; do \
+	      if "$$program" "$$mode" > "$$consumer-$$mode.out" 2> "$$consumer-$$mode.err"; \
+	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	      test -s "$$consumer-$$mode.err"; \
+	    done; \
+	    for mode in empty invalid; do \
+	      grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=1; releases=1' \
+	        "$$consumer-$$mode.out" > /dev/null; \
+	    done; \
+	    grep -Fx 'host: stopped; frame turns=3; budget turns=1; ROM requests=3; releases=3' \
+	      "$$consumer-only48.out" > /dev/null; \
+	    if "$$program" > "$$consumer-usage.out" 2> "$$consumer-usage.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    test -s "$$consumer-usage.err"; \
+	  done; \
+	  test "$$directories" = "$$(find . -type d | sort)"; \
+	  test "$$before" = "$$(find . -type f ! -name '*.out' ! -name '*.err' -exec cksum {} \; | sort)"; \
+	  echo 'Direct null-backed host passed for archive/source consumers and ROM failures'
+
 LIFECYCLE_CHECK_TARGETS += check-legacy-engine-link check-startup-ownership \
                            check-legacy-lifecycle check-host-prepare
 .PHONY: check-legacy-lifecycle check-host-prepare check-host-operations

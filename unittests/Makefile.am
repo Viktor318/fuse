@@ -266,11 +266,13 @@ unittests_startupownershiptest_LDADD = libfuselegacy.la
 unittests_legacyenginelinktest_SOURCES = unittests/legacyenginetest.c \
                                        unittests/hostpreparetest.c \
                                        unittests/hostoperationstest.c \
+                                       unittests/snapshotfiletest.c \
                                        unittests/legacylifecycletest.c
 unittests_legacyenginelinktest_LDADD = libfuselegacy.la
 unittests_legacyenginesourcetest_SOURCES = unittests/legacyenginetest.c \
                                         unittests/hostpreparetest.c \
                                         unittests/hostoperationstest.c \
+                                        unittests/snapshotfiletest.c \
                                         unittests/legacylifecycletest.c \
                                         $(libfuselegacy_la_SOURCES)
 unittests_legacyenginesourcetest_CPPFLAGS = $(AM_CPPFLAGS)
@@ -281,7 +283,20 @@ $(unittests_legacyenginesourcetest_OBJECTS): config.h
 LIFECYCLE_CHECK_TARGETS += check-legacy-engine-link check-startup-ownership \
                            check-legacy-lifecycle check-host-prepare
 .PHONY: check-legacy-lifecycle check-host-prepare check-host-operations
-LIFECYCLE_CHECK_TARGETS += check-host-operations
+LIFECYCLE_CHECK_TARGETS += check-host-operations check-snapshot-file
+.PHONY: check-snapshot-file
+
+check-snapshot-file: unittests/legacyenginelinktest unittests/legacyenginesourcetest
+	@set -e; root="$(abs_top_builddir)/unittests"; \
+	  rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    "$$root/$$consumer$(EXEEXT)" --snapshot-file-test --machine 48 \
+	      --rom-48 "$$rom" --no-sound --no-autosave-settings; \
+	  done; \
+	  test -z "$$(find . -type f -print)"; \
+	  echo 'Existing snapshot file save and failure cleanup passed for both consumers'
 
 check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesourcetest
 	@set -e; root="$(abs_top_builddir)/unittests"; \
@@ -289,7 +304,7 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
-	    for mode in success reset-failure select-failure; do \
+	    for mode in success reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
 	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$mode" "$$roms"; \
 	    done; \
 	  done; \

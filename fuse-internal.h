@@ -159,6 +159,11 @@ fuse_host_operation_result fuse_host_mouse_event( fuse_host_mouse_button button,
    release-all explicitly for focus loss, retaining existing reset semantics. */
 fuse_host_operation_result fuse_host_release_all( void );
 
+/* Internal outcome collection for legacy void peripheral callbacks: record ROM
+   errors only during host preparation/mutations; never a replacement for fatal
+   recovery or permission to continue a failed session. */
+void fuse_host_resource_error( void );
+
 /* Internal ROM routing only; active also during startup and teardown. */
 int fuse_host_resources_active( void );
 int fuse_host_acquire_rom( const char *name, fuse_host_rom *rom );

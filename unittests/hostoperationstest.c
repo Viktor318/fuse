@@ -21,7 +21,8 @@
 #define OK FUSE_HOST_OPERATION_OK
 static struct {
   const char *directory;
-  int fail, acquired, released;
+  int fail, acquired, released, rejected;
+  const char *fail_name;
   unsigned char *bytes;
 } provider;
 
@@ -51,7 +52,10 @@ acquire_rom( void *context, const char *name, fuse_host_rom *rom )
   assert( fuse_legacy_run_frame() == FUSE_LEGACY_RUN_BUSY );
   assert( fuse_legacy_run_tstates( 1 ) == FUSE_LEGACY_RUN_BUSY );
   fuse_legacy_shutdown();
-  if( provider.fail ) return 1;
+  if( provider.fail || ( provider.fail_name && !strcmp( name, provider.fail_name ) ) ) {
+    provider.rejected++;
+    return 1;
+  }
   assert( snprintf( path, sizeof(path), "%s/%s", provider.directory, name ) < sizeof(path) );
   file = fopen( path, "rb" );
   assert( file && !fseek( file, 0, SEEK_END ) );
@@ -255,10 +259,16 @@ host_operations_test( int argc, char **argv )
   assert( settings_current.joystick_2_output == JOYSTICK_TYPE_FULLER );
   assert( settings_current.mouse_swap_buttons == 1 );
   if( strcmp( argv[1], "success" ) ) {
-    provider.fail = 1;
-    if( !strcmp( argv[1], "reset-failure" ) )
+    if( !strncmp( argv[1], "peripheral-", 11 ) ) {
+      settings_current.beta128 = 1;
+      (void)periph_update();
+      provider.fail_name = "trdos.rom"; /* Main model ROMs must still load. */
+    } else provider.fail = 1;
+    if( !strcmp( argv[1], "reset-failure" ) ||
+        !strcmp( argv[1], "peripheral-reset-failure" ) )
       assert( fuse_host_reset( FUSE_HOST_RESET_HARD ) == FUSE_HOST_OPERATION_FAILED );
     else assert( fuse_host_select_machine( "128" ) == FUSE_HOST_OPERATION_FAILED );
+    assert( provider.rejected == 1 );
     assert( fuse_legacy_run_frame() == FUSE_LEGACY_RUN_NOT_READY );
     assert( fuse_legacy_run_tstates( 1 ) == FUSE_LEGACY_RUN_NOT_READY );
     assert( fuse_host_nmi() == FUSE_HOST_OPERATION_NOT_READY );

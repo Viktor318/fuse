@@ -195,8 +195,10 @@ callback may recursively enter the engine. Embedded snapshot ROMs retain priorit
 This path does not parse CLI options, read/write preferences, process application
 startup files, execute startup debugger commands, print the application banner or
 drop process privileges. ROM failure does not silently retry filesystem search or
-a default filename: fallback is the provider's policy. The legacy path retains its
-existing behaviour. Selected UI/output startup, scaler/device defaults, RNG
+a default filename: fallback is the provider's policy. A reported ROM failure also
+fails host preparation/mutations when a legacy optional-peripheral reset would
+otherwise disable itself and return success. The legacy adapter retains that
+existing disabling behaviour. Selected UI/output startup, scaler/device defaults, RNG
 seeding and process-global library/error handling remain; this is not a general
 host-services abstraction. Preparation can block and its failure is not a
 transaction undoing external effects.

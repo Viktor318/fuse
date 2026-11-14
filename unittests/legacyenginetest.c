@@ -8,10 +8,13 @@
 int legacy_lifecycle_test( int argc, char **argv );
 int host_prepare_test( int argc, char **argv );
 int host_operations_test( int argc, char **argv );
+int snapshot_file_test( int argc, char **argv );
 
 int
 main( int argc, char **argv )
 {
+  if( argc > 1 && !strcmp( argv[1], "--snapshot-file-test" ) )
+    return snapshot_file_test( argc - 1, argv + 1 );
   if( argc > 1 && !strcmp( argv[1], "--host-operations-test" ) )
     return host_operations_test( argc - 1, argv + 1 );
   if( argc > 1 && !strcmp( argv[1], "--host-prepare-test" ) )

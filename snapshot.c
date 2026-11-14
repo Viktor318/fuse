@@ -158,7 +158,11 @@ int snapshot_write( const char *filename )
   buffer = NULL;
   error = libspectrum_snap_write( &buffer, &length, &flags, snap, type,
 				  fuse_creator, 0 );
-  if( error ) { libspectrum_snap_free( snap ); return error; }
+  if( error ) {
+    libspectrum_free( buffer );
+    libspectrum_snap_free( snap );
+    return error;
+  }
 
   if( flags & LIBSPECTRUM_FLAG_SNAPSHOT_MAJOR_INFO_LOSS ) {
     ui_error(

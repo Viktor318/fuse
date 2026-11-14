@@ -402,7 +402,10 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
   int custom;
 
   if( loaded_length ) *loaded_length = 0;
-  if( !sizes->allowed_lengths || !sizes->allowed_length_count ) return 1;
+  if( !sizes->allowed_lengths || !sizes->allowed_length_count ) {
+    fuse_host_resource_error();
+    return 1;
+  }
 
   /* Machine ROMs are requested during the machine reset, before modules can
      restore their snapshot state. Resolve their snapshot banks on demand. */
@@ -414,8 +417,10 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
       !snapshot_rom_bank_find( bank_map, page_num ) ) {
     if( machine_load_rom_bank_from_snapshot( bank_map, page_num,
           libspectrum_snap_roms( loading_snapshot, page_num ),
-          libspectrum_snap_rom_length( loading_snapshot, page_num ), 1 ) )
+          libspectrum_snap_rom_length( loading_snapshot, page_num ), 1 ) ) {
+      fuse_host_resource_error();
       return 1;
+    }
   }
 
   snapshot_bank = snapshot_rom_bank_find( bank_map, page_num );
@@ -424,6 +429,7 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
       ui_error( UI_ERROR_ERROR,
                 "snapshot ROM is %ld bytes long; unsupported size",
                 (unsigned long)snapshot_bank->bank.length );
+      fuse_host_resource_error();
       return 1;
     }
 
@@ -443,6 +449,7 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
       if( !error && loaded_length ) *loaded_length = rom.length;
     }
     if( rom.release ) rom.release( rom.context );
+    if( error ) fuse_host_resource_error();
     return error;
   }
 
@@ -475,6 +482,7 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
                 (unsigned long)actual_length );
   }
 
+  fuse_host_resource_error();
   return 1;
 }
 

@@ -228,6 +228,7 @@ static struct {
   int xml_owned;
   int libspectrum_owned;
   int callback_owned;
+  int resource_failed;
   libspectrum_error_function_t previous_error_function;
 } legacy_ownership;
 
@@ -322,7 +323,7 @@ fuse_host_prepare( const fuse_host_config *config,
   host_preparation.active = 1;
   host_preparation.resources = *resources;
 
-  if( fuse_init( 0, NULL, config ) ) {
+  if( fuse_init( 0, NULL, config ) || legacy_ownership.resource_failed ) {
     fuse_end();
     return FUSE_LEGACY_INIT_FAILED;
   }
@@ -350,6 +351,23 @@ host_operation_check( void )
   return FUSE_HOST_OPERATION_OK;
 }
 
+/* Some legacy peripheral reset callbacks disable themselves on ROM failure.
+   Keep their behaviour, but do not publish false success to a host mutation. */
+void
+fuse_host_resource_error( void )
+{
+  if( legacy_ownership.phase == LEGACY_OPERATING ||
+      ( legacy_ownership.phase == LEGACY_STARTING && host_preparation.active ) )
+    legacy_ownership.resource_failed = 1;
+}
+
+static void
+host_mutation_begin( void )
+{
+  legacy_ownership.resource_failed = 0;
+  legacy_ownership.phase = LEGACY_OPERATING;
+}
+
 static void
 host_release_physical( void )
 {
@@ -369,9 +387,10 @@ fuse_host_select_machine( const char *id )
   for( i = 0; i < machine_count; i++ )
     if( !strcmp( id, machine_types[i]->id ) ) break;
   if( i == machine_count ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
-  legacy_ownership.phase = LEGACY_OPERATING;
+  host_mutation_begin();
   /* ID selection avoids the legacy enum/snapshot fallback and abort policy. */
   error = machine_select_id( machine_types[i]->id );
+  if( legacy_ownership.resource_failed ) error = 1;
   legacy_ownership.phase = error ? LEGACY_FAILED : LEGACY_READY;
   return error ? FUSE_HOST_OPERATION_FAILED : FUSE_HOST_OPERATION_OK;
 }
@@ -384,8 +403,9 @@ fuse_host_reset( fuse_host_reset_kind kind )
   if( result != FUSE_HOST_OPERATION_OK ) return result;
   if( kind != FUSE_HOST_RESET_SOFT && kind != FUSE_HOST_RESET_HARD )
     return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
-  legacy_ownership.phase = LEGACY_OPERATING;
+  host_mutation_begin();
   error = machine_reset( kind == FUSE_HOST_RESET_HARD );
+  if( legacy_ownership.resource_failed ) error = 1;
   legacy_ownership.phase = error ? LEGACY_FAILED : LEGACY_READY;
   return error ? FUSE_HOST_OPERATION_FAILED : FUSE_HOST_OPERATION_OK;
 }

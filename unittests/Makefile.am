@@ -265,10 +265,12 @@ unittests_startupownershiptest_SOURCES = unittests/startupownershiptest.c
 unittests_startupownershiptest_LDADD = libfuselegacy.la
 unittests_legacyenginelinktest_SOURCES = unittests/legacyenginetest.c \
                                        unittests/hostpreparetest.c \
+                                       unittests/hostoperationstest.c \
                                        unittests/legacylifecycletest.c
 unittests_legacyenginelinktest_LDADD = libfuselegacy.la
 unittests_legacyenginesourcetest_SOURCES = unittests/legacyenginetest.c \
                                         unittests/hostpreparetest.c \
+                                        unittests/hostoperationstest.c \
                                         unittests/legacylifecycletest.c \
                                         $(libfuselegacy_la_SOURCES)
 unittests_legacyenginesourcetest_CPPFLAGS = $(AM_CPPFLAGS)
@@ -278,7 +280,21 @@ $(unittests_legacyenginesourcetest_OBJECTS): config.h
 
 LIFECYCLE_CHECK_TARGETS += check-legacy-engine-link check-startup-ownership \
                            check-legacy-lifecycle check-host-prepare
-.PHONY: check-legacy-lifecycle check-host-prepare
+.PHONY: check-legacy-lifecycle check-host-prepare check-host-operations
+LIFECYCLE_CHECK_TARGETS += check-host-operations
+
+check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesourcetest
+	@set -e; root="$(abs_top_builddir)/unittests"; \
+	  roms="$(abs_top_srcdir)/roms"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    for mode in success reset-failure select-failure; do \
+	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$mode" "$$roms"; \
+	    done; \
+	  done; \
+	  test -z "$$(find . -type f -print)"; \
+	  echo 'Private machine/input operations passed for both consumers'
 
 check-host-prepare: unittests/legacyenginelinktest unittests/legacyenginesourcetest
 	@set -e; root="$(abs_top_builddir)/unittests"; \

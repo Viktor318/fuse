@@ -250,6 +250,16 @@ typedef enum input_dispatch_result {
   INPUT_DISPATCH_BLOCKED
 } input_dispatch_result;
 
+/* Emulation-only translation shared with hosts: no widgets, shortcuts, mouse
+   grab or deferred UI actions. Press returns whether joystick mapping swallowed
+   the key. Callers validate normalized values and serialize on the owner thread. */
+int input_keypress_emulation( input_key key );
+void input_keyrelease_emulation( input_key key );
+typedef enum input_mouse_button_t {
+  INPUT_MOUSE_LEFT, INPUT_MOUSE_RIGHT
+} input_mouse_button_t;
+void input_mouse_button_event( input_mouse_button_t button, int pressed );
+
 /* Normal dispatch retains its existing 0/error return convention. */
 int input_event( const input_event_t *event );
 /* READ_TIME applies the same physical mapping but never invokes UI handlers.

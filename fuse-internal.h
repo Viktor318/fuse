@@ -20,6 +20,7 @@
 #define FUSE_INTERNAL_H
 
 #include <stddef.h>
+#include "input.h"
 
 /* Private, UI-bound, exclusive legacy-runtime lifecycle. Not a supported
    embedding API: selected toolkit/fatal-error policy still applies. Calls must
@@ -46,8 +47,8 @@ fuse_legacy_init_result fuse_legacy_prepare( int argc, char **argv );
 /* Private M3 preparation, still using the selected UI/output adapters. Configuration
    owns its strings and may be freed after prepare returns. Only one preparation
    attempt is supported, shared with the legacy entry. No CLI or preference I/O.
-   This first subset configures machine ID and sound only; other values retain
-   generated defaults internally. Use legacy run/shutdown entries after READY.
+   This subset configures machine ID, sound and input mappings; other values
+   retain generated defaults internally. Use legacy run/shutdown entries after READY.
    Owner-thread only, no recursion; selected UI, device waits, RNG and process-
    global library/error policy remain. Not toolkit-free or a public SDK. */
 typedef struct fuse_host_config fuse_host_config;
@@ -78,6 +79,85 @@ typedef struct fuse_host_resources {
 } fuse_host_resources;
 fuse_legacy_init_result fuse_host_prepare( const fuse_host_config *config,
                                           const fuse_host_resources *resources );
+
+/* Synchronous value operations, serialized between execution turns (also while
+   paused). They do not advance emulated time; NMI is queued for normal dispatch.
+   No recursive entry or source aggregation: the host merges physical sources.
+   FAILED machine/reset operations may have partially mutated state: only shutdown
+   is permitted afterwards. INVALID_ARGUMENT never mutates state. These entries
+   retain selected-UI synchronous notifications, not async/transactional promises. */
+typedef enum fuse_host_operation_result {
+  FUSE_HOST_OPERATION_OK,
+  FUSE_HOST_OPERATION_INVALID_ARGUMENT,
+  FUSE_HOST_OPERATION_BUSY,
+  FUSE_HOST_OPERATION_NOT_READY,
+  FUSE_HOST_OPERATION_EXITING,
+  FUSE_HOST_OPERATION_FAILED
+} fuse_host_operation_result;
+
+typedef enum fuse_host_reset_kind {
+  FUSE_HOST_RESET_SOFT, FUSE_HOST_RESET_HARD
+} fuse_host_reset_kind;
+
+/* Spectrum keys, not native keysyms, shortcuts or joystick/menu mappings. */
+typedef enum fuse_host_key {
+  FUSE_HOST_KEY_SPACE = 0x20,
+  FUSE_HOST_KEY_0 = 0x30, FUSE_HOST_KEY_1, FUSE_HOST_KEY_2, FUSE_HOST_KEY_3,
+  FUSE_HOST_KEY_4, FUSE_HOST_KEY_5, FUSE_HOST_KEY_6, FUSE_HOST_KEY_7,
+  FUSE_HOST_KEY_8, FUSE_HOST_KEY_9,
+  FUSE_HOST_KEY_A = 0x61, FUSE_HOST_KEY_B, FUSE_HOST_KEY_C, FUSE_HOST_KEY_D,
+  FUSE_HOST_KEY_E, FUSE_HOST_KEY_F, FUSE_HOST_KEY_G, FUSE_HOST_KEY_H,
+  FUSE_HOST_KEY_I, FUSE_HOST_KEY_J, FUSE_HOST_KEY_K, FUSE_HOST_KEY_L,
+  FUSE_HOST_KEY_M, FUSE_HOST_KEY_N, FUSE_HOST_KEY_O, FUSE_HOST_KEY_P,
+  FUSE_HOST_KEY_Q, FUSE_HOST_KEY_R, FUSE_HOST_KEY_S, FUSE_HOST_KEY_T,
+  FUSE_HOST_KEY_U, FUSE_HOST_KEY_V, FUSE_HOST_KEY_W, FUSE_HOST_KEY_X,
+  FUSE_HOST_KEY_Y, FUSE_HOST_KEY_Z,
+  FUSE_HOST_KEY_ENTER = 0x100, FUSE_HOST_KEY_CAPS, FUSE_HOST_KEY_SYMBOL
+} fuse_host_key;
+
+/* Logical input slots. Fuse owns their configured emulated-interface mapping. */
+typedef enum fuse_host_joystick {
+  FUSE_HOST_JOYSTICK_1, FUSE_HOST_JOYSTICK_2, FUSE_HOST_JOYSTICK_KEYBOARD
+} fuse_host_joystick;
+/* Configuration options, deliberately separate from input delivery. */
+typedef enum fuse_host_joystick_output {
+  FUSE_HOST_JOYSTICK_OUTPUT_NONE, FUSE_HOST_JOYSTICK_OUTPUT_CURSOR,
+  FUSE_HOST_JOYSTICK_OUTPUT_KEMPSTON, FUSE_HOST_JOYSTICK_OUTPUT_SINCLAIR_1,
+  FUSE_HOST_JOYSTICK_OUTPUT_SINCLAIR_2, FUSE_HOST_JOYSTICK_OUTPUT_TIMEX_1,
+  FUSE_HOST_JOYSTICK_OUTPUT_TIMEX_2, FUSE_HOST_JOYSTICK_OUTPUT_FULLER
+} fuse_host_joystick_output;
+int fuse_host_config_set_joystick( fuse_host_config *config,
+  fuse_host_joystick slot, fuse_host_joystick_output output );
+int fuse_host_config_set_mouse_swap_buttons( fuse_host_config *config, int swap );
+typedef enum fuse_host_joystick_button {
+  FUSE_HOST_JOYSTICK_LEFT, FUSE_HOST_JOYSTICK_RIGHT, FUSE_HOST_JOYSTICK_UP,
+  FUSE_HOST_JOYSTICK_DOWN, FUSE_HOST_JOYSTICK_FIRE
+} fuse_host_joystick_button;
+typedef enum fuse_host_mouse_button {
+  FUSE_HOST_MOUSE_LEFT, FUSE_HOST_MOUSE_RIGHT
+} fuse_host_mouse_button;
+
+fuse_host_operation_result fuse_host_select_machine( const char *id );
+fuse_host_operation_result fuse_host_reset( fuse_host_reset_kind kind );
+fuse_host_operation_result fuse_host_nmi( void );
+/* Normalized keyboard values use shared Fuse translation and keyboard-joystick
+   mapping, but never trigger menus/widgets/grab actions (even for F-keys/Escape).
+   These are not toolkit keycodes. Direct matrix injection is a separate option. */
+fuse_host_operation_result fuse_host_keyboard_event( input_key key, int pressed );
+fuse_host_operation_result fuse_host_spectrum_key_event( fuse_host_key key,
+                                                        int pressed );
+fuse_host_operation_result fuse_host_joystick_event( fuse_host_joystick joystick,
+  fuse_host_joystick_button button, int pressed );
+/* Relative motion in host-style coordinates (positive y down), wrapping the
+   hardware's 8-bit counters. Logical buttons respect Fuse's swap configuration;
+   pointer capture and other native UI actions remain host policy. */
+fuse_host_operation_result fuse_host_mouse_motion( int dx, int dy );
+fuse_host_operation_result fuse_host_mouse_event( fuse_host_mouse_button button,
+                                                 int pressed );
+/* Clears physical keyboard/joystick/mouse buttons, retaining mouse position and
+   synthetic typing. Select/reset do not add an implicit release: the host sends
+   release-all explicitly for focus loss, retaining existing reset semantics. */
+fuse_host_operation_result fuse_host_release_all( void );
 
 /* Internal ROM routing only; active also during startup and teardown. */
 int fuse_host_resources_active( void );

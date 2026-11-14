@@ -175,8 +175,10 @@ not a toolkit-free core or installed SDK. Do not call both preparation paths.
 
 Allocate an opaque `fuse_host_config` with `fuse_host_config_alloc()`. Its machine
 ID and sound setters accept owned values (the machine string is copied);
-configuration can be freed after preparation returns, including failure. Other
-settings currently retain generated defaults internally. A nonempty but unknown
+configuration can be freed after preparation returns, including failure. Typed
+joystick-slot output and mouse-button swap setters configure input policy without
+exposing generated settings. Input delivery itself does not need those choices.
+Other settings currently retain generated defaults internally. A nonempty but unknown
 machine ID fails during preparation and consumes the attempt; invalid preparation
 arguments do not. Generated settings layouts are not configuration inputs.
 
@@ -203,11 +205,66 @@ Only ROM acquisition is redirected here. Persistent disks/IDE, serial/network,
 media saves, synchronous decisions and snapshot operations still use their old
 internal interfaces. In particular, the old snapshot machine fallback can abort;
 this addition does not promise nonfatal host snapshot loading or deterministic
-checkpoints. Typed operations and further resource backends are later M3 work.
+checkpoints. Snapshot/media operations and further resource backends are later
+M3 work; the machine/input subset below does not expose those old interfaces.
 
 `check-host-prepare` exercises both archive/source consumers, copied configuration,
 provider release on success/error, custom provenance, snapshot-ROM priority,
 invalid arguments/reentry, blocked preference access and no filesystem ROM fallback.
+
+## Private machine and input operations
+
+After either successful preparation path, the `fuse_host_*` operations in
+`fuse-internal.h` may run between execution turns, including while paused.
+Calls must be serialized on the owner thread. Active execution, preparation,
+cleanup or another machine/reset operation returns BUSY; invalid arguments return
+INVALID_ARGUMENT without changing state. Before preparation, after shutdown,
+after legacy execution finalization or after a failed machine/reset operation,
+operations return NOT_READY. Pending exit returns EXITING. These are synchronous
+operations, not a command transport, callback protocol or cooperative guarantee.
+
+Machine selection takes an ID borrowed only for the call and validates it before
+mutation. Selection/reset reuse existing machine mechanics, UI notifications and
+ROM services without adding a physical-input release. Existing module reset
+semantics still apply; focus loss uses explicit release-all. ID selection does not use the legacy
+snapshot/enum fallback-to-48K/abort path. A reset or selection failure can leave
+partially modified machine state: FAILED requires shutdown, and execution and
+further operations are rejected until then. There is no rollback/retry promise.
+Successful operations retain nested pause ownership. Ordinary reset does not
+replace the current clock; machine selection still uses M2's existing clock/queue
+replacement hook. These host operations cannot be called recursively from an
+active turn; legacy internal machine changes retain their existing M2 behaviour.
+
+NMI queues the normal NMI event, without executing the CPU or delivering it inline.
+Input operations also do not execute CPU time. Normal keyboard input uses portable
+`input_key` values through shared Fuse translation, including composite keys,
+shifted arrows, recreated keyboard and configured keyboard-joystick mappings.
+It never invokes widgets, menus, deferred UI actions or mouse grabbing, even for
+Escape/function keys. Hosts still own conversion from toolkit keycodes. A separate
+`fuse_host_spectrum_key_event` offers explicit low-level Spectrum matrix injection
+for tests/on-screen Spectrum keyboards; it is not the normal input path.
+Joystick values identify logical slots (1, 2 or keyboard), and Fuse applies its
+configured emulated-interface mapping through the existing joystick dispatcher.
+The host need not know that mapping when delivering input. Injection does not
+enable disabled/unavailable hardware. Relative mouse motion (positive y down)
+wraps hardware counters, even for extreme integer deltas. Logical left/right
+buttons share Fuse's configured swapping with legacy UI dispatch, while native
+pointer capture and middle-button grab remain host/UI policy.
+
+Release-all clears physical keyboard state and all joystick/mouse button latches,
+without moving the mouse or cancelling synthetic phantom/disciple typing. The
+host must aggregate overlapping physical sources and avoid competing native input
+writers; these calls are set/clear operations, not reference-counted holds. They
+also do not impose a new input-sampling policy on the selected frontend. Resets
+otherwise retain the existing machine/module reset semantics. No owned state
+observation interface is added by this subset; do not use live globals for
+cross-thread UI reads.
+
+`check-host-operations` runs both archive/source consumers and covers valid keys,
+all logical slots/buttons under each configured mapping, normal keyboard versus
+direct matrix input, mouse swapping/wrap/button state, release-all and synthetic
+typing, retained held keys/buttons across reset/selection, nested pause, provider
+reentry, execution-time rejection, deferred NMI and failed-operation shutdown.
 
 ## Private host execution recipe
 

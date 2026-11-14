@@ -85,7 +85,8 @@ typedef enum fuse_host_operation_result {
   FUSE_HOST_OPERATION_BUSY,
   FUSE_HOST_OPERATION_NOT_READY,
   FUSE_HOST_OPERATION_EXITING,
-  FUSE_HOST_OPERATION_FAILED
+  FUSE_HOST_OPERATION_FAILED,
+  FUSE_HOST_OPERATION_MEDIA_ERROR
 } fuse_host_operation_result;
 
 typedef enum fuse_host_reset_kind {
@@ -133,6 +134,16 @@ typedef enum fuse_host_mouse_button {
 fuse_host_operation_result fuse_host_select_machine( const char *id );
 fuse_host_operation_result fuse_host_reset( fuse_host_reset_kind kind );
 fuse_host_operation_result fuse_host_nmi( void );
+/* Media > Tape > Open intent: the existing tape_open(path, 0) workflow, not
+   File > Open (which uses tape_can_autoload()). The auto_load preference is not
+   consulted for this intent, exactly as in the legacy menu. Path is borrowed
+   through return. Replacement, recording finalization and save/discard/cancel
+   use the existing selected-UI services, which may block. MEDIA_ERROR maps the
+   legacy nonzero return, including cancellation; the session remains usable,
+   but tape state follows the legacy operation (no rollback guarantee). There
+   is no extra close/cleanup after a failed or cancelled open. Separate save/
+   eject commands and non-path access are not exposed here. */
+fuse_host_operation_result fuse_host_insert_tape_file( const char *filename );
 /* Normalized keyboard values use shared Fuse translation and keyboard-joystick
    mapping, but never trigger menus/widgets/grab actions (even for F-keys/Escape).
    These are not toolkit keycodes. Direct matrix injection is a separate option. */

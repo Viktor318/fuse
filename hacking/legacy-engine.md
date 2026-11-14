@@ -199,6 +199,33 @@ NMI event; it is not delivered inline.
 Existing reset/module semantics apply. No input-sampling policy or owned state
 query is provided; do not read live globals concurrently from a UI thread.
 
+## Tape-file insertion
+
+`fuse_host_insert_tape_file(path)` exposes the existing **Media → Tape → Open**
+intent: `tape_open(path, 0)`. That menu action does not consult `auto_load`; it
+inserts without initiating autoload. Manual Play and later loader-detected tape
+activity retain their existing mechanics. The path is borrowed through return;
+decoded tape data is engine-owned.
+
+This is not **File → Open**: that existing workflow uses `tape_can_autoload()`
+(`auto_load` plus custom-ROM eligibility), file identification and dispatch. It
+has not been exposed by this private entry. Hosts must not reimplement those
+rules or treat this narrower command as a policy replacement.
+
+Replacement and recording finalization follow the existing tape workflow,
+including selected-UI save/discard/cancel handling. Occupied or modified media do
+not make this command BUSY. These synchronous services may block; host-facing
+resumable decisions are not implemented yet.
+
+MEDIA_ERROR maps the legacy nonzero result, which can also mean cancellation.
+The session remains runnable, but there is no tape rollback guarantee: read
+failure can leave old media untouched, cancellation retains the existing tape,
+and a decode failure can leave the old tape removed and partial new blocks.
+The wrapper neither retries close nor adds cleanup after a failed operation.
+This uses the existing filesystem reader, not the ROM provider; separate save/
+eject commands and non-path resources are not exposed.
+Success reports insertion, not playback or program-loading completion.
+
 ## Direct null-backed example
 
 [null-host.c](null-host.c) has its own `main` and uses `fuse-internal.h` directly.
@@ -206,12 +233,17 @@ It configures a 48K machine, supplies a directory ROM provider, runs frame/budge
 turns, delivers input, handles focus loss, resets, selects 128 and shuts down.
 The directory needs `48.rom`, `128-0.rom` and `128-1.rom`.
 
+An optional tape filename selects a separate scenario: insert on 48K with the
+deck stopped, run five frame turns and shut down. This mode needs only `48.rom`;
+it does not perform the input/reset/128K sequence or wait for tape completion.
+
 In a configured null-UI build:
 
 ```sh
 make unittests/nullhostlink unittests/nullhostsource
 ./unittests/nullhostlink /path/to/fuse/roms
 ./unittests/nullhostsource /path/to/fuse/roms
+./unittests/nullhostlink /path/to/fuse/roms /path/to/demo.tap
 make check-null-host
 ```
 
@@ -231,9 +263,9 @@ Null-UI builds include these checks in `make check`:
 | `check-startup-ownership` | Startup storage, preference-save permission and callback restoration. |
 | `check-legacy-lifecycle` | One-attempt lifecycle, reentry, pause, frame/budget boundaries and clock replacement; automation builds also cover bounded RZX/finalization cases. |
 | `check-host-prepare` | Explicit configuration, ROM ownership/provenance and preference isolation. |
-| `check-host-operations` | Typed machine/input behaviour and failures. |
+| `check-host-operations` | Typed machine/input behaviour, tape insertion/replacement, selected-null-UI discard, recording finalization and legacy error-state handling. |
 | `check-snapshot-file` | Existing file serialization and error cleanup. |
-| `check-null-host` | Direct driver transcripts, ROM failures and preference isolation in both linking forms. |
+| `check-null-host` | Direct driver transcripts, ROM/tape failures and preference isolation in both linking forms. |
 | `check-startup-unwind` | Instrumented startup failures and reverse cleanup; requires null UI with automation. |
 
 Startup-unwind hooks compile out of the production engine. Tests run accepted

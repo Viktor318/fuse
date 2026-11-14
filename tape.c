@@ -177,15 +177,12 @@ tape_open( const char *filename, int autoload )
   int error;
 
   error = utils_read_file( filename, &file );
-  if( error ) return error;
-
-  error = tape_read_buffer( file.buffer, file.length, LIBSPECTRUM_ID_UNKNOWN,
-			    filename, autoload );
-  if( error ) { utils_close_file( &file ); return error; }
-
+  if( !error )
+    error = tape_read_buffer( file.buffer, file.length, LIBSPECTRUM_ID_UNKNOWN,
+                              filename, autoload );
   utils_close_file( &file );
 
-  return 0;
+  return error;
 }
 
 /* Use an already open tape file as the current tape */

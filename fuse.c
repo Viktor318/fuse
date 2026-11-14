@@ -412,6 +412,21 @@ fuse_host_reset( fuse_host_reset_kind kind )
 }
 
 fuse_host_operation_result
+fuse_host_insert_tape_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = host_operation_check();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  host_mutation_begin();
+  error = tape_open( filename, 0 ); /* Same intent as menu_media_tape_open. */
+  /* tape_open owns replacement and selected-UI save/discard/cancel handling.
+     Do not retry close on failure: it may represent a cancelled replacement. */
+  legacy_ownership.phase = LEGACY_READY;
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
 fuse_host_nmi( void )
 {
   fuse_host_operation_result result = host_operation_check();

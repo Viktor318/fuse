@@ -15,6 +15,8 @@
 #include "periph.h"
 #include "peripherals/joystick.h"
 #include "settings.h"
+#include "tape.h"
+#include "tape_internals.h"
 #include "ui/ui.h"
 #include "z80/z80.h"
 
@@ -49,6 +51,7 @@ acquire_rom( void *context, const char *name, fuse_host_rom *rom )
   assert( fuse_host_release_all() == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_nmi() == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_run_frame() == FUSE_RUN_BUSY );
   assert( fuse_run_tstates( 1 ) == FUSE_RUN_BUSY );
   fuse_shutdown();
@@ -226,6 +229,136 @@ check_input( void )
   assert( tstates == clock );
 }
 
+static compat_file_vtable_t tape_file_io;
+static int tape_file_closes;
+
+static off_t
+tape_size_failure( compat_fd fd )
+{
+  (void)fd;
+  return -1;
+}
+
+static int
+tape_file_close( compat_fd fd )
+{
+  tape_file_closes++;
+  return tape_file_io.close( fd );
+}
+
+static libspectrum_error
+tape_error( libspectrum_error error, const char *format, va_list ap )
+{
+  (void)format; (void)ap;
+  assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_BUSY );
+  return error;
+}
+
+static void
+check_tape_workflow( void )
+{
+  static const unsigned char valid[] = { 2, 0, 0xff, 0xff };
+  static const unsigned char bad[] = { 2, 0, 0xff, 0xff, 5, 0, 0xff };
+  char filename[] = "host-driver.tap";
+  FILE *file;
+  compat_file_vtable_t failing;
+  libspectrum_error_function_t previous_error;
+  libspectrum_tape_block *block;
+  libspectrum_dword clock = tstates;
+  int i, microphone, saved_auto_load = settings_current.auto_load;
+  int rom_requests = provider.acquired, legacy_present;
+
+  assert( fuse_host_insert_tape_file( NULL ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+  assert( fuse_host_insert_tape_file( "" ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+  file = fopen( filename, "wb" ); assert( file );
+  assert( fwrite( valid, 1, sizeof(valid), file ) == sizeof(valid) && !fclose(file) );
+  /* Compare the host boundary with the exact Media > Tape > Open mechanics.
+     File > Open's preference/ROM eligibility is a different existing intent. */
+  for( i = 0; i <= 1; i++ ) {
+    settings_current.auto_load = i;
+    assert( tape_can_autoload() == i ); /* Provider supplies standard ROMs. */
+    assert( !tape_open( filename, 0 ) );
+    assert( tape_present() && !tape_is_playing() && tstates == clock );
+    assert( !tape_close() );
+    assert( fuse_host_insert_tape_file( filename ) == OK );
+    assert( tape_present() && !tape_is_playing() && tstates == clock );
+    assert( settings_current.auto_load == i && provider.acquired == rom_requests );
+    assert( !tape_close() );
+  }
+  settings_current.auto_load = saved_auto_load;
+  file = fopen( "host-bad.tap", "wb" ); assert( file );
+  assert( fwrite( bad, 1, sizeof(bad), file ) == sizeof(bad) && !fclose(file) );
+  file = fopen( "host-empty.tap", "wb" ); assert( file && !fclose(file) );
+  previous_error = libspectrum_error_function;
+  libspectrum_error_function = tape_error;
+  assert( fuse_host_insert_tape_file( "missing-host.tap" ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
+  assert( !tape_present() && !tape_is_playing() && tstates == clock );
+  libspectrum_error_function = previous_error;
+  assert( tape_open( "host-bad.tap", 0 ) );
+  legacy_present = tape_present();
+  assert( !tape_close() );
+  libspectrum_error_function = tape_error;
+  assert( fuse_host_insert_tape_file( "host-bad.tap" ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
+  assert( tape_present() == legacy_present && !tape_is_playing() && tstates == clock );
+  assert( !tape_close() ); /* Explicit fixture cleanup, not API rollback. */
+  /* Empty TAP is valid insertion; playability is not an insertion condition. */
+  assert( fuse_host_insert_tape_file( "host-empty.tap" ) == OK );
+  assert( !tape_present() && !tape_is_playing() && tstates == clock );
+  compat_file_get_vtable( &tape_file_io ); failing = tape_file_io;
+  failing.get_length = tape_size_failure; failing.close = tape_file_close;
+  compat_file_set_vtable( &failing );
+  assert( fuse_host_insert_tape_file( filename ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
+  compat_file_set_vtable( &tape_file_io );
+  assert( tape_file_closes == 1 && !tape_present() );
+  libspectrum_error_function = previous_error;
+  assert( fuse_host_keyboard_event( INPUT_KEY_space, 0 ) == OK );
+
+  assert( !fuse_emulation_pause() );
+  assert( fuse_host_insert_tape_file( filename ) == OK );
+  filename[0] = 'x'; /* The caller's filename is not retained. */
+  assert( !remove( "host-driver.tap" ) ); /* All data is owned by the deck now. */
+  assert( tape_present() && !tape_is_playing() && tstates == clock );
+  block = libspectrum_tape_current_block( tape ); assert( block );
+  assert( libspectrum_tape_block_data( block )[0] == 0xff );
+  assert( fuse_run_frame() == FUSE_RUN_PAUSED && tstates == clock );
+  assert( fuse_host_insert_tape_file( "missing-host.tap" ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
+  tape_modified = 1;
+  assert( fuse_host_insert_tape_file( "missing-host.tap" ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
+  assert( tape_modified && libspectrum_tape_current_block( tape ) == block );
+  tape_modified = 0;
+  assert( !fuse_emulation_unpause() );
+  microphone = tape_microphone;
+  for( i = 0; i < 5; i++ )
+    assert( fuse_run_frame() == FUSE_RUN_COMPLETED );
+  assert( !tape_is_playing() && tape_microphone == microphone );
+  assert( libspectrum_tape_current_block( tape ) == block );
+  /* Playback remains a separate action through the existing tape mechanism. */
+  assert( !tape_do_play( 0 ) );
+  assert( fuse_run_tstates( 100 ) == FUSE_RUN_COMPLETED );
+  microphone = tape_microphone;
+  assert( fuse_run_tstates( 2200 ) == FUSE_RUN_COMPLETED );
+  assert( tape_is_playing() && tape_microphone != microphone );
+  /* A failed read must not close or prompt about an existing playing tape. */
+  tape_modified = 1;
+  assert( fuse_host_insert_tape_file( "missing-host.tap" ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
+  assert( tape_modified && tape_is_playing() );
+  assert( libspectrum_tape_current_block( tape ) == block );
+  file = fopen( "host-replacement.tap", "wb" ); assert( file );
+  assert( fwrite( valid, 1, sizeof(valid), file ) == sizeof(valid) && !fclose(file) );
+  /* The selected null UI chooses DON'T SAVE, as it does for the legacy menu. */
+  assert( fuse_host_insert_tape_file( "host-replacement.tap" ) == OK );
+  assert( tape_present() && !tape_modified && !tape_is_playing() );
+  /* Ordinary clean replacement also uses the same existing path. */
+  assert( fuse_host_insert_tape_file( "host-replacement.tap" ) == OK );
+  tape_record_start(); assert( tape_recording );
+  assert( fuse_run_tstates( 100 ) == FUSE_RUN_COMPLETED );
+  assert( fuse_host_insert_tape_file( "host-replacement.tap" ) == OK );
+  assert( tape_present() && !tape_recording && !tape_modified && !tape_is_playing() );
+  assert( !tape_close() && !remove( "host-replacement.tap" ) );
+  assert( !tape_present() && !remove( "host-bad.tap" ) );
+  assert( !remove( "host-empty.tap" ) );
+}
+
 static void
 active_callback( libspectrum_dword ts, int type, void *data )
 {
@@ -234,6 +367,7 @@ active_callback( libspectrum_dword ts, int type, void *data )
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_select_machine( "128" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_BUSY );
 }
 
 int
@@ -245,6 +379,7 @@ host_operations_test( int argc, char **argv )
   int callback;
   assert( argc == 3 ); provider.directory = argv[2];
   assert( fuse_host_release_all() == FUSE_HOST_OPERATION_NOT_READY );
+  assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_NOT_READY );
   config = fuse_host_config_alloc();
   assert( !fuse_host_config_set_sound( config, 0 ) );
   assert( fuse_host_config_set_joystick( config, 3, 0 ) );
@@ -258,7 +393,9 @@ host_operations_test( int argc, char **argv )
   assert( settings_current.joystick_1_output == JOYSTICK_TYPE_KEMPSTON );
   assert( settings_current.joystick_2_output == JOYSTICK_TYPE_FULLER );
   assert( settings_current.mouse_swap_buttons == 1 );
-  if( strcmp( argv[1], "success" ) ) {
+  if( !strcmp( argv[1], "tape-contract" ) ) {
+    check_tape_workflow();
+  } else if( strcmp( argv[1], "success" ) ) {
     if( !strncmp( argv[1], "peripheral-", 11 ) ) {
       settings_current.beta128 = 1;
       (void)periph_update();
@@ -301,10 +438,12 @@ host_operations_test( int argc, char **argv )
     event_do_events(); assert( z80.pc.w == 0x66 && z80.sp.w == 0x8ffe );
     fuse_exiting = 1;
     assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_EXITING );
+    assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_EXITING );
   }
   assert( provider.acquired == provider.released );
   fuse_shutdown(); fuse_shutdown();
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( !fuse_host_resources_active() );
+  assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_NOT_READY );
   return 0;
 }

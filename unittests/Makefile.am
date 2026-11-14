@@ -298,6 +298,7 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=config-blocker USERPROFILE=. WINDIR=. APPDATA=.; \
 	  printf 'not a configuration directory\n' > config-blocker; \
 	  mkdir empty invalid only48; printf x > invalid/48.rom; \
+	  printf '\002\000\377\377' > sample.tap; printf x > malformed.tap; \
 	  cp "$$roms/48.rom" 48.rom; cp "$$roms/48.rom" only48/48.rom; \
 	  printf '%s\n' 'host: prepared 48' \
 	    'host: holding execution; delivering Space and joystick 1 fire' \
@@ -305,11 +306,22 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource
 	    'host: completed relative 997-T-state budget' 'host: reset 48' \
 	    'host: selected 128' \
 	    'host: shutdown; frame turns=5; budget turns=1; ROM requests=4; releases=4' > expected; \
+	  printf '%s\n' 'host: prepared 48' 'host: inserted tape; deck stopped' \
+	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=1; releases=1' > expected-tape; \
 	  before=$$(find . -type f -exec cksum {} \; | sort); directories=$$(find . -type d | sort); \
 	  for consumer in nullhostlink nullhostsource; do \
 	    program="$$root/$$consumer$(EXEEXT)"; \
 	    "$$program" "$$roms" > "$$consumer-valid.out" 2> "$$consumer-valid.err"; \
 	    cmp expected "$$consumer-valid.out"; \
+	    "$$program" only48 sample.tap > "$$consumer-tape.out" 2> "$$consumer-tape.err"; \
+	    cmp expected-tape "$$consumer-tape.out"; \
+	    for tape in missing.tap malformed.tap; do \
+	      if "$$program" only48 "$$tape" > "$$consumer-$$tape.out" 2> "$$consumer-$$tape.err"; \
+	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	      test -s "$$consumer-$$tape.err"; \
+	      grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=1; releases=1' \
+	        "$$consumer-$$tape.out" > /dev/null; \
+	    done; \
 	    for mode in empty invalid only48; do \
 	      if "$$program" "$$mode" > "$$consumer-$$mode.out" 2> "$$consumer-$$mode.err"; \
 	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
@@ -327,7 +339,7 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource
 	  done; \
 	  test "$$directories" = "$$(find . -type d | sort)"; \
 	  test "$$before" = "$$(find . -type f ! -name '*.out' ! -name '*.err' -exec cksum {} \; | sort)"; \
-	  echo 'Direct null-backed host passed for archive/source consumers and ROM failures'
+	  echo 'Direct null-backed host passed for archive/source consumers and ROM/tape failures'
 
 LIFECYCLE_CHECK_TARGETS += check-legacy-engine-link check-startup-ownership \
                            check-legacy-lifecycle check-host-prepare
@@ -353,12 +365,12 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
-	    for mode in success reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
+	    for mode in success tape-contract reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
 	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$mode" "$$roms"; \
 	    done; \
 	  done; \
 	  test -z "$$(find . -type f -print)"; \
-	  echo 'Private machine/input operations passed for both consumers'
+	  echo 'Private machine/input/tape operations passed for both consumers'
 
 check-host-prepare: unittests/legacyenginelinktest unittests/legacyenginesourcetest
 	@set -e; root="$(abs_top_builddir)/unittests"; \

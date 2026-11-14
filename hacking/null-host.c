@@ -100,8 +100,8 @@ main( int argc, char **argv )
   unsigned int frame_turns = 0, budget_turns = 0;
   int prepared = 0, status = EXIT_FAILURE;
 
-  if( argc != 2 ) {
-    fprintf( stderr, "Usage: %s ROM_DIRECTORY\n", argv[0] );
+  if( argc != 2 && argc != 3 ) {
+    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE]\n", argv[0] );
     return EXIT_FAILURE;
   }
   provider.directory = argv[1]; /* Borrowed through shutdown, not passed as engine CLI. */
@@ -122,6 +122,13 @@ main( int argc, char **argv )
   }
   prepared = 1;
   puts( "host: prepared 48" );
+  if( argc == 3 ) {
+    if( operation( "tape insertion", fuse_host_insert_tape_file( argv[2] ) ) ) goto cleanup;
+    puts( "host: inserted tape; deck stopped" );
+    if( frames( 5, &frame_turns ) ) goto cleanup;
+    status = EXIT_SUCCESS;
+    goto cleanup; /* Insertion does not start playback or program autoload. */
+  }
   if( frames( 2, &frame_turns ) ) goto cleanup;
 
   /* The host holds execution simply by not calling a run entry. Input can be

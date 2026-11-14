@@ -541,7 +541,10 @@ int
 utils_read_fd( compat_fd fd, const char *filename, utils_file *file )
 {
   file->length = compat_file_get_length( fd );
-  if( file->length == -1 ) return 1;
+  if( file->length == -1 ) {
+    compat_file_close( fd );
+    return 1;
+  }
 
   file->buffer = libspectrum_new( unsigned char, file->length );
 

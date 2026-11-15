@@ -88,7 +88,7 @@ Recoverable startup results are not a universal non-terminating lifecycle promis
 ## Host configuration and ROMs
 
 Allocate `fuse_host_config` with `fuse_host_config_alloc()` and use its machine,
-sound, joystick-slot output and mouse-swap setters. The configuration owns copied
+sound, autoload preference, joystick-slot output and mouse-swap setters. The configuration owns copied
 strings and may be freed after preparation returns, including failure. Other
 settings use internal generated defaults; generated settings layouts are not host
 configuration inputs. An unknown nonempty machine ID fails during preparation
@@ -173,7 +173,7 @@ The `fuse_host_*` operations run between execution turns on the owner thread,
 including while paused. They do not advance CPU time. Calls during active work
 return BUSY; pending exit returns EXITING. Invalid arguments return
 INVALID_ARGUMENT without core mutation. Before preparation, after shutdown or
-legacy execution finalization, and after a destructive operation failure, they
+legacy execution finalization, and after FAILED machine selection/reset, they
 return NOT_READY.
 
 Machine selection borrows an ID for the call and validates it before mutation.
@@ -204,6 +204,27 @@ NMI event; it is not delivered inline.
 Existing reset/module semantics apply. No input-sampling policy or owned state
 query is provided; do not read live globals concurrently from a UI thread.
 
+## File → Open
+
+`fuse_host_open_file(path)` invokes the existing general Open dispatcher with
+`tape_can_autoload()`, then refreshes the display as the legacy menu does. The
+current `auto_load` preference and ROM eligibility remain emulator policy;
+`fuse_host_config_set_auto_load` supplies that existing value during preparation.
+Configuration setters do not update a running session.
+
+File identification, RZX stop-before-identification, tape/snapshot/cartridge/disk
+loading, machine fallback, companion-POK discovery and selected-UI decisions stay
+in the existing implementation. The host supplies a filename and command intent,
+not decoded bytes or a copy of the dispatch rules. There is no media-type gate.
+Native filename selection and command delivery/pause ownership stay with the host.
+
+OK means the legacy dispatcher returned zero, which can include cancelled/no-op
+insertion; it does not prove replacement or program-loading completion. MEDIA_ERROR
+maps nonzero, not a uniform unchanged-state or safe-to-continue outcome. File Open
+can partially mutate state and retains legacy fatal paths. No rollback, extra
+cleanup, strict-ID failure rule or new fallback policy is imposed. The example
+shuts down on failure; this is not a universal error-safe loading API.
+
 ## Tape-file insertion
 
 `fuse_host_insert_tape_file(path)` exposes the existing **Media → Tape → Open**
@@ -212,10 +233,8 @@ inserts without initiating autoload. Manual Play and later loader-detected tape
 activity retain their existing mechanics. The path is borrowed through return;
 decoded tape data is engine-owned.
 
-This is not **File → Open**: that existing workflow uses `tape_can_autoload()`
-(`auto_load` plus custom-ROM eligibility), file identification and dispatch. It
-has not been exposed by this private entry. Hosts must not reimplement those
-rules or treat this narrower command as a policy replacement.
+This is not **File → Open**, exposed separately by `fuse_host_open_file`. Hosts
+must not reimplement its rules or treat tape insertion as a policy replacement.
 
 Replacement and recording finalization follow the existing tape workflow,
 including selected-UI save/discard/cancel handling. Occupied or modified media do
@@ -241,6 +260,10 @@ The directory needs `48.rom`, `128-0.rom` and `128-1.rom`.
 An optional tape filename selects a separate scenario: insert on 48K with the
 deck stopped, run five frame turns and shut down. This mode needs only `48.rom`;
 it does not perform the input/reset/128K sequence or wait for tape completion.
+`--open FILE` instead demonstrates general File → Open followed by five turns.
+With default standard 48K ROMs, tape autoload requests the ROM again during reset;
+other files can select machines and require additional ROMs. The log reports the
+legacy return, not that the file replaced media or that loading finished.
 
 In a configured null-UI build:
 
@@ -249,6 +272,7 @@ make unittests/nullhostlink unittests/nullhostsource
 ./unittests/nullhostlink /path/to/fuse/roms
 ./unittests/nullhostsource /path/to/fuse/roms
 ./unittests/nullhostlink /path/to/fuse/roms /path/to/demo.tap
+./unittests/nullhostlink /path/to/fuse/roms --open /path/to/demo.tap
 make check-null-host
 ```
 
@@ -268,7 +292,7 @@ Null-UI builds include these checks in `make check`:
 | `check-startup-ownership` | Startup storage, preference-save permission and callback restoration. |
 | `check-legacy-lifecycle` | One-attempt lifecycle, reentry, pause, frame/budget boundaries and clock replacement; automation builds also cover bounded RZX/finalization cases. |
 | `check-host-prepare` | Explicit configuration, ROM ownership/provenance and preference isolation. |
-| `check-host-operations` | Typed machine/input behaviour, tape insertion/replacement, selected-null-UI discard, recording finalization and legacy error-state handling. |
+| `check-host-operations` | Typed machine/input behaviour, tape insertion/replacement, File Open autoload/ROM eligibility, snapshot restore, RZX stop, recording and error handling. |
 | `check-snapshot-file` | Existing file serialization and error cleanup. |
 | `check-null-host` | Direct driver transcripts, ROM/tape failures and preference isolation in both linking forms. |
 | `check-startup-unwind` | Instrumented startup failures and reverse cleanup; requires null UI with automation. |

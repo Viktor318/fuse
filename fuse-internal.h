@@ -40,8 +40,8 @@ typedef enum fuse_init_result {
 /* Host preparation uses the selected UI/output adapters. Configuration
    owns its strings and may be freed after prepare returns. Only one preparation
    attempt is supported, shared with the legacy entry. No CLI or preference I/O.
-   This subset configures machine ID, sound and input mappings; other values
-   retain generated defaults internally. Use shared run/shutdown entries after READY.
+   This subset configures machine ID, sound, autoload and input mappings; other
+   values retain generated defaults internally. Use shared run/shutdown after READY.
    Owner-thread only, no recursion; selected UI, device waits, RNG and process-
    global library/error policy remain. Not toolkit-free or a public SDK. */
 typedef struct fuse_host_config fuse_host_config;
@@ -49,6 +49,7 @@ fuse_host_config *fuse_host_config_alloc( void );
 void fuse_host_config_free( fuse_host_config *config );
 int fuse_host_config_set_machine( fuse_host_config *config, const char *id );
 int fuse_host_config_set_sound( fuse_host_config *config, int enabled );
+int fuse_host_config_set_auto_load( fuse_host_config *config, int enabled );
 
 /* A synchronous ROM result, not a filesystem path. Provider context remains
    borrowed through shutdown, including failed-startup cleanup. On every acquire,
@@ -134,6 +135,13 @@ typedef enum fuse_host_mouse_button {
 fuse_host_operation_result fuse_host_select_machine( const char *id );
 fuse_host_operation_result fuse_host_reset( fuse_host_reset_kind kind );
 fuse_host_operation_result fuse_host_nmi( void );
+/* File > Open: existing identification/dispatch, current auto_load/ROM
+   eligibility, machine fallback and selected-UI services, followed by refresh.
+   Path borrowed through return. OK means legacy zero, which can include a
+   cancelled/no-op insertion; MEDIA_ERROR means legacy nonzero. No rollback,
+   unchanged-state or safe-continuation promise on error; legacy fatal paths
+   remain. This is not strict ID selection or the tape-only insertion intent. */
+fuse_host_operation_result fuse_host_open_file( const char *filename );
 /* Media > Tape > Open intent: the existing tape_open(path, 0) workflow, not
    File > Open (which uses tape_can_autoload()). The auto_load preference is not
    consulted for this intent, exactly as in the legacy menu. Path is borrowed

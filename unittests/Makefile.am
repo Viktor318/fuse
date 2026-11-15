@@ -308,6 +308,8 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource
 	    'host: shutdown; frame turns=5; budget turns=1; ROM requests=4; releases=4' > expected; \
 	  printf '%s\n' 'host: prepared 48' 'host: inserted tape; deck stopped' \
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=1; releases=1' > expected-tape; \
+	  printf '%s\n' 'host: prepared 48' 'host: File Open returned legacy success' \
+	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=2; releases=2' > expected-open; \
 	  before=$$(find . -type f -exec cksum {} \; | sort); directories=$$(find . -type d | sort); \
 	  for consumer in nullhostlink nullhostsource; do \
 	    program="$$root/$$consumer$(EXEEXT)"; \
@@ -315,6 +317,15 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource
 	    cmp expected "$$consumer-valid.out"; \
 	    "$$program" only48 sample.tap > "$$consumer-tape.out" 2> "$$consumer-tape.err"; \
 	    cmp expected-tape "$$consumer-tape.out"; \
+	    "$$program" only48 --open sample.tap > "$$consumer-open.out" 2> "$$consumer-open.err"; \
+	    cmp expected-open "$$consumer-open.out"; \
+	    for file in missing.tap malformed.tap; do \
+	      if "$$program" only48 --open "$$file" > "$$consumer-open-$$file.out" 2> "$$consumer-open-$$file.err"; \
+	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	      test -s "$$consumer-open-$$file.err"; \
+	      grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=1; releases=1' \
+	        "$$consumer-open-$$file.out" > /dev/null; \
+	    done; \
 	    for tape in missing.tap malformed.tap; do \
 	      if "$$program" only48 "$$tape" > "$$consumer-$$tape.out" 2> "$$consumer-$$tape.err"; \
 	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
@@ -365,7 +376,9 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
-	    for mode in success tape-contract autoload-success autoload-failure reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
+	    for mode in success tape-contract autoload-success autoload-failure \
+	      open-auto open-noauto open-custom open-reset-failure open-snapshot open-fallback open-rzx-stop \
+	      reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
 	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$mode" "$$roms"; \
 	    done; \
 	  done; \

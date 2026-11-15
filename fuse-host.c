@@ -21,6 +21,7 @@
 
 #include <string.h>
 
+#include "display.h"
 #include "event.h"
 #include "fuse.h"
 #include "fuse-engine.h"
@@ -37,6 +38,7 @@
 struct fuse_host_config {
   char *machine;
   int sound;
+  int auto_load;
   int joystick_output[3];
   int mouse_swap_buttons;
 };
@@ -54,6 +56,7 @@ fuse_host_config_alloc( void )
   settings_defaults( &defaults );
   config->machine = utils_safe_strdup( defaults.start_machine );
   config->sound = defaults.sound;
+  config->auto_load = defaults.auto_load;
   config->joystick_output[0] = defaults.joystick_1_output;
   config->joystick_output[1] = defaults.joystick_2_output;
   config->joystick_output[2] = defaults.joystick_keyboard_output;
@@ -87,6 +90,14 @@ fuse_host_config_set_sound( fuse_host_config *config, int enabled )
 }
 
 int
+fuse_host_config_set_auto_load( fuse_host_config *config, int enabled )
+{
+  if( !config || ( enabled != 0 && enabled != 1 ) ) return 1;
+  config->auto_load = enabled;
+  return 0;
+}
+
+int
 fuse_host_config_set_joystick( fuse_host_config *config,
   fuse_host_joystick slot, fuse_host_joystick_output output )
 {
@@ -115,6 +126,7 @@ fuse_host_apply_config( const fuse_host_config *config )
 {
   settings_set_string( &settings_current.start_machine, config->machine );
   settings_current.sound = config->sound;
+  settings_current.auto_load = config->auto_load;
   settings_current.joystick_1_output = config->joystick_output[0];
   settings_current.joystick_2_output = config->joystick_output[1];
   settings_current.joystick_keyboard_output = config->joystick_output[2];
@@ -191,6 +203,20 @@ fuse_host_reset( fuse_host_reset_kind kind )
   fuse_engine_begin_operation();
   error = machine_reset( kind == FUSE_HOST_RESET_HARD );
   return fuse_engine_end_machine_operation( error );
+}
+
+fuse_host_operation_result
+fuse_host_open_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = utils_open_file( filename, tape_can_autoload(), NULL );
+  display_refresh_all(); /* Same post-operation refresh as menu_file_open. */
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
 }
 
 fuse_host_operation_result

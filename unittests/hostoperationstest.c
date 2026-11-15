@@ -10,6 +10,7 @@
 #include "fuse-internal.h"
 #include "fuse-engine.h"
 #include "event.h"
+#include "display.h"
 #include "keyboard.h"
 #include "machine.h"
 #include "memory.h"
@@ -17,15 +18,18 @@
 #include "phantom_typist.h"
 #include "peripherals/joystick.h"
 #include "settings.h"
+#include "snapshot.h"
+#include "rzx.h"
 #include "tape.h"
 #include "tape_internals.h"
 #include "ui/ui.h"
+#include "utils.h"
 #include "z80/z80.h"
 
 #define OK FUSE_HOST_OPERATION_OK
 static struct {
   const char *directory;
-  int fail, acquired, released, rejected;
+  int fail, acquired, released, rejected, custom;
   const char *fail_name;
   unsigned char *bytes;
 } provider;
@@ -48,11 +52,13 @@ acquire_rom( void *context, const char *name, fuse_host_rom *rom )
   assert( provider.acquired == provider.released );
   provider.acquired++;
   rom->context = &provider; rom->release = release_rom;
+  rom->custom = provider.custom;
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_select_machine( "48" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_release_all() == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_nmi() == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_open_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_run_frame() == FUSE_RUN_BUSY );
   assert( fuse_run_tstates( 1 ) == FUSE_RUN_BUSY );
@@ -390,12 +396,80 @@ check_tape_autoload( int fail )
 }
 
 static void
+check_file_open( const char *mode )
+{
+  const unsigned char bytes[] = { 2, 0, 0xff, 0xff };
+  FILE *file;
+  int i, requests, error;
+  int autoload = settings_current.auto_load && !provider.custom;
+  int (*reset)( int, libspectrum_snap * ) = machine_current->reset;
+  libspectrum_dword clock;
+
+  assert( settings_current.auto_load == ( strcmp( mode, "open-noauto" ) != 0 ) );
+  assert( fuse_host_open_file( NULL ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+  assert( fuse_host_open_file( "" ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+  file = fopen( "open.tap", "wb" ); assert( file );
+  assert( fwrite( bytes, 1, sizeof(bytes), file ) == sizeof(bytes) && !fclose(file) );
+  if( !strcmp( mode, "open-reset-failure" ) ) {
+    machine_current->reset = fail_autoload_reset;
+    assert( fuse_host_open_file( "open.tap" ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
+    machine_current->reset = reset;
+    assert( tape_present() && !phantom_typist_is_active() );
+    /* No execution/retry after destructive failure; caller will shut down. */
+  } else if( !strcmp( mode, "open-snapshot" ) || !strcmp( mode, "open-fallback" ) ) {
+    if( !strcmp( mode, "open-fallback" ) ) assert( fuse_host_select_machine( "128" ) == OK );
+    settings_current.late_timings = 1; z80.pc.w = 0x8123;
+    assert( !snapshot_write( "open.szx" ) );
+    if( !strcmp( mode, "open-fallback" ) ) {
+      assert( fuse_host_select_machine( "48" ) == OK );
+      provider.fail_name = "128-0.rom";
+    }
+    settings_current.late_timings = 0; z80.pc.w = 0x9234;
+    assert( fuse_host_spectrum_key_event( FUSE_HOST_KEY_A, 1 ) == OK );
+    assert( fuse_host_open_file( "open.szx" ) == OK );
+    assert( z80.pc.w == 0x8123 && settings_current.late_timings == 1 );
+    if( !strcmp( mode, "open-fallback" ) ) {
+      assert( machine_current->machine == LIBSPECTRUM_MACHINE_48 && provider.rejected == 1 );
+      assert( fuse_host_keyboard_event( INPUT_KEY_space, 0 ) == OK );
+    }
+    for( i = 0; i < KEYBOARD_HALFROWS; i++ ) assert( keyboard_return_values[i] == 0xff );
+    assert( !remove( "open.szx" ) );
+  } else if( !strcmp( mode, "open-rzx-stop" ) ) {
+    assert( !rzx_start_recording( "open-recording.rzx", 0 ) && rzx_recording );
+    assert( fuse_host_open_file( "missing-open.tap" ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
+    assert( !rzx_recording ); /* Stop occurs before even failed identification. */
+    assert( !remove( "open-recording.rzx" ) );
+    assert( fuse_host_open_file( "open.tap" ) == OK ); /* Ordinary read error permits retry. */
+  } else {
+    assert( !fuse_emulation_pause() );
+    for( i = 0; i < 2; i++ ) {
+      if( i ) { assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == OK ); tape_modified = 1; }
+      z80.pc.w = 0x8123; clock = tstates; requests = provider.acquired;
+      if( !i ) {
+        fuse_engine_begin_operation();
+        error = utils_open_file( "open.tap", tape_can_autoload(), NULL );
+        display_refresh_all();
+        fuse_engine_end_operation();
+        assert( !error );
+      } else assert( fuse_host_open_file( "open.tap" ) == OK );
+      assert( provider.acquired == requests + autoload );
+      assert( phantom_typist_is_active() == autoload );
+      assert( z80.pc.w == ( autoload ? 0 : 0x8123 ) && tstates == clock );
+      assert( tape_present() && !tape_modified && !tape_is_playing() && fuse_emulation_paused == 1 );
+    }
+    assert( !fuse_emulation_unpause() );
+  }
+  assert( !remove( "open.tap" ) );
+}
+
+static void
 active_callback( libspectrum_dword ts, int type, void *data )
 {
   (void)ts; (void)type; (void)data;
   assert( fuse_host_nmi() == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_select_machine( "128" ) == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_open_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_BUSY );
 }
@@ -408,10 +482,16 @@ host_operations_test( int argc, char **argv )
   libspectrum_dword clock;
   int callback;
   assert( argc == 3 ); provider.directory = argv[2];
+  provider.custom = !strcmp( argv[1], "open-custom" );
   assert( fuse_host_release_all() == FUSE_HOST_OPERATION_NOT_READY );
+  assert( fuse_host_open_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_NOT_READY );
   config = fuse_host_config_alloc();
   assert( !fuse_host_config_set_sound( config, 0 ) );
+  assert( fuse_host_config_set_auto_load( NULL, 0 ) );
+  assert( fuse_host_config_set_auto_load( config, 2 ) );
+  if( !strncmp( argv[1], "open-", 5 ) )
+    assert( !fuse_host_config_set_auto_load( config, strcmp( argv[1], "open-noauto" ) != 0 ) );
   assert( fuse_host_config_set_joystick( config, 3, 0 ) );
   assert( fuse_host_config_set_joystick( config, 0, 8 ) );
   assert( !fuse_host_config_set_joystick( config, FUSE_HOST_JOYSTICK_1, FUSE_HOST_JOYSTICK_OUTPUT_KEMPSTON ) );
@@ -423,7 +503,9 @@ host_operations_test( int argc, char **argv )
   assert( settings_current.joystick_1_output == JOYSTICK_TYPE_KEMPSTON );
   assert( settings_current.joystick_2_output == JOYSTICK_TYPE_FULLER );
   assert( settings_current.mouse_swap_buttons == 1 );
-  if( !strcmp( argv[1], "tape-contract" ) ) {
+  if( !strncmp( argv[1], "open-", 5 ) ) {
+    check_file_open( argv[1] );
+  } else if( !strcmp( argv[1], "tape-contract" ) ) {
     check_tape_workflow();
   } else if( !strcmp( argv[1], "autoload-success" ) ||
              !strcmp( argv[1], "autoload-failure" ) ) {
@@ -471,12 +553,14 @@ host_operations_test( int argc, char **argv )
     event_do_events(); assert( z80.pc.w == 0x66 && z80.sp.w == 0x8ffe );
     fuse_exiting = 1;
     assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_EXITING );
+    assert( fuse_host_open_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_EXITING );
     assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_EXITING );
   }
   assert( provider.acquired == provider.released );
   fuse_shutdown(); fuse_shutdown();
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( !fuse_host_resources_active() );
+  assert( fuse_host_open_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( fuse_host_insert_tape_file( "not-opened.tap" ) == FUSE_HOST_OPERATION_NOT_READY );
   return 0;
 }

@@ -3,6 +3,7 @@
    Build/run instructions and limits: hacking/legacy-engine.md. */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "fuse-internal.h"
 
@@ -100,8 +101,10 @@ main( int argc, char **argv )
   unsigned int frame_turns = 0, budget_turns = 0;
   int prepared = 0, status = EXIT_FAILURE;
 
-  if( argc != 2 && argc != 3 ) {
-    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE]\n", argv[0] );
+  if( ( argc != 2 && argc != 3 && argc != 4 ) ||
+      ( argc == 4 && strcmp( argv[2], "--open" ) ) ||
+      ( argc == 3 && !strcmp( argv[2], "--open" ) ) ) {
+    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE]\n", argv[0] );
     return EXIT_FAILURE;
   }
   provider.directory = argv[1]; /* Borrowed through shutdown, not passed as engine CLI. */
@@ -122,6 +125,13 @@ main( int argc, char **argv )
   }
   prepared = 1;
   puts( "host: prepared 48" );
+  if( argc == 4 ) {
+    if( operation( "File Open", fuse_host_open_file( argv[3] ) ) ) goto cleanup;
+    puts( "host: File Open returned legacy success" );
+    if( frames( 5, &frame_turns ) ) goto cleanup;
+    status = EXIT_SUCCESS;
+    goto cleanup; /* Neither dispatch success nor five turns prove loading complete. */
+  }
   if( argc == 3 ) {
     if( operation( "tape insertion", fuse_host_insert_tape_file( argv[2] ) ) ) goto cleanup;
     puts( "host: inserted tape; deck stopped" );

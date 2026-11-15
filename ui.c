@@ -807,19 +807,20 @@ int
 ui_tape_write( void )
 {
   char *filename;
+  int error;
 
   fuse_emulation_pause();
 
   filename = ui_get_save_filename( "Fuse - Write Tape" );
   if( !filename ) { fuse_emulation_unpause(); return 1; }
 
-  tape_write( filename );
+  error = tape_write( filename );
 
   libspectrum_free( filename );
 
   fuse_emulation_unpause();
 
-  return 0;
+  return error;
 }
 
 int

@@ -294,6 +294,7 @@ Null-UI builds include these checks in `make check`:
 | `check-host-prepare` | Explicit configuration, ROM ownership/provenance and preference isolation. |
 | `check-host-operations` | Typed machine/input behaviour, tape insertion/replacement, File Open autoload/ROM eligibility, snapshot restore, RZX stop, recording and error handling. |
 | `check-snapshot-file` | Existing file serialization and error cleanup. |
+| `check-tape-save-ui` | Save failures retain modified/playing tape, save/cancel/discard and nested pause ownership, using selected-service doubles. |
 | `check-null-host` | Direct driver transcripts, ROM/tape failures and preference isolation in both linking forms. |
 | `check-startup-unwind` | Instrumented startup failures and reverse cleanup; requires null UI with automation. |
 

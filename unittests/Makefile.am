@@ -280,6 +280,20 @@ unittests_legacyenginesourcetest_LDADD = $(libfuselegacy_la_LIBADD)
 unittests_legacyenginesourcetest_DEPENDENCIES = $(libfuselegacy_la_DEPENDENCIES)
 $(unittests_legacyenginesourcetest_OBJECTS): config.h
 
+# Exercise the original common UI helper with selected-service doubles; the
+# normal engine archive supplies the real tape implementation and teardown.
+check_PROGRAMS += unittests/tapesaveuitest
+unittests_tapesaveuitest_SOURCES = unittests/tapesaveuitest.c unittests/tapesaveui.c
+unittests_tapesaveuitest_LDADD = libfuselegacy.la
+LIFECYCLE_CHECK_TARGETS += check-tape-save-ui
+.PHONY: check-tape-save-ui
+check-tape-save-ui: unittests/tapesaveuitest
+	@set -e; program="$(abs_top_builddir)/unittests/tapesaveuitest$(EXEEXT)"; \
+	  rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  "$$program" "$$rom"; test -z "$$(find . -type f -print)"
+
 # A separate own-main consumer: no legacy CLI/test dispatcher or core globals.
 check_PROGRAMS += unittests/nullhostlink unittests/nullhostsource
 unittests_nullhostlink_SOURCES = hacking/null-host.c

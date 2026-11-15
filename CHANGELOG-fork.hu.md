@@ -184,6 +184,10 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - Az upstream `master`-ből: a Fuse indulásának és leállásának belső
   átszervezése, az emulátor magja belső könyvtárként fordul. A
   felhasználók számára semmi sem változik.
+- Az upstream `master`-ből: a lebegő busz egységtesztjéhez már nem kell a
+  GLib (a tesztfájlokat a zlib CRC32-jével ellenőrzi), így ennek a
+  kiadásnak a saját kerülőmegoldása kikerült. A felhasználók számára semmi
+  sem változik.
 
 ## v1.10.1-hu.3 – 2026-11-09
 

@@ -173,6 +173,9 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - From upstream `master`: internal restructuring of how Fuse starts up and
   shuts down, with the emulator core built as an internal library. Nothing
   changes for users.
+- From upstream `master`: the floating bus unit test no longer needs GLib
+  (it checks its files with the CRC32 of zlib), so this edition's own
+  workaround for it is gone. Nothing changes for users.
 
 ## v1.10.1-hu.3 – 2026-11-09
 

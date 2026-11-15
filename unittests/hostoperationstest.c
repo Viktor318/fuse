@@ -8,11 +8,13 @@
 #include <string.h>
 #include "fuse.h"
 #include "fuse-internal.h"
+#include "fuse-engine.h"
 #include "event.h"
 #include "keyboard.h"
 #include "machine.h"
 #include "memory.h"
 #include "periph.h"
+#include "phantom_typist.h"
 #include "peripherals/joystick.h"
 #include "settings.h"
 #include "tape.h"
@@ -359,6 +361,34 @@ check_tape_workflow( void )
   assert( !remove( "host-empty.tap" ) );
 }
 
+static int
+fail_autoload_reset( int hard_reset, libspectrum_snap *snap )
+{
+  assert( !hard_reset && !snap );
+  return 37;
+}
+
+static void
+check_tape_autoload( int fail )
+{
+  unsigned char bytes[] = { 2, 0, 0xff, 0xff };
+  int (*reset)( int, libspectrum_snap * ) = machine_current->reset;
+  int error;
+
+  assert( !phantom_typist_is_active() );
+  if( fail ) machine_current->reset = fail_autoload_reset;
+  /* White-box lifecycle bracket: the legacy loader can reset the machine. */
+  fuse_engine_begin_operation();
+  error = tape_read_buffer( bytes, sizeof(bytes), LIBSPECTRUM_ID_TAPE_TAP,
+                            "autoload.tap", 1 );
+  machine_current->reset = reset;
+  assert( error == ( fail ? 37 : 0 ) );
+  assert( phantom_typist_is_active() == !fail );
+  assert( tape_present() && !tape_is_playing() ); /* No tape rollback. */
+  assert( fuse_engine_end_machine_operation( error ) ==
+          ( fail ? FUSE_HOST_OPERATION_FAILED : OK ) );
+}
+
 static void
 active_callback( libspectrum_dword ts, int type, void *data )
 {
@@ -395,6 +425,9 @@ host_operations_test( int argc, char **argv )
   assert( settings_current.mouse_swap_buttons == 1 );
   if( !strcmp( argv[1], "tape-contract" ) ) {
     check_tape_workflow();
+  } else if( !strcmp( argv[1], "autoload-success" ) ||
+             !strcmp( argv[1], "autoload-failure" ) ) {
+    check_tape_autoload( !strcmp( argv[1], "autoload-failure" ) );
   } else if( strcmp( argv[1], "success" ) ) {
     if( !strncmp( argv[1], "peripheral-", 11 ) ) {
       settings_current.beta128 = 1;

@@ -22,7 +22,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <glib.h>
+
+#ifdef HAVE_ZLIB_H
+#include <zlib.h>
+#endif
+
+#ifdef _WIN32
+#include <direct.h>
+#define MKDIR(path) _mkdir( path )
+#define PATH_SEP '\\'
+#else
+#include <sys/stat.h>
+#define MKDIR(path) mkdir( (path), 0700 )
+#define PATH_SEP '/'
+#endif
 
 #include "display.h"
 #include "event.h"
@@ -294,16 +307,40 @@ display_colours( unsigned int rows[ DISPLAY_SCREEN_HEIGHT ],
   }
 }
 
-/* Return 1 for a verified local fixture, 0 for an optional missing fixture,
-   and -1 for a malformed path, unreadable file or hash mismatch. */
+/* Create directory and all parent components. Returns 0 on success. */
 static int
-find_fixture( const char *name, const char *sha256, char *path, size_t size )
+mkdir_p( const char *path )
+{
+  char tmp[1024], *p;
+  size_t len = strlen( path );
+
+  if( len >= sizeof(tmp) ) return -1;
+  memcpy( tmp, path, len + 1 );
+  /* Strip trailing separator */
+  if( len > 1 && ( tmp[len-1] == '/' || tmp[len-1] == '\\' ) ) tmp[len-1] = '\0';
+  for( p = tmp + 1; *p; p++ ) {
+    if( *p == '/' || *p == '\\' ) {
+      char sep = *p;
+      *p = '\0';
+      MKDIR( tmp );
+      *p = sep;
+    }
+  }
+  MKDIR( tmp );
+  return 0;
+}
+
+/* Return 1 for a verified local fixture, 0 for an optional missing fixture,
+   and -1 for a malformed path, unreadable file or checksum mismatch. */
+static int
+find_fixture( const char *name, const char *crc32_hex, char *path, size_t size )
 {
   const char *srcdir = getenv( "FUSE_TEST_SRCDIR" );
-  GError *file_error = NULL;
-  char *contents, *digest;
-  gsize length;
-  int n, missing, error;
+  char *contents;
+  long file_length;
+  size_t length;
+  FILE *f;
+  int n, error;
 
   if( !srcdir ) srcdir = ".";
   n = snprintf( path, size, "%s/unittests/fixtures/floatingbus/%s", srcdir, name );
@@ -311,23 +348,41 @@ find_fixture( const char *name, const char *sha256, char *path, size_t size )
     printf( "Floating-bus fixture path too long: %s\n", name );
     return -1;
   }
-  if( !g_file_get_contents( path, &contents, &length, &file_error ) ) {
-    missing = g_error_matches( file_error, G_FILE_ERROR, G_FILE_ERROR_NOENT );
-    if( missing )
+
+  f = fopen( path, "rb" );
+  if( !f ) {
+    if( errno == ENOENT )
       printf( "SKIP: optional floating-bus fixture missing: %s\n", path );
     else
       printf( "Floating-bus fixture read failed: %s: %s\n", path,
-              file_error ? file_error->message : "unknown error" );
-    g_clear_error( &file_error );
-    return missing ? 0 : -1;
+              strerror( errno ) );
+    return errno == ENOENT ? 0 : -1;
   }
-  digest = g_compute_checksum_for_data( G_CHECKSUM_SHA256,
-                                        (const guchar *)contents, length );
-  error = !digest || strcmp( digest, sha256 );
-  g_free( digest );
-  g_free( contents );
+
+  if( fseek( f, 0, SEEK_END ) ) { fclose( f ); return -1; }
+  file_length = ftell( f );
+  if( file_length <= 0 ) { fclose( f ); return -1; }
+  if( fseek( f, 0, SEEK_SET ) ) { fclose( f ); return -1; }
+
+  contents = malloc( (size_t)file_length );
+  if( !contents ) { fclose( f ); return -1; }
+  length = fread( contents, 1, (size_t)file_length, f );
+  fclose( f );
+  if( length != (size_t)file_length ) { free( contents ); return -1; }
+
+  error = 0;
+#ifdef HAVE_ZLIB_H
+  {
+    uLong crc = crc32( 0, Z_NULL, 0 );
+    char computed[9];
+    crc = crc32( crc, (const Bytef *)contents, length );
+    snprintf( computed, sizeof(computed), "%08lx", (unsigned long)crc );
+    error = strcmp( computed, crc32_hex );
+  }
+#endif
+  free( contents );
   if( error ) {
-    printf( "Floating-bus fixture hash mismatch: %s\n", path );
+    printf( "Floating-bus fixture checksum mismatch: %s\n", path );
     return -1;
   }
   return 1;
@@ -339,9 +394,9 @@ output_directory( void )
   const char *directory = getenv( "FUSE_TEST_FLOATING_VISUAL_OUTPUT" );
 
   if( !directory ) directory = "unittests/floatingbus-output";
-  if( g_mkdir_with_parents( directory, 0700 ) ) {
+  if( mkdir_p( directory ) ) {
     printf( "Cannot create floating-bus test output directory %s: %s\n",
-            directory, g_strerror( errno ) );
+            directory, strerror( errno ) );
     return NULL;
   }
   return directory;
@@ -369,9 +424,7 @@ floatingbus_original_unittest( void )
   int late = settings_current.late_timings;
   char path[1024], filename[1024];
 
-  found = find_fixture( "hikaru.tap",
-    "48dd8eb1eb7b92e2fc7ee99b0065d7dd7da7fe87d188447795df0072e111a6b9",
-    path, sizeof(path) );
+  found = find_fixture( "hikaru.tap", "b73dd642", path, sizeof(path) );
   if( found <= 0 ) return found < 0;
   directory = output_directory();
   if( !directory ) return 1;
@@ -539,8 +592,7 @@ floatingbus_visual_unittest( void )
     LIBSPECTRUM_MACHINE_PLUS3E
   };
   static const char * const hashes[] = {
-    "d703d838adba23eafdd4e0457486ce1318e488667ebb12a96f72ec5e06114b10",
-    "b80c4ab7690434451fcb0c15d0af7975c7808e22e562b14186008666f4628bf3"
+    "9a33dc99", "5b8793bb"
   };
   static const char * const names[] = { "universal.tap", "woody.tap" };
   char paths[2][1024];

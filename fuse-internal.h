@@ -170,6 +170,14 @@ fuse_host_operation_result fuse_host_set_disk_flipped( fuse_disk_controller cont
                                                       int slot, int flipped );
 fuse_host_operation_result fuse_host_set_disk_write_protected( fuse_disk_controller controller,
                                                               int slot, int write_protected );
+/* Copy on the owner thread between execution turns, including registered but
+   inactive/disabled drives. Unknown controller/slot is INVALID_ARGUMENT. *info
+   is set to NULL on failure; pass a fresh result pointer (free any prior copy
+   before reuse). Success transfers the value/strings to the caller, independent
+   of later operations or shutdown. Free with fuse_disk_drive_info_free(). This
+   observation is not a command token; mutations still resolve current state. */
+fuse_host_operation_result fuse_host_copy_disk_drive_info(
+  fuse_disk_controller controller, int slot, fuse_disk_drive_info **info );
 /* Normalized keyboard values use shared Fuse translation and keyboard-joystick
    mapping, but never trigger menus/widgets/grab actions (even for F-keys/Escape).
    These are not toolkit keycodes. Direct matrix injection is a separate option. */

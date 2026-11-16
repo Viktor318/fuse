@@ -75,6 +75,15 @@ operation( const char *name, fuse_host_operation_result result )
   return 1;
 }
 
+static void
+print_disk_info( const char *label, const fuse_disk_drive_info *info )
+{
+  printf( "host: %s; controller=%d; slot=%d; name=%s; available=%d; enabled=%d; loaded=%d; flipped=%d; protected=%d; target=%s\n",
+          label, (int)info->controller, info->slot, info->name ? info->name : "(none)",
+          info->available, info->enabled, info->loaded, info->flipped,
+          info->write_protected, info->filename ? info->filename : "(none)" );
+}
+
 static int
 frames( unsigned int count, unsigned int *completed )
 {
@@ -96,6 +105,7 @@ main( int argc, char **argv )
   rom_provider provider = { 0 };
   fuse_host_resources resources = { &provider, acquire_rom };
   fuse_host_config *config;
+  fuse_disk_drive_info *disk = NULL, *saved_disk = NULL;
   fuse_init_result init;
   fuse_run_result run;
   unsigned int frame_turns = 0, budget_turns = 0;
@@ -137,12 +147,22 @@ main( int argc, char **argv )
   }
   if( disk_lifecycle ) {
     if( operation( "new disk", fuse_host_new_disk( FUSE_DISK_CONTROLLER_PLUS3, 0 ) ) ||
-        operation( "flip", fuse_host_set_disk_flipped( FUSE_DISK_CONTROLLER_PLUS3, 0, 1 ) ) ||
-        operation( "unflip", fuse_host_set_disk_flipped( FUSE_DISK_CONTROLLER_PLUS3, 0, 0 ) ) ||
-        operation( "write protect", fuse_host_set_disk_write_protected( FUSE_DISK_CONTROLLER_PLUS3, 0, 1 ) ) ||
-        operation( "write enable", fuse_host_set_disk_write_protected( FUSE_DISK_CONTROLLER_PLUS3, 0, 0 ) ) ||
-        operation( "disk save", fuse_host_save_disk_file( FUSE_DISK_CONTROLLER_PLUS3, 0, argv[3] ) ) ||
-        operation( "disk eject", fuse_host_eject_disk( FUSE_DISK_CONTROLLER_PLUS3, 0 ) ) ) goto cleanup;
+        operation( "drive info", fuse_host_copy_disk_drive_info( FUSE_DISK_CONTROLLER_PLUS3, 0, &disk ) ) ) goto cleanup;
+    print_disk_info( "new disk copy", disk );
+    if( operation( "flip", fuse_host_set_disk_flipped( disk->controller, disk->slot, 1 ) ) ||
+        operation( "write protect", fuse_host_set_disk_write_protected( disk->controller, disk->slot, 1 ) ) ) goto cleanup;
+    /* The identity is a selector, not a handle: each command resolves current state. */
+    fuse_disk_drive_info_free( disk ); disk = NULL;
+    if( operation( "drive info", fuse_host_copy_disk_drive_info( FUSE_DISK_CONTROLLER_PLUS3, 0, &disk ) ) ) goto cleanup;
+    print_disk_info( "controls copy", disk );
+    if( operation( "unflip", fuse_host_set_disk_flipped( disk->controller, disk->slot, 0 ) ) ||
+        operation( "write enable", fuse_host_set_disk_write_protected( disk->controller, disk->slot, 0 ) ) ||
+        operation( "disk save", fuse_host_save_disk_file( disk->controller, disk->slot, argv[3] ) ) ||
+        operation( "saved drive info", fuse_host_copy_disk_drive_info( disk->controller, disk->slot, &saved_disk ) ) ||
+        operation( "disk eject", fuse_host_eject_disk( disk->controller, disk->slot ) ) ) goto cleanup;
+    fuse_disk_drive_info_free( disk ); disk = NULL;
+    if( operation( "empty drive info", fuse_host_copy_disk_drive_info( FUSE_DISK_CONTROLLER_PLUS3, 0, &disk ) ) ) goto cleanup;
+    print_disk_info( "ejected drive copy", disk );
     puts( "host: new disk; flip/WP controls; saved and ejected plus3 drive 0" );
     status = EXIT_SUCCESS;
     goto cleanup;
@@ -190,6 +210,9 @@ main( int argc, char **argv )
 
 cleanup:
   if( prepared ) fuse_shutdown(); /* Also valid after a failed mutation. */
+  if( saved_disk ) print_disk_info( "retained copy after shutdown", saved_disk );
+  fuse_disk_drive_info_free( saved_disk );
+  fuse_disk_drive_info_free( disk );
   if( provider.requests != provider.releases || provider.pending ) {
     fprintf( stderr, "host: ROM ownership mismatch\n" );
     status = EXIT_FAILURE;

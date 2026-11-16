@@ -38,6 +38,8 @@
 static fdd_t fdd;
 static const fdd_params_t params = { 1, 2, 40 };
 static unsigned char rom_bytes[0x4000];
+static char drive_name[] = "Test floppy";
+static int drive_available = 1;
 static const char *selected_filename;
 static int caller_pauses, writes, filenames, overwrites, eject_questions, fail_write;
 static int fail_read, file_frees;
@@ -45,9 +47,9 @@ static ui_confirm_save_t overwrite_choice = UI_CONFIRM_SAVE_SAVE;
 static ui_confirm_save_t eject_choice = UI_CONFIRM_SAVE_SAVE;
 
 static const fdd_params_t *get_params( void ) { return &params; }
-static int is_available( void ) { return 1; }
+static int is_available( void ) { return drive_available; }
 static ui_media_drive_info_t drive = {
-  "Test floppy", TEST_CONTROLLER, TEST_SLOT,
+  drive_name, TEST_CONTROLLER, TEST_SLOT,
   UI_MENU_ITEM_INVALID, UI_MENU_ITEM_INVALID, UI_MENU_ITEM_INVALID,
   UI_MENU_ITEM_INVALID, UI_MENU_ITEM_INVALID,
   is_available, get_params, NULL, NULL, &fdd
@@ -234,6 +236,57 @@ report( const char *label, int result )
   assert( fuse_emulation_paused == caller_pauses );
 }
 
+static fuse_disk_drive_info *
+copy_info( void )
+{
+  fuse_disk_drive_info *info = NULL;
+  assert( fuse_host_copy_disk_drive_info( TEST_CONTROLLER, TEST_SLOT, &info ) == FUSE_HOST_OPERATION_OK );
+  assert( info && info->controller == TEST_CONTROLLER && info->slot == TEST_SLOT );
+  return info;
+}
+
+static fuse_disk_drive_info *
+check_observations( void )
+{
+  fuse_disk_drive_info *cold = copy_info(), *info, *saved;
+  fdd_type_t type = fdd.type;
+  assert( cold->available && cold->enabled && !cold->loaded && !cold->filename );
+  assert( cold->name != drive.name && !strcmp( cold->name, "Test floppy" ) );
+  drive_name[0] = 'X';
+  assert( !strcmp( cold->name, "Test floppy" ) ); drive_name[0] = 'T';
+  drive_available = 0; info = copy_info();
+  assert( !info->available && info->enabled && !info->loaded && cold->available );
+  fuse_disk_drive_info_free( info ); drive_available = 1;
+  fdd.type = FDD_TYPE_NONE; info = copy_info();
+  assert( info->available && !info->enabled && !info->loaded );
+  fuse_disk_drive_info_free( info ); fdd.type = type;
+  assert( !new_disk() );
+  info = copy_info();
+  assert( info->loaded && !info->filename && !info->flipped && !info->write_protected );
+  fuse_disk_drive_info_free( info );
+  assert( !set_flipped( 1 ) && !set_write_protected( 1 ) );
+  assert( !save_to( "observed.udi" ) ); saved = copy_info();
+  assert( saved->loaded && saved->flipped && saved->write_protected );
+  assert( !strcmp( saved->filename, "observed.udi" ) && saved->filename != fdd.disk.filename );
+  assert( !save_to( "renamed.udi" ) ); info = copy_info();
+  assert( !strcmp( info->filename, "renamed.udi" ) && !strcmp( saved->filename, "observed.udi" ) );
+  fuse_disk_drive_info_free( info );
+  assert( !new_disk() ); info = copy_info();
+  assert( info->loaded && !info->filename && !info->flipped && !info->write_protected );
+  assert( saved->loaded && saved->flipped && saved->write_protected );
+  fuse_disk_drive_info_free( info ); eject_choice = UI_CONFIRM_SAVE_DONTSAVE;
+  assert( !eject_disk() ); info = copy_info();
+  assert( !info->loaded && !info->filename );
+  /* Report actual drive latches, not fabricated media-presence inference. */
+  assert( info->flipped == !!fdd.upsidedown && info->write_protected == !!fdd.wrprot );
+  assert( !cold->loaded && !cold->filename && saved->loaded );
+  assert( !strcmp( saved->name, "Test floppy" ) && !strcmp( saved->filename, "observed.udi" ) );
+  fuse_disk_drive_info_free( cold ); fuse_disk_drive_info_free( info );
+  fuse_disk_drive_info_free( NULL );
+  assert( !remove( "observed.udi" ) && !remove( "renamed.udi" ) );
+  return saved;
+}
+
 static void
 check_lifecycle( void )
 {
@@ -308,14 +361,16 @@ main( int argc, char **argv )
 {
   fuse_host_resources resources = { NULL, acquire_rom };
   fuse_host_config *config;
+  fuse_disk_drive_info *retained = NULL;
   libspectrum_byte *data;
   char target[] = "first.udi";
   char sentinel[8];
   FILE *file;
-  int result, nested = 1, lifecycle = 0, i;
+  int result, nested = 1, lifecycle = 0, observations = 0, i;
   assert( argc >= 2 && argc <= 4 );
   for( i = 2; i < argc; i++ ) {
     if( !strcmp( argv[i], "--unpaused" ) ) nested = 0;
+    else if( !strcmp( argv[i], "--observations" ) ) observations = 1;
     else { assert( !strcmp( argv[i], "--lifecycle" ) ); lifecycle = 1; }
   }
   file = fopen( argv[1], "rb" ); assert( file );
@@ -331,6 +386,7 @@ main( int argc, char **argv )
   if( nested ) assert( !fuse_emulation_pause() && !fuse_emulation_pause() );
   caller_pauses = fuse_emulation_paused;
   if( lifecycle ) { check_lifecycle(); goto done; }
+  if( observations ) { retained = check_observations(); goto done; }
   assert( !new_disk() );
   modify( 0x5a );
 
@@ -416,5 +472,10 @@ done:
   if( nested ) assert( !fuse_emulation_unpause() && !fuse_emulation_unpause() );
   assert( !fuse_emulation_paused );
   fuse_shutdown(); fuse_shutdown();
+  if( retained ) {
+    assert( retained->loaded && retained->flipped && retained->write_protected );
+    assert( !strcmp( retained->name, "Test floppy" ) && !strcmp( retained->filename, "observed.udi" ) );
+    fuse_disk_drive_info_free( retained );
+  }
   return 0;
 }

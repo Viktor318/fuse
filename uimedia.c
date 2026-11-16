@@ -1,6 +1,7 @@
 /* uimedia.c: Disk media UI routines
    Copyright (c) 2013 Alex Badea
    Copyright (c) 2015-2017 Gergely Szasz
+   Copyright (c) 2026 Fredrick Meunier
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -417,7 +418,7 @@ ui_media_drive_insert_file( const ui_media_drive_info_t *drive,
 /* Own admission through completion here, including lookup/availability callbacks.
    A successful begin must be paired with completion in the operation entry. */
 static fuse_host_operation_result
-begin_disk_operation( fuse_disk_controller controller, int slot,
+begin_disk_access( fuse_disk_controller controller, int slot,
                        const ui_media_drive_info_t **drive )
 {
   fuse_host_operation_result result = fuse_engine_check_operation();
@@ -428,12 +429,63 @@ begin_disk_operation( fuse_disk_controller controller, int slot,
   else {
     *drive = ui_media_drive_find( controller, slot );
     if( !*drive ) result = FUSE_HOST_OPERATION_INVALID_ARGUMENT;
-    else if( !(*drive)->is_available || !(*drive)->is_available() ||
-             !(*drive)->fdd || (*drive)->fdd->type == FDD_TYPE_NONE )
-      result = FUSE_HOST_OPERATION_MEDIA_ERROR;
   }
   if( result != FUSE_HOST_OPERATION_OK ) fuse_engine_end_operation();
   return result;
+}
+
+static fuse_host_operation_result
+begin_disk_operation( fuse_disk_controller controller, int slot,
+                       const ui_media_drive_info_t **drive )
+{
+  fuse_host_operation_result result = begin_disk_access( controller, slot, drive );
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !(*drive)->is_available || !(*drive)->is_available() ||
+      !(*drive)->fdd || (*drive)->fdd->type == FDD_TYPE_NONE ) {
+    fuse_engine_end_operation();
+    return FUSE_HOST_OPERATION_MEDIA_ERROR;
+  }
+  return FUSE_HOST_OPERATION_OK;
+}
+
+void
+fuse_disk_drive_info_free( fuse_disk_drive_info *info )
+{
+  if( !info ) return;
+  libspectrum_free( info->name );
+  libspectrum_free( info->filename );
+  libspectrum_free( info );
+}
+
+fuse_host_operation_result
+fuse_host_copy_disk_drive_info( fuse_disk_controller controller, int slot,
+                                fuse_disk_drive_info **info )
+{
+  const ui_media_drive_info_t *drive;
+  fuse_disk_drive_info *copy;
+  fuse_host_operation_result result;
+  if( !info ) {
+    result = fuse_engine_check_operation();
+    return result == FUSE_HOST_OPERATION_OK ? FUSE_HOST_OPERATION_INVALID_ARGUMENT : result;
+  }
+  *info = NULL;
+  result = begin_disk_access( controller, slot, &drive );
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  copy = libspectrum_new0( fuse_disk_drive_info, 1 );
+  copy->controller = controller;
+  copy->slot = slot;
+  copy->name = utils_safe_strdup( drive->name );
+  copy->available = drive->is_available && !!drive->is_available();
+  if( drive->fdd ) {
+    copy->enabled = drive->fdd->type != FDD_TYPE_NONE;
+    copy->loaded = !!drive->fdd->loaded;
+    copy->flipped = !!drive->fdd->upsidedown;
+    copy->write_protected = !!drive->fdd->wrprot;
+    copy->filename = utils_safe_strdup( drive->fdd->disk.filename );
+  }
+  fuse_engine_end_operation();
+  *info = copy;
+  return FUSE_HOST_OPERATION_OK;
 }
 
 fuse_host_operation_result

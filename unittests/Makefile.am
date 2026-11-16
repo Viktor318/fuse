@@ -318,6 +318,8 @@ check-floppy-save-ui: unittests/floppysaveuitest unittests/floppysavelegacytest
 	    "$$root/floppysavelegacytest$(EXEEXT)" "$$rom" "$$@" --lifecycle > legacy.out 2> legacy.err; \
 	    cmp target.out legacy.out; cmp target.err legacy.err; \
 	    rm target.out target.err legacy.out legacy.err; \
+	    "$$root/floppysaveuitest$(EXEEXT)" "$$rom" "$$@" --observations; \
+	    "$$root/floppysavelegacytest$(EXEEXT)" "$$rom" "$$@" --observations; \
 	  done; \
 	  test -z "$$(find . -type f -print)"; \
 	  echo 'Shared floppy target/chooser saves match; choices, failure retention and pauses passed'
@@ -355,7 +357,12 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=2; releases=2' > expected-open; \
 	  printf '%s\n' 'host: prepared plus3' 'host: saved disk through plus3 drive 0' \
 	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-disk; \
-	  printf '%s\n' 'host: prepared plus3' 'host: new disk; flip/WP controls; saved and ejected plus3 drive 0' \
+	  printf '%s\n' 'host: prepared plus3' \
+	    'host: new disk copy; controller=0; slot=0; name=+3 Disk A:; available=1; enabled=1; loaded=1; flipped=0; protected=0; target=(none)' \
+	    'host: controls copy; controller=0; slot=0; name=+3 Disk A:; available=1; enabled=1; loaded=1; flipped=1; protected=1; target=(none)' \
+	    'host: ejected drive copy; controller=0; slot=0; name=+3 Disk A:; available=1; enabled=1; loaded=0; flipped=0; protected=1; target=(none)' \
+	    'host: new disk; flip/WP controls; saved and ejected plus3 drive 0' \
+	    'host: retained copy after shutdown; controller=0; slot=0; name=+3 Disk A:; available=1; enabled=1; loaded=1; flipped=0; protected=0; target=lifecycle.udi' \
 	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-lifecycle; \
 	  before=$$(find . -type f -exec cksum {} \; | sort); directories=$$(find . -type d | sort); \
 	  for consumer in nullhostlink nullhostsource; do \

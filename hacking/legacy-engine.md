@@ -284,8 +284,7 @@ the separate Microdrive group, are decoded only in `menu.c`.
 
 Disk operation entries in the media implementation own admission through
 completion, including drive lookup, FDD preconditions and result translation.
-There is no duplicate host/engine disk delegate API. Drive descriptors remain private; owned
-drive observations are follow-on.
+There is no duplicate host/engine disk delegate API. Drive descriptors remain private.
 
 `fuse_host_new_disk` uses configured geometry, controller insertion hooks (including
 +3 preformat) and the same replacement questions; zero can mean cancellation. `fuse_host_eject_disk`
@@ -293,6 +292,16 @@ uses existing Save/Discard/Cancel and succeeds for an already empty available
 drive. `fuse_host_set_disk_flipped` and `fuse_host_set_disk_write_protected` take
 0/1 flags and require loaded media. Floppy WP is an emulated write gate, not
 filesystem access, and changing it does not itself mark the image modified.
+
+`fuse_host_copy_disk_drive_info(controller,slot,&info)` copies the engine-defined
+`fuse_disk_drive_info` on the owner thread. It succeeds for registered inactive
+or disabled drives too: controller availability and hardware enablement are
+separate fields. Identity, display name, retained target, loaded and flip/WP
+flags cover the existing drive UI reads, without menu IDs or FDD pointers.
+Loaded is authoritative for media presence; drive latches may remain set while
+empty. The value and strings survive replacement, eject and shutdown; release
+with `fuse_disk_drive_info_free`, which needs no live engine. Copies are observations,
+not command tokens: operations still resolve current controller/slot state.
 
 ## Direct null-backed example
 
@@ -315,7 +324,9 @@ encodes the image; the host does not handle disk bytes. This requires the four
 adapter declines overwrite); use a fresh output path for a successful example.
 `--disk-lifecycle OUTPUT` demonstrates New, flip/unflip, WP on/off, Save and eject
 on +3 slot 0 without running the CPU. Geometry and encoding stay in the engine;
-it is a bounded API example, not a new replacement/overwrite policy.
+it is a bounded API example, not a new replacement/overwrite policy. It prints
+owned drive copies at New, control changes and eject, then reads a retained saved
+copy after shutdown. The driver never accesses drive/FDD internals.
 
 In a configured null-UI build:
 
@@ -349,7 +360,7 @@ Null-UI builds include these checks in `make check`:
 | `check-host-operations` | Typed machine/input behaviour, tape and +3/Beta disk lifecycle, File Open eligibility/restore/RZX stop, admission and errors. |
 | `check-snapshot-file` | Existing file serialization and error cleanup. |
 | `check-tape-save-ui` | Save failures retain modified/playing tape, save/cancel/discard and nested pause ownership, using selected-service doubles. |
-| `check-floppy-save-ui` | Host/legacy save and lifecycle comparison: overwrite/replacement decisions, dirty/name ownership, failures, flags and eject, nested/unpaused. |
+| `check-floppy-save-ui` | Host/legacy lifecycle, decisions/failure retention, flags and owned observation lifetime across changes/shutdown, nested/unpaused. |
 | `check-null-host` | Direct input/Open/disk lifecycle driver flows, ROM/media failures, saved image/legacy comparison and preference isolation in both linking forms. |
 | `check-startup-unwind` | Instrumented startup failures and reverse cleanup; requires null UI with automation. |
 

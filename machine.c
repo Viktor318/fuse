@@ -28,6 +28,7 @@
 
 #include "event.h"
 #include "fuse.h"
+#include "fuse-engine.h"
 #include "fuse-internal.h"
 #include "infrastructure/startup_manager.h"
 #include "machine.h"

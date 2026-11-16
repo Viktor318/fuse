@@ -221,7 +221,7 @@ fuse_legacy_prepare( int argc, char **argv )
 }
 
 fuse_init_result
-fuse_engine_host_prepare( const fuse_host_config *config,
+fuse_host_prepare( const fuse_host_config *config,
                    const fuse_host_resources *resources )
 {
   if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_INIT_CLOSED;
@@ -662,7 +662,7 @@ fuse_init( int argc, char **argv, const fuse_host_config *config )
   /* Config parsing can initialize XML before its manager registration runs. */
   if( config ) {
     settings_init_defaults();
-    fuse_host_apply_config( config );
+    fuse_engine_apply_config( config );
   } else {
     legacy_ownership.xml_owned = 1;
     if( settings_init( &first_arg, argc, argv ) ) return 1;

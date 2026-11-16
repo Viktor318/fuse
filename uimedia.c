@@ -30,6 +30,7 @@
 #endif
 
 #include "fuse.h"
+#include "fuse-engine.h"
 #include "options.h"
 #include "peripherals/disk/fdd.h"
 #include "ui/ui.h"
@@ -70,7 +71,7 @@ ui_media_drive_end( void )
 }
 
 struct find_info {
-  int controller;
+  fuse_disk_controller controller;
   int drive;
 };
 
@@ -85,7 +86,7 @@ find_drive( gconstpointer data, gconstpointer user_data )
 }
 
 ui_media_drive_info_t *
-ui_media_drive_find( int controller, int drive )
+ui_media_drive_find( fuse_disk_controller controller, int drive )
 {
   struct find_info info = {
     /* .controller = */ controller,
@@ -157,7 +158,7 @@ ui_media_drive_update_menus( const ui_media_drive_info_t *drive,
 
 
 int
-ui_media_drive_flip( int controller, int which, int flip )
+ui_media_drive_flip( fuse_disk_controller controller, int which, int flip )
 {
   ui_media_drive_info_t *drive;
 
@@ -173,7 +174,7 @@ ui_media_drive_flip( int controller, int which, int flip )
 }
 
 int
-ui_media_drive_writeprotect( int controller, int which, int wrprot )
+ui_media_drive_writeprotect( fuse_disk_controller controller, int which, int wrprot )
 {
   ui_media_drive_info_t *drive;
 
@@ -235,6 +236,16 @@ drive_disk_write( const ui_media_drive_info_t *drive, const char *filename )
 }
 
 
+/* Both save entry paths finish after releasing their own pause. The chooser
+   also owns a temporary filename, which must be freed before that release. */
+static int
+drive_save_finish( const ui_media_drive_info_t *drive, int error )
+{
+  if( error ) return 1;
+  drive->fdd->disk.dirty = 0;
+  return 0;
+}
+
 static int
 drive_save( const ui_media_drive_info_t *drive, int saveas )
 {
@@ -261,15 +272,11 @@ drive_save( const ui_media_drive_info_t *drive, int saveas )
     libspectrum_free( filename );
 
   fuse_emulation_unpause();
-  if( err )
-    return 1;
-
-  drive->fdd->disk.dirty = 0;
-  return 0;
+  return drive_save_finish( drive, err );
 }
 
 int
-ui_media_drive_save( int controller, int which, int saveas )
+ui_media_drive_save( fuse_disk_controller controller, int which, int saveas )
 {
   ui_media_drive_info_t *drive;
 
@@ -313,7 +320,7 @@ drive_eject( const ui_media_drive_info_t *drive )
 }
 
 int
-ui_media_drive_eject( int controller, int which )
+ui_media_drive_eject( fuse_disk_controller controller, int which )
 {
   ui_media_drive_info_t *drive;
 
@@ -350,8 +357,8 @@ ui_media_drive_insert( const ui_media_drive_info_t *drive,
   if( !filename ) return ui_media_drive_insert_file( drive, NULL, autoload );
 
   utils_file_init( &file, filename );
-  if( utils_file_read( &file ) ) return 1;
-  error = ui_media_drive_insert_file( drive, &file, autoload );
+  error = utils_file_read( &file ) ? 1 : 0;
+  if( !error ) error = ui_media_drive_insert_file( drive, &file, autoload );
   utils_file_free( &file );
   return error;
 }
@@ -405,4 +412,122 @@ ui_media_drive_insert_file( const ui_media_drive_info_t *drive,
   }
 
   return 0;
+}
+
+/* Own admission through completion here, including lookup/availability callbacks.
+   A successful begin must be paired with completion in the operation entry. */
+static fuse_host_operation_result
+begin_disk_operation( fuse_disk_controller controller, int slot,
+                       const ui_media_drive_info_t **drive )
+{
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  if( controller < FUSE_DISK_CONTROLLER_PLUS3 || controller > FUSE_DISK_CONTROLLER_DIDAKTIK || slot < 0 )
+    result = FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  else {
+    *drive = ui_media_drive_find( controller, slot );
+    if( !*drive ) result = FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+    else if( !(*drive)->is_available || !(*drive)->is_available() ||
+             !(*drive)->fdd || (*drive)->fdd->type == FDD_TYPE_NONE )
+      result = FUSE_HOST_OPERATION_MEDIA_ERROR;
+  }
+  if( result != FUSE_HOST_OPERATION_OK ) fuse_engine_end_operation();
+  return result;
+}
+
+fuse_host_operation_result
+fuse_host_insert_disk_file( fuse_disk_controller controller, int slot,
+                            const char *filename )
+{
+  int error;
+  const ui_media_drive_info_t *drive;
+  fuse_host_operation_result result = begin_disk_operation( controller, slot, &drive );
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) result = FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  else {
+    error = ui_media_drive_insert( drive, filename, 0 );
+    result = error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+  }
+  fuse_engine_end_operation();
+  return result;
+}
+
+fuse_host_operation_result
+fuse_host_save_disk_file( fuse_disk_controller controller, int slot,
+                          const char *filename )
+{
+  int error;
+  const ui_media_drive_info_t *drive;
+  fuse_host_operation_result result = begin_disk_operation( controller, slot, &drive );
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( filename && !*filename ) result = FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  else if( !drive->fdd->loaded || ( !filename && !drive->fdd->disk.filename ) )
+    result = FUSE_HOST_OPERATION_MEDIA_ERROR;
+  else {
+    fuse_emulation_pause();
+    error = drive_disk_write( drive, filename );
+    fuse_emulation_unpause();
+    result = drive_save_finish( drive, error ) ? FUSE_HOST_OPERATION_MEDIA_ERROR :
+                                               FUSE_HOST_OPERATION_OK;
+  }
+  fuse_engine_end_operation();
+  return result;
+}
+
+fuse_host_operation_result
+fuse_host_new_disk( fuse_disk_controller controller, int slot )
+{
+  int error;
+  const ui_media_drive_info_t *drive;
+  fuse_host_operation_result result = begin_disk_operation( controller, slot, &drive );
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  error = ui_media_drive_insert_file( drive, NULL, 0 );
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_eject_disk( fuse_disk_controller controller, int slot )
+{
+  int error;
+  const ui_media_drive_info_t *drive;
+  fuse_host_operation_result result = begin_disk_operation( controller, slot, &drive );
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  error = drive_eject( drive );
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_set_disk_flipped( fuse_disk_controller controller, int slot, int flipped )
+{
+  int error;
+  const ui_media_drive_info_t *drive;
+  fuse_host_operation_result result = begin_disk_operation( controller, slot, &drive );
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( flipped != 0 && flipped != 1 ) result = FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  else {
+    error = ui_media_drive_flip( controller, slot, flipped );
+    result = error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+  }
+  fuse_engine_end_operation();
+  return result;
+}
+
+fuse_host_operation_result
+fuse_host_set_disk_write_protected( fuse_disk_controller controller, int slot,
+                                    int write_protected )
+{
+  int error;
+  const ui_media_drive_info_t *drive;
+  fuse_host_operation_result result = begin_disk_operation( controller, slot, &drive );
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( write_protected != 0 && write_protected != 1 ) result = FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  else {
+    error = ui_media_drive_writeprotect( controller, slot, write_protected );
+    result = error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+  }
+  fuse_engine_end_operation();
+  return result;
 }

@@ -67,7 +67,7 @@ static libspectrum_byte timex2_value;
 static libspectrum_byte fuller_value;
 
 /* The names of the joysticks we can emulate. Order must correspond to
-   that of joystick.h:joystick_type_t */
+   that of fuse-joystick.h:joystick_type_t */
 const char *joystick_name[ JOYSTICK_TYPE_COUNT ] = {
   "None",
   "Cursor",

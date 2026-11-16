@@ -100,19 +100,22 @@ main( int argc, char **argv )
   fuse_run_result run;
   unsigned int frame_turns = 0, budget_turns = 0;
   int prepared = 0, status = EXIT_FAILURE;
+  int disk_lifecycle = argc == 4 && !strcmp( argv[2], "--disk-lifecycle" );
 
-  if( ( argc != 2 && argc != 3 && argc != 4 ) ||
-      ( argc == 4 && strcmp( argv[2], "--open" ) ) ||
-      ( argc == 3 && !strcmp( argv[2], "--open" ) ) ) {
-    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE]\n", argv[0] );
+  if( ( argc != 2 && argc != 3 && argc != 4 && argc != 5 ) ||
+      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle ) ||
+      ( argc == 5 && strcmp( argv[2], "--save-disk" ) ) ||
+      ( argc == 3 && ( !strcmp( argv[2], "--open" ) || !strcmp( argv[2], "--save-disk" ) ||
+                      !strcmp( argv[2], "--disk-lifecycle" ) ) ) ) {
+    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT]\n", argv[0] );
     return EXIT_FAILURE;
   }
   provider.directory = argv[1]; /* Borrowed through shutdown, not passed as engine CLI. */
   config = fuse_host_config_alloc();
-  if( fuse_host_config_set_machine( config, "48" ) ||
+  if( fuse_host_config_set_machine( config, argc == 5 || disk_lifecycle ? "plus3" : "48" ) ||
       fuse_host_config_set_sound( config, 0 ) ||
       fuse_host_config_set_joystick( config, FUSE_HOST_JOYSTICK_1,
-                                    FUSE_HOST_JOYSTICK_OUTPUT_KEMPSTON ) ) {
+                                    JOYSTICK_TYPE_KEMPSTON ) ) {
     fprintf( stderr, "host: configuration rejected\n" );
     fuse_host_config_free( config );
     goto cleanup;
@@ -124,7 +127,26 @@ main( int argc, char **argv )
     goto cleanup; /* A rejected prepare does not authorize another session's shutdown. */
   }
   prepared = 1;
-  puts( "host: prepared 48" );
+  puts( argc == 5 || disk_lifecycle ? "host: prepared plus3" : "host: prepared 48" );
+  if( argc == 5 ) {
+    if( operation( "disk insertion", fuse_host_insert_disk_file( FUSE_DISK_CONTROLLER_PLUS3, 0, argv[3] ) ) ||
+        operation( "disk save", fuse_host_save_disk_file( FUSE_DISK_CONTROLLER_PLUS3, 0, argv[4] ) ) ) goto cleanup;
+    puts( "host: saved disk through plus3 drive 0" );
+    status = EXIT_SUCCESS;
+    goto cleanup; /* Core codecs handle both input and output; no CPU turn needed. */
+  }
+  if( disk_lifecycle ) {
+    if( operation( "new disk", fuse_host_new_disk( FUSE_DISK_CONTROLLER_PLUS3, 0 ) ) ||
+        operation( "flip", fuse_host_set_disk_flipped( FUSE_DISK_CONTROLLER_PLUS3, 0, 1 ) ) ||
+        operation( "unflip", fuse_host_set_disk_flipped( FUSE_DISK_CONTROLLER_PLUS3, 0, 0 ) ) ||
+        operation( "write protect", fuse_host_set_disk_write_protected( FUSE_DISK_CONTROLLER_PLUS3, 0, 1 ) ) ||
+        operation( "write enable", fuse_host_set_disk_write_protected( FUSE_DISK_CONTROLLER_PLUS3, 0, 0 ) ) ||
+        operation( "disk save", fuse_host_save_disk_file( FUSE_DISK_CONTROLLER_PLUS3, 0, argv[3] ) ) ||
+        operation( "disk eject", fuse_host_eject_disk( FUSE_DISK_CONTROLLER_PLUS3, 0 ) ) ) goto cleanup;
+    puts( "host: new disk; flip/WP controls; saved and ejected plus3 drive 0" );
+    status = EXIT_SUCCESS;
+    goto cleanup;
+  }
   if( argc == 4 ) {
     if( operation( "File Open", fuse_host_open_file( argv[3] ) ) ) goto cleanup;
     puts( "host: File Open returned legacy success" );

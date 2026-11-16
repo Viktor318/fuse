@@ -294,6 +294,34 @@ check-tape-save-ui: unittests/tapesaveuitest
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  "$$program" "$$rom"; test -z "$$(find . -type f -print)"
 
+# Shared floppy save mechanics with controlled chooser/confirmation/writer services.
+check_PROGRAMS += unittests/floppysaveuitest unittests/floppysavelegacytest
+unittests_floppysaveuitest_SOURCES = unittests/floppysaveuitest.c unittests/floppysaveui.c
+unittests_floppysaveuitest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_floppysaveuitest_LDADD = libfuselegacy.la
+unittests_floppysavelegacytest_SOURCES = $(unittests_floppysaveuitest_SOURCES)
+unittests_floppysavelegacytest_CPPFLAGS = $(AM_CPPFLAGS) -DFUSE_MEDIA_SAVE_BASELINE
+unittests_floppysavelegacytest_LDADD = libfuselegacy.la
+LIFECYCLE_CHECK_TARGETS += check-floppy-save-ui
+.PHONY: check-floppy-save-ui
+check-floppy-save-ui: unittests/floppysaveuitest unittests/floppysavelegacytest
+	@set -e; root="$(abs_top_builddir)/unittests"; rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  for mode in nested unpaused; do \
+	    if test "$$mode" = unpaused; then set -- --unpaused; else set --; fi; \
+	    "$$root/floppysaveuitest$(EXEEXT)" "$$rom" "$$@" > target.out 2> target.err; \
+	    "$$root/floppysavelegacytest$(EXEEXT)" "$$rom" "$$@" > legacy.out 2> legacy.err; \
+	    cmp target.out legacy.out; cmp target.err legacy.err; \
+	    rm target.out target.err legacy.out legacy.err; \
+	    "$$root/floppysaveuitest$(EXEEXT)" "$$rom" "$$@" --lifecycle > target.out 2> target.err; \
+	    "$$root/floppysavelegacytest$(EXEEXT)" "$$rom" "$$@" --lifecycle > legacy.out 2> legacy.err; \
+	    cmp target.out legacy.out; cmp target.err legacy.err; \
+	    rm target.out target.err legacy.out legacy.err; \
+	  done; \
+	  test -z "$$(find . -type f -print)"; \
+	  echo 'Shared floppy target/chooser saves match; choices, failure retention and pauses passed'
+
 # A separate own-main consumer: no legacy CLI/test dispatcher or core globals.
 check_PROGRAMS += unittests/nullhostlink unittests/nullhostsource
 unittests_nullhostlink_SOURCES = hacking/null-host.c
@@ -306,13 +334,14 @@ $(unittests_nullhostsource_OBJECTS): config.h
 LIFECYCLE_CHECK_TARGETS += check-null-host
 .PHONY: check-null-host
 
-check-null-host: unittests/nullhostlink unittests/nullhostsource
+check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legacyenginelinktest
 	@set -e; root="$(abs_top_builddir)/unittests"; roms="$(abs_top_srcdir)/roms"; \
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=config-blocker USERPROFILE=. WINDIR=. APPDATA=.; \
 	  printf 'not a configuration directory\n' > config-blocker; \
 	  mkdir empty invalid only48; printf x > invalid/48.rom; \
-	  printf '\002\000\377\377' > sample.tap; printf x > malformed.tap; \
+	  printf '\002\000\377\377' > sample.tap; printf x > malformed.tap; printf x > malformed.udi; \
+	  "$$root/legacyenginelinktest$(EXEEXT)" --host-operations-test disk-fixture "$$roms"; \
 	  cp "$$roms/48.rom" 48.rom; cp "$$roms/48.rom" only48/48.rom; \
 	  printf '%s\n' 'host: prepared 48' \
 	    'host: holding execution; delivering Space and joystick 1 fire' \
@@ -324,6 +353,10 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=1; releases=1' > expected-tape; \
 	  printf '%s\n' 'host: prepared 48' 'host: File Open returned legacy success' \
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=2; releases=2' > expected-open; \
+	  printf '%s\n' 'host: prepared plus3' 'host: saved disk through plus3 drive 0' \
+	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-disk; \
+	  printf '%s\n' 'host: prepared plus3' 'host: new disk; flip/WP controls; saved and ejected plus3 drive 0' \
+	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-lifecycle; \
 	  before=$$(find . -type f -exec cksum {} \; | sort); directories=$$(find . -type d | sort); \
 	  for consumer in nullhostlink nullhostsource; do \
 	    program="$$root/$$consumer$(EXEEXT)"; \
@@ -333,6 +366,29 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource
 	    cmp expected-tape "$$consumer-tape.out"; \
 	    "$$program" only48 --open sample.tap > "$$consumer-open.out" 2> "$$consumer-open.err"; \
 	    cmp expected-open "$$consumer-open.out"; \
+	    "$$program" "$$roms" --save-disk sample.udi "$$consumer-copy.udi" \
+	      > "$$consumer-disk.out" 2> "$$consumer-disk.err"; \
+	    cmp expected-disk "$$consumer-disk.out"; cmp sample.udi "$$consumer-copy.udi"; \
+	    rm "$$consumer-copy.udi"; \
+	    "$$program" "$$roms" --disk-lifecycle lifecycle.udi \
+	      > "$$consumer-lifecycle.out" 2> "$$consumer-lifecycle.err"; \
+	    cmp expected-lifecycle "$$consumer-lifecycle.out"; \
+	    "$$root/legacyenginelinktest$(EXEEXT)" --host-operations-test disk-lifecycle-readback "$$roms" \
+	      > "$$consumer-lifecycle-check.out" 2> "$$consumer-lifecycle-check.err"; \
+	    rm lifecycle.udi; \
+	    if "$$program" "$$roms" --disk-lifecycle sample.udi \
+	      > "$$consumer-lifecycle-decline.out" 2> "$$consumer-lifecycle-decline.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=4; releases=4' \
+	      "$$consumer-lifecycle-decline.out" > /dev/null; \
+	    for file in missing.udi malformed.udi sample.udi; do \
+	      if "$$program" "$$roms" --save-disk "$$file" sample.udi \
+	        > "$$consumer-disk-$$file.out" 2> "$$consumer-disk-$$file.err"; \
+	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	      test -s "$$consumer-disk-$$file.err"; \
+	      grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=4; releases=4' \
+	        "$$consumer-disk-$$file.out" > /dev/null; \
+	    done; \
 	    for file in missing.tap malformed.tap; do \
 	      if "$$program" only48 --open "$$file" > "$$consumer-open-$$file.out" 2> "$$consumer-open-$$file.err"; \
 	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
@@ -364,7 +420,7 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource
 	  done; \
 	  test "$$directories" = "$$(find . -type d | sort)"; \
 	  test "$$before" = "$$(find . -type f ! -name '*.out' ! -name '*.err' -exec cksum {} \; | sort)"; \
-	  echo 'Direct null-backed host passed for archive/source consumers and ROM/tape failures'
+	  echo 'Direct null-backed host passed for archive/source consumers and ROM/media failures'
 
 LIFECYCLE_CHECK_TARGETS += check-legacy-engine-link check-startup-ownership \
                            check-legacy-lifecycle check-host-prepare
@@ -392,6 +448,7 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
 	    for mode in success tape-contract autoload-success autoload-failure \
 	      open-auto open-noauto open-custom open-reset-failure open-snapshot open-fallback open-rzx-stop \
+	      disk-save disk-save-beta \
 	      reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
 	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$mode" "$$roms"; \
 	    done; \
@@ -407,7 +464,8 @@ check-host-prepare: unittests/legacyenginelinktest unittests/legacyenginesourcet
 	  printf 'not a directory\n' > blocked; cp "$$rom" 48.rom; \
 	  before=$$(find . -type f -exec cksum {} \;); \
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
-	    for mode in success custom missing bad-size error-bytes bad-provenance null-bytes; do \
+	    for mode in success custom missing bad-size error-bytes bad-provenance null-bytes \
+	      joystick-0 joystick-1 joystick-2 joystick-3 joystick-4 joystick-5 joystick-6 joystick-7; do \
 	      "$$root/$$consumer$(EXEEXT)" --host-prepare-test "$$mode" "$$rom"; \
 	    done; \
 	  done; \

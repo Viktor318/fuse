@@ -59,9 +59,4 @@ void fuse_budget_interrupt( void );
    legacy void callbacks which disable their peripheral. Not fatal recovery. */
 void fuse_host_resource_error( void );
 
-/* Synchronous ROM routing, also active during startup and teardown. */
-struct fuse_host_rom;
-int fuse_host_resources_active( void );
-int fuse_host_acquire_rom( const char *name, struct fuse_host_rom *rom );
-
 #endif			/* #ifndef FUSE_FUSE_H */

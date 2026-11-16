@@ -25,6 +25,7 @@
 #ifndef FUSE_UIMEDIA_H
 #define FUSE_UIMEDIA_H
 
+#include "fuse-disk.h"
 #include "utils.h"
 
 struct fdd_t;
@@ -41,7 +42,7 @@ typedef int (*ui_media_drive_autoload_hook_fn)( void );
 typedef struct ui_media_drive_info_t
 {
   const char *name;
-  int controller_index;
+  fuse_disk_controller controller_index;
   int drive_index;
   int menu_item_parent;
   int menu_item_top;
@@ -57,7 +58,7 @@ typedef struct ui_media_drive_info_t
 
 int ui_media_drive_register( ui_media_drive_info_t *drive );
 void ui_media_drive_end( void );
-ui_media_drive_info_t *ui_media_drive_find( int controller, int drive );
+ui_media_drive_info_t *ui_media_drive_find( fuse_disk_controller controller, int drive );
 
 #define UI_MEDIA_DRIVE_UPDATE_ALL	(~0)
 #define UI_MEDIA_DRIVE_UPDATE_TOP	(1 << 0)
@@ -75,20 +76,9 @@ int ui_media_drive_insert( const ui_media_drive_info_t *drive,
                            const char *filename, int autoload );
 int ui_media_drive_insert_file( const ui_media_drive_info_t *drive,
                                 const utils_file *file, int autoload );
-int ui_media_drive_save( int controller, int which, int saveas );
-int ui_media_drive_eject( int controller, int which );
-int ui_media_drive_flip( int controller, int which, int flip );
-int ui_media_drive_writeprotect( int controller, int which, int wrprot );
-
-/* These are (also) used in media menu items */
-typedef enum ui_media_controller {
-  UI_MEDIA_CONTROLLER_PLUS3,
-  UI_MEDIA_CONTROLLER_BETA,
-  UI_MEDIA_CONTROLLER_PLUSD,
-  UI_MEDIA_CONTROLLER_MDR,
-  UI_MEDIA_CONTROLLER_OPUS,
-  UI_MEDIA_CONTROLLER_DISCIPLE,
-  UI_MEDIA_CONTROLLER_DIDAKTIK,
-} ui_media_controller;
+int ui_media_drive_save( fuse_disk_controller controller, int which, int saveas );
+int ui_media_drive_eject( fuse_disk_controller controller, int which );
+int ui_media_drive_flip( fuse_disk_controller controller, int which, int flip );
+int ui_media_drive_writeprotect( fuse_disk_controller controller, int which, int wrprot );
 
 #endif			/* #ifndef FUSE_UIMEDIA_H */

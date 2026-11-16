@@ -41,7 +41,9 @@ libfuselegacy_la_SOURCES = display.c \
 	display_render.c \
 	event.c \
 	fuse.c \
+	fuse-config.c \
 	fuse-host.c \
+	fuse-operations.c \
 	input.c \
 	input_refresh.c \
 	keyboard.c \
@@ -154,6 +156,8 @@ noinst_HEADERS = bitmap.h \
 	event.h \
 	fuse.h \
 	fuse-internal.h \
+	fuse-disk.h \
+	fuse-joystick.h \
 	fuse-engine.h \
 	fuse-legacy.h \
 	input.h \

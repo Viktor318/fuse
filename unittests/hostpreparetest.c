@@ -7,6 +7,7 @@
 #include <string.h>
 #include "fuse.h"
 #include "fuse-internal.h"
+#include "fuse-engine.h"
 #include "fuse-legacy.h"
 #include "machine.h"
 #include "settings.h"
@@ -64,7 +65,12 @@ host_prepare_test( int argc, char **argv )
   fuse_host_resources resources = { &provider, acquire_rom };
   fuse_init_result result;
   char machine[] = "48";
-  int success;
+  static const joystick_type_t expected_interfaces[] = {
+    JOYSTICK_TYPE_NONE, JOYSTICK_TYPE_CURSOR, JOYSTICK_TYPE_KEMPSTON,
+    JOYSTICK_TYPE_SINCLAIR_1, JOYSTICK_TYPE_SINCLAIR_2, JOYSTICK_TYPE_TIMEX_1,
+    JOYSTICK_TYPE_TIMEX_2, JOYSTICK_TYPE_FULLER
+  };
+  int success, interface_index = -1, slot;
   assert( argc == 3 );
   provider.mode = argv[1];
   provider.path = argv[2];
@@ -77,7 +83,11 @@ host_prepare_test( int argc, char **argv )
     fuse_shutdown();
     return 0;
   }
-  success = !strcmp( provider.mode, "success" ) ||
+  if( !strncmp( provider.mode, "joystick-", 9 ) ) {
+    assert( sscanf( provider.mode, "joystick-%d", &interface_index ) == 1 );
+    assert( interface_index >= 0 && interface_index < JOYSTICK_TYPE_COUNT );
+  }
+  success = interface_index >= 0 || !strcmp( provider.mode, "success" ) ||
             !strcmp( provider.mode, "host-state" ) ||
             !strcmp( provider.mode, "custom" );
   assert( fuse_host_prepare( NULL, &resources ) == FUSE_INIT_INVALID_ARGUMENT );
@@ -88,6 +98,19 @@ host_prepare_test( int argc, char **argv )
   assert( !fuse_host_config_set_machine( config, machine ) );
   machine[0] = 'x'; /* Configuration must not borrow the caller's string. */
   assert( !fuse_host_config_set_sound( config, 0 ) );
+  assert( fuse_host_config_set_joystick( NULL, FUSE_HOST_JOYSTICK_1, JOYSTICK_TYPE_NONE ) );
+  if( interface_index >= 0 ) {
+    for( slot = FUSE_HOST_JOYSTICK_1; slot <= FUSE_HOST_JOYSTICK_KEYBOARD; slot++ ) {
+      assert( !fuse_host_config_set_joystick( config, (fuse_host_joystick)slot,
+                                             expected_interfaces[interface_index] ) );
+      assert( fuse_host_config_set_joystick( config, (fuse_host_joystick)slot,
+                                            (joystick_type_t)-1 ) );
+      assert( fuse_host_config_set_joystick( config, (fuse_host_joystick)slot,
+                                            (joystick_type_t)JOYSTICK_TYPE_COUNT ) );
+    }
+    assert( fuse_host_config_set_joystick( config, (fuse_host_joystick)-1, JOYSTICK_TYPE_KEMPSTON ) );
+    assert( fuse_host_config_set_joystick( config, (fuse_host_joystick)3, JOYSTICK_TYPE_KEMPSTON ) );
+  }
   assert( fuse_host_prepare( config, NULL ) == FUSE_INIT_INVALID_ARGUMENT );
   {
     fuse_host_resources invalid = { &provider, NULL };
@@ -101,6 +124,12 @@ host_prepare_test( int argc, char **argv )
     assert( result == FUSE_INIT_READY );
     assert( !strcmp( settings_current.start_machine, "48" ) );
     assert( !settings_current.sound );
+    if( interface_index >= 0 ) {
+      /* Numeric values are persisted settings, not a second identity scheme. */
+      assert( settings_current.joystick_1_output == interface_index );
+      assert( settings_current.joystick_2_output == interface_index );
+      assert( settings_current.joystick_keyboard_output == interface_index );
+    }
     assert( machine_current );
     assert( !!memory_custom_rom() == !strcmp( provider.mode, "custom" ) );
     if( !strcmp( provider.mode, "custom" ) ) {

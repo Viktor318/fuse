@@ -1032,6 +1032,9 @@ open_udi( buffer_t *buffer, disk_t *d )
   size_t eof;
   libspectrum_dword crc;
 
+  /* Fixed 16-byte header plus trailing CRC, before reading any fields. */
+  if( buffer->file.length < 20 ) return d->status = DISK_OPEN;
+
   crc = ~(libspectrum_dword) 0;
 
   /* check file length */

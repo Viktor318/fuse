@@ -76,22 +76,22 @@ utils_read_le16( const libspectrum_byte *buffer )
 
 #ifdef ENABLE_AUTOMATION
 static const char *
-automation_disk_controller_name( ui_media_controller controller )
+automation_disk_controller_name( fuse_disk_controller controller )
 {
   switch( controller ) {
-  case UI_MEDIA_CONTROLLER_PLUS3: return "plus3";
-  case UI_MEDIA_CONTROLLER_BETA: return "beta";
-  case UI_MEDIA_CONTROLLER_PLUSD: return "plusd";
-  case UI_MEDIA_CONTROLLER_OPUS: return "opus";
-  case UI_MEDIA_CONTROLLER_DISCIPLE: return "disciple";
-  case UI_MEDIA_CONTROLLER_DIDAKTIK: return "didaktik";
+  case FUSE_DISK_CONTROLLER_PLUS3: return "plus3";
+  case FUSE_DISK_CONTROLLER_BETA: return "beta";
+  case FUSE_DISK_CONTROLLER_PLUSD: return "plusd";
+  case FUSE_DISK_CONTROLLER_OPUS: return "opus";
+  case FUSE_DISK_CONTROLLER_DISCIPLE: return "disciple";
+  case FUSE_DISK_CONTROLLER_DIDAKTIK: return "didaktik";
   default: return "unknown";
   }
 }
 #endif
 
 static int
-utils_insert_disk( ui_media_controller controller, utils_file *file,
+utils_insert_disk( fuse_disk_controller controller, utils_file *file,
                    int autoload )
 {
   ui_media_drive_info_t *drive = ui_media_drive_find( controller, 0 );
@@ -175,25 +175,25 @@ utils_open_loaded_file( utils_file *file, int autoload,
       error = machine_select( LIBSPECTRUM_MACHINE_PLUS3 ); if( error ) break;
     }
 
-    error = utils_insert_disk( UI_MEDIA_CONTROLLER_PLUS3, file, autoload );
+    error = utils_insert_disk( FUSE_DISK_CONTROLLER_PLUS3, file, autoload );
     break;
 
   case LIBSPECTRUM_CLASS_DISK_DIDAKTIK:
 
-    error = utils_insert_disk( UI_MEDIA_CONTROLLER_DIDAKTIK, file, autoload );
+    error = utils_insert_disk( FUSE_DISK_CONTROLLER_DIDAKTIK, file, autoload );
     break;
 
   case LIBSPECTRUM_CLASS_DISK_PLUSD:
 
     if( periph_is_active( PERIPH_TYPE_DISCIPLE ) )
-      error = utils_insert_disk( UI_MEDIA_CONTROLLER_DISCIPLE, file, autoload );
+      error = utils_insert_disk( FUSE_DISK_CONTROLLER_DISCIPLE, file, autoload );
     else
-      error = utils_insert_disk( UI_MEDIA_CONTROLLER_PLUSD, file, autoload );
+      error = utils_insert_disk( FUSE_DISK_CONTROLLER_PLUSD, file, autoload );
     break;
 
   case LIBSPECTRUM_CLASS_DISK_OPUS:
 
-    error = utils_insert_disk( UI_MEDIA_CONTROLLER_OPUS, file, autoload );
+    error = utils_insert_disk( FUSE_DISK_CONTROLLER_OPUS, file, autoload );
     break;
 
   case LIBSPECTRUM_CLASS_DISK_TRDOS:
@@ -208,26 +208,26 @@ utils_open_loaded_file( utils_file *file, int autoload,
     if( ( machine_current->capabilities & 
           LIBSPECTRUM_MACHINE_CAPABILITY_TRDOS_DISK ) ||
         periph_is_active( PERIPH_TYPE_BETA128 ) ) {
-      error = utils_insert_disk( UI_MEDIA_CONTROLLER_BETA, file, autoload );
+      error = utils_insert_disk( FUSE_DISK_CONTROLLER_BETA, file, autoload );
     }
     break;
 
   case LIBSPECTRUM_CLASS_DISK_GENERIC:
     if( machine_current->machine == LIBSPECTRUM_MACHINE_PLUS3 ||
         machine_current->machine == LIBSPECTRUM_MACHINE_PLUS2A )
-      error = utils_insert_disk( UI_MEDIA_CONTROLLER_PLUS3, file, autoload );
+      error = utils_insert_disk( FUSE_DISK_CONTROLLER_PLUS3, file, autoload );
     else if( machine_current->machine == LIBSPECTRUM_MACHINE_PENT ||
           machine_current->machine == LIBSPECTRUM_MACHINE_PENT512 ||
           machine_current->machine == LIBSPECTRUM_MACHINE_PENT1024 ||
           machine_current->machine == LIBSPECTRUM_MACHINE_SCORP )
-      error = utils_insert_disk( UI_MEDIA_CONTROLLER_BETA, file, autoload );
+      error = utils_insert_disk( FUSE_DISK_CONTROLLER_BETA, file, autoload );
     else
       if( periph_is_active( PERIPH_TYPE_BETA128 ) )
-        error = utils_insert_disk( UI_MEDIA_CONTROLLER_BETA, file, autoload );
+        error = utils_insert_disk( FUSE_DISK_CONTROLLER_BETA, file, autoload );
       else if( periph_is_active( PERIPH_TYPE_DISCIPLE ) )
-        error = utils_insert_disk( UI_MEDIA_CONTROLLER_DISCIPLE, file, autoload );
+        error = utils_insert_disk( FUSE_DISK_CONTROLLER_DISCIPLE, file, autoload );
       else if( periph_is_active( PERIPH_TYPE_PLUSD ) )
-        error = utils_insert_disk( UI_MEDIA_CONTROLLER_PLUSD, file, autoload );
+        error = utils_insert_disk( FUSE_DISK_CONTROLLER_PLUSD, file, autoload );
     break;
 
   case LIBSPECTRUM_CLASS_CARTRIDGE_IF2:

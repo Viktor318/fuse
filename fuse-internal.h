@@ -21,6 +21,8 @@
 
 #include <stddef.h>
 #include "input.h"
+#include "fuse-disk.h"
+#include "fuse-joystick.h"
 
 /* Private, selected-UI-bound engine lifecycle. Not an installed embedding API:
    toolkit/fatal-error policy still applies. Calls must be serialized on the
@@ -114,15 +116,9 @@ typedef enum fuse_host_key {
 typedef enum fuse_host_joystick {
   FUSE_HOST_JOYSTICK_1, FUSE_HOST_JOYSTICK_2, FUSE_HOST_JOYSTICK_KEYBOARD
 } fuse_host_joystick;
-/* Configuration options, deliberately separate from input delivery. */
-typedef enum fuse_host_joystick_output {
-  FUSE_HOST_JOYSTICK_OUTPUT_NONE, FUSE_HOST_JOYSTICK_OUTPUT_CURSOR,
-  FUSE_HOST_JOYSTICK_OUTPUT_KEMPSTON, FUSE_HOST_JOYSTICK_OUTPUT_SINCLAIR_1,
-  FUSE_HOST_JOYSTICK_OUTPUT_SINCLAIR_2, FUSE_HOST_JOYSTICK_OUTPUT_TIMEX_1,
-  FUSE_HOST_JOYSTICK_OUTPUT_TIMEX_2, FUSE_HOST_JOYSTICK_OUTPUT_FULLER
-} fuse_host_joystick_output;
+/* Engine interface selection, deliberately separate from input delivery. */
 int fuse_host_config_set_joystick( fuse_host_config *config,
-  fuse_host_joystick slot, fuse_host_joystick_output output );
+  fuse_host_joystick slot, joystick_type_t output );
 int fuse_host_config_set_mouse_swap_buttons( fuse_host_config *config, int swap );
 typedef enum fuse_host_joystick_button {
   FUSE_HOST_JOYSTICK_LEFT, FUSE_HOST_JOYSTICK_RIGHT, FUSE_HOST_JOYSTICK_UP,
@@ -152,6 +148,28 @@ fuse_host_operation_result fuse_host_open_file( const char *filename );
    is no extra close/cleanup after a failed or cancelled open. Separate save/
    eject commands and non-path access are not exposed here. */
 fuse_host_operation_result fuse_host_insert_tape_file( const char *filename );
+/* Zero-based slots. Explicit Media insert, without File Open's autoload/machine
+   selection. Existing replacement questions remain; OK can mean cancelled
+   replacement. Save takes a borrowed chosen target, or NULL for the retained
+   target, and never chooses
+   a filename. Existing overwrite questions may block. Unavailable/disabled or
+   empty-to-save drives return MEDIA_ERROR; unknown controller/slot is invalid.
+   No rollback/atomic-write guarantee; failure does not add an eject or retry. */
+fuse_host_operation_result fuse_host_insert_disk_file( fuse_disk_controller controller,
+                                                      int slot, const char *filename );
+fuse_host_operation_result fuse_host_save_disk_file( fuse_disk_controller controller,
+                                                    int slot, const char *filename );
+/* New uses configured geometry and controller insertion hooks (including +3
+   preformat), with existing replacement decisions: OK can mean cancellation.
+   Eject uses Save/Discard/Cancel and succeeds on an already empty available drive. Flip/WP require
+   loaded media and accept flags 0 or 1. WP is emulated write protection, not
+   filesystem permissions; changing it does not itself dirty a floppy image. */
+fuse_host_operation_result fuse_host_new_disk( fuse_disk_controller controller, int slot );
+fuse_host_operation_result fuse_host_eject_disk( fuse_disk_controller controller, int slot );
+fuse_host_operation_result fuse_host_set_disk_flipped( fuse_disk_controller controller,
+                                                      int slot, int flipped );
+fuse_host_operation_result fuse_host_set_disk_write_protected( fuse_disk_controller controller,
+                                                              int slot, int write_protected );
 /* Normalized keyboard values use shared Fuse translation and keyboard-joystick
    mapping, but never trigger menus/widgets/grab actions (even for F-keys/Escape).
    These are not toolkit keycodes. Direct matrix injection is a separate option. */

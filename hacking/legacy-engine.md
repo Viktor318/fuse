@@ -37,9 +37,13 @@ compile alternative UI/audio adapters together or omit the special scaler rules.
 
 The host API is declared in `fuse-internal.h`; CLI adapter entries are in
 `fuse-legacy.h`, which includes the host header for shared types and operations.
-`fuse-host.c` implements host configuration, ROM-provider storage and typed
-operations. `fuse.c` retains lifecycle ownership, admission and execution;
-`fuse-engine.h` connects these implementations without exposing lifecycle state.
+`fuse-host.c` retains only host ROM-provider callback storage/routing.
+`fuse-config.c` owns the opaque configuration, engine defaults and application.
+`fuse-operations.c` implements machine/input/File Open/tape operation entries;
+`uimedia.c` implements the disk entries. These engine implementations own admission
+and completion, rather than caller-side wrappers. `fuse.c` owns preparation,
+lifecycle state and execution. `fuse-engine.h` declares private implementation
+hooks without exposing lifecycle state; it is not a second operation API.
 `fuse.h` contains other engine globals/service hooks, not the host interface.
 The implementation header is not a host-consumer dependency.
 
@@ -92,7 +96,10 @@ sound, autoload preference, joystick-slot output and mouse-swap setters. The con
 strings and may be freed after preparation returns, including failure. Other
 settings use internal generated defaults; generated settings layouts are not host
 configuration inputs. An unknown nonempty machine ID fails during preparation
-and consumes the attempt.
+and consumes the attempt. Joystick interface selection uses the engine's
+`joystick_type_t` from `fuse-joystick.h`, also imported by emulation. There is no
+parallel host output enum or translation table; existing numeric settings/name
+ordering is preserved. Logical input slots remain separate from interface choice.
 
 `fuse_host_resources` supplies a synchronous ROM acquisition callback. The engine
 copies the descriptor; its context remains borrowed until preparation failure
@@ -250,6 +257,43 @@ This uses the existing filesystem reader, not the ROM provider; separate save/
 eject commands and non-path resources are not exposed.
 Success reports insertion, not playback or program-loading completion.
 
+## Shared floppy save implementation
+
+`ui_media_drive_save` retains the selected-UI filename chooser. The private engine
+save adapter takes a chosen path, borrowed through return; NULL uses the retained
+target and fails if unnamed. It does not invoke a chooser. Both paths share static
+format/overwrite/write/filename mechanics and post-pause result/dirty handling.
+The chooser keeps its own filename lifetime and pause interval, without adding a
+nested pause at write. There is no separate descriptor-taking chosen-target entry.
+
+These remain selected-UI-bound implementation mechanics, not host-facing mutable
+drive descriptors. Overwrite questions can block, and existing cancellation/type
+mutation and non-atomic file-write behaviour remain.
+
+`fuse_host_insert_disk_file(controller,slot,path)` supplies the existing explicit
+Media insert intent, without autoload or machine selection.
+`fuse_host_save_disk_file(controller,slot,path)` calls the chosen-target save seam;
+NULL saves to the retained filename. Controllers are emulated identities and slots
+are zero-based, not menu IDs. Unavailable/disabled controllers and empty-to-save
+drives return MEDIA_ERROR; invalid controller/slot/arguments are rejected before
+I/O. Occupied/modified insertion still uses existing replacement decisions, not
+BUSY. `fuse-disk.h` defines the single engine-owned `fuse_disk_controller` type
+used by host operations, registration, lookup and File Open dispatch. There is
+no host/UI controller enum translation. Packed menu action numbers, including
+the separate Microdrive group, are decoded only in `menu.c`.
+
+Disk operation entries in the media implementation own admission through
+completion, including drive lookup, FDD preconditions and result translation.
+There is no duplicate host/engine disk delegate API. Drive descriptors remain private; owned
+drive observations are follow-on.
+
+`fuse_host_new_disk` uses configured geometry, controller insertion hooks (including
++3 preformat) and the same replacement questions; zero can mean cancellation. `fuse_host_eject_disk`
+uses existing Save/Discard/Cancel and succeeds for an already empty available
+drive. `fuse_host_set_disk_flipped` and `fuse_host_set_disk_write_protected` take
+0/1 flags and require loaded media. Floppy WP is an emulated write gate, not
+filesystem access, and changing it does not itself mark the image modified.
+
 ## Direct null-backed example
 
 [null-host.c](null-host.c) has its own `main` and uses `fuse-internal.h` directly.
@@ -264,6 +308,14 @@ it does not perform the input/reset/128K sequence or wait for tape completion.
 With default standard 48K ROMs, tape autoload requests the ROM again during reset;
 other files can select machines and require additional ROMs. The log reports the
 legacy return, not that the file replaced media or that loading finished.
+`--save-disk INPUT OUTPUT` prepares a +3, explicitly inserts into slot 0 and saves
+through the host controller/slot API, without running the CPU. The core reads and
+encodes the image; the host does not handle disk bytes. This requires the four
+`plus3-*.rom` files. Existing-output decisions remain selected-UI policy (the null
+adapter declines overwrite); use a fresh output path for a successful example.
+`--disk-lifecycle OUTPUT` demonstrates New, flip/unflip, WP on/off, Save and eject
+on +3 slot 0 without running the CPU. Geometry and encoding stay in the engine;
+it is a bounded API example, not a new replacement/overwrite policy.
 
 In a configured null-UI build:
 
@@ -273,6 +325,8 @@ make unittests/nullhostlink unittests/nullhostsource
 ./unittests/nullhostsource /path/to/fuse/roms
 ./unittests/nullhostlink /path/to/fuse/roms /path/to/demo.tap
 ./unittests/nullhostlink /path/to/fuse/roms --open /path/to/demo.tap
+./unittests/nullhostlink /path/to/fuse/roms --save-disk /path/to/input.dsk /path/to/copy.udi
+./unittests/nullhostlink /path/to/fuse/roms --disk-lifecycle /path/to/new.udi
 make check-null-host
 ```
 
@@ -291,11 +345,12 @@ Null-UI builds include these checks in `make check`:
 | `check-legacy-engine-link` | Archive/source linkage and legacy help/version entry. |
 | `check-startup-ownership` | Startup storage, preference-save permission and callback restoration. |
 | `check-legacy-lifecycle` | One-attempt lifecycle, reentry, pause, frame/budget boundaries and clock replacement; automation builds also cover bounded RZX/finalization cases. |
-| `check-host-prepare` | Explicit configuration, ROM ownership/provenance and preference isolation. |
-| `check-host-operations` | Typed machine/input behaviour, tape insertion/replacement, File Open autoload/ROM eligibility, snapshot restore, RZX stop, recording and error handling. |
+| `check-host-prepare` | Configuration, all eight joystick interfaces on three slots, invalid inputs, ROM ownership/provenance and preference isolation. |
+| `check-host-operations` | Typed machine/input behaviour, tape and +3/Beta disk lifecycle, File Open eligibility/restore/RZX stop, admission and errors. |
 | `check-snapshot-file` | Existing file serialization and error cleanup. |
 | `check-tape-save-ui` | Save failures retain modified/playing tape, save/cancel/discard and nested pause ownership, using selected-service doubles. |
-| `check-null-host` | Direct driver transcripts, ROM/tape failures and preference isolation in both linking forms. |
+| `check-floppy-save-ui` | Host/legacy save and lifecycle comparison: overwrite/replacement decisions, dirty/name ownership, failures, flags and eject, nested/unpaused. |
+| `check-null-host` | Direct input/Open/disk lifecycle driver flows, ROM/media failures, saved image/legacy comparison and preference isolation in both linking forms. |
 | `check-startup-unwind` | Instrumented startup failures and reverse cleanup; requires null UI with automation. |
 
 Startup-unwind hooks compile out of the production engine. Tests run accepted

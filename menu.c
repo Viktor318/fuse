@@ -447,9 +447,27 @@ MENU_CALLBACK_WITH_ACTION( menu_media_if1_rs232 )
 
 }
 
+/* Packed action numbers belong to the UI, not to controller identity. The
+   Microdrive action group (3) deliberately has no floppy controller. */
+static int
+menu_disk_controller( int group, fuse_disk_controller *controller )
+{
+  switch( group ) {
+  case 0: *controller = FUSE_DISK_CONTROLLER_PLUS3; break;
+  case 1: *controller = FUSE_DISK_CONTROLLER_BETA; break;
+  case 2: *controller = FUSE_DISK_CONTROLLER_PLUSD; break;
+  case 4: *controller = FUSE_DISK_CONTROLLER_OPUS; break;
+  case 5: *controller = FUSE_DISK_CONTROLLER_DISCIPLE; break;
+  case 6: *controller = FUSE_DISK_CONTROLLER_DIDAKTIK; break;
+  default: return 0;
+  }
+  return 1;
+}
+
 MENU_CALLBACK_WITH_ACTION( menu_media_insert_new )
 {
   int which, type;
+  fuse_disk_controller controller;
   ui_media_drive_info_t *drive;
   
   ui_widget_finish();
@@ -463,7 +481,8 @@ MENU_CALLBACK_WITH_ACTION( menu_media_insert_new )
     if1_mdr_insert( which, NULL );
     break;
   default:
-    drive = ui_media_drive_find( type, which );
+    if( !menu_disk_controller( type, &controller ) ) return;
+    drive = ui_media_drive_find( controller, which );
     if( !drive )
       return;
     ui_media_drive_insert( drive, NULL, 0 );
@@ -476,6 +495,7 @@ MENU_CALLBACK_WITH_ACTION( menu_media_insert )
   char *filename;
   char title[80];
   int which, type;
+  fuse_disk_controller controller;
   ui_media_drive_info_t *drive = NULL;
   
   action--;
@@ -489,9 +509,11 @@ MENU_CALLBACK_WITH_ACTION( menu_media_insert )
     snprintf( title, 80, "Fuse - Insert Microdrive Cartridge %i", which + 1 );
     break;
   default:
-    drive = ui_media_drive_find( type, which );
-    if( !drive )
+    if( !menu_disk_controller( type, &controller ) ||
+        !( drive = ui_media_drive_find( controller, which ) ) ) {
+      fuse_emulation_unpause();
       return;
+    }
     snprintf( title, sizeof(title), "Fuse - Insert %s", drive->name );
     break;
   }
@@ -515,6 +537,7 @@ MENU_CALLBACK_WITH_ACTION( menu_media_insert )
 MENU_CALLBACK_WITH_ACTION( menu_media_eject )
 {
   int which, type;
+  fuse_disk_controller controller;
 
   ui_widget_finish();
 
@@ -527,7 +550,8 @@ MENU_CALLBACK_WITH_ACTION( menu_media_eject )
     if1_mdr_eject( which );
     break;
   default:
-    ui_media_drive_eject( type, which );
+    if( menu_disk_controller( type, &controller ) )
+      ui_media_drive_eject( controller, which );
     break;
   }
 }
@@ -535,6 +559,7 @@ MENU_CALLBACK_WITH_ACTION( menu_media_eject )
 MENU_CALLBACK_WITH_ACTION( menu_media_save )
 {
   int which, saveas, type;
+  fuse_disk_controller controller;
 
   ui_widget_finish();
 
@@ -548,7 +573,8 @@ MENU_CALLBACK_WITH_ACTION( menu_media_save )
     if1_mdr_save( which, saveas );
     break;
   default:
-    ui_media_drive_save( type, which, saveas );
+    if( menu_disk_controller( type, &controller ) )
+      ui_media_drive_save( controller, which, saveas );
     break;
   }
 }
@@ -556,6 +582,7 @@ MENU_CALLBACK_WITH_ACTION( menu_media_save )
 MENU_CALLBACK_WITH_ACTION( menu_media_flip )
 {
   int which, type, flip;
+  fuse_disk_controller controller;
   
   ui_widget_finish();
 
@@ -567,7 +594,8 @@ MENU_CALLBACK_WITH_ACTION( menu_media_flip )
   switch( type ) {
   /* No flip option for IF1 */
   default:
-    ui_media_drive_flip( type, which, flip );
+    if( menu_disk_controller( type, &controller ) )
+      ui_media_drive_flip( controller, which, flip );
     break;
   }
 }
@@ -575,6 +603,7 @@ MENU_CALLBACK_WITH_ACTION( menu_media_flip )
 MENU_CALLBACK_WITH_ACTION( menu_media_writeprotect )
 {
   int which, wrprot, type;
+  fuse_disk_controller controller;
 
   ui_widget_finish();
 
@@ -588,7 +617,8 @@ MENU_CALLBACK_WITH_ACTION( menu_media_writeprotect )
     if1_mdr_writeprotect( which, wrprot );
     break;
   default:
-    ui_media_drive_writeprotect( type, which, wrprot );
+    if( menu_disk_controller( type, &controller ) )
+      ui_media_drive_writeprotect( controller, which, wrprot );
     break;
   }
 

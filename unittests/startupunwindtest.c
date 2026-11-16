@@ -42,7 +42,7 @@ fuse_startup_test_checkpoint( startup_manager_module module, int completed,
   fuse_shutdown(); /* STARTING must not dispose an initializer's state. */
   if( natural_failure ) settings_current.autosave_settings = 1;
   if( media_test && completed && module == STARTUP_MANAGER_MODULE_MACHINE ) {
-    media_drive = ui_media_drive_find( UI_MEDIA_CONTROLLER_PLUS3, 0 );
+    media_drive = ui_media_drive_find( FUSE_DISK_CONTROLLER_PLUS3, 0 );
     assert( media_drive && media_drive->fdd );
     assert( !media_drive->fdd->disk.data && !media_drive->fdd->disk.filename );
     media_drive->fdd->disk.data = libspectrum_new( libspectrum_byte, 512 );

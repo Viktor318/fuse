@@ -24,17 +24,18 @@
 /* Engine-owned lifecycle/admission. No lifecycle state is shared with callers.
    Machine failures can invalidate the session; ordinary tape-open failure does
    not. These are synchronous implementation hooks, not additional host API. */
-fuse_init_result fuse_engine_host_prepare( const fuse_host_config *config,
-                                          const fuse_host_resources *resources );
 fuse_host_operation_result fuse_engine_check_operation( void );
 void fuse_engine_begin_operation( void );
 fuse_host_operation_result fuse_engine_end_machine_operation( int error );
 void fuse_engine_end_operation( void );
 
-/* Host-owned configuration/resource storage, applied/cleared by the engine at
-   the existing initialization and teardown points. */
-void fuse_host_apply_config( const fuse_host_config *config );
+/* Apply the opaque engine configuration at initialization. */
+void fuse_engine_apply_config( const fuse_host_config *config );
+
+/* Borrowed host resource callback storage, active through teardown. */
 void fuse_host_begin_resources( const fuse_host_resources *resources );
 void fuse_host_end_resources( void );
+int fuse_host_resources_active( void );
+int fuse_host_acquire_rom( const char *name, fuse_host_rom *rom );
 
 #endif

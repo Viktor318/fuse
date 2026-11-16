@@ -209,7 +209,7 @@ static int ui_drive_autoload( void );
 static ui_media_drive_info_t ui_drives[ SPECPLUS3_NUM_DRIVES ] = {
   {
     /* .name = */ "+3 Disk A:",
-    /* .controller_index = */ UI_MEDIA_CONTROLLER_PLUS3,
+    /* .controller_index = */ FUSE_DISK_CONTROLLER_PLUS3,
     /* .drive_index = */ SPECPLUS3_DRIVE_A,
     /* .menu_item_parent = */ UI_MENU_ITEM_MEDIA_DISK_PLUS3,
     /* .menu_item_top = */ UI_MENU_ITEM_INVALID,
@@ -223,7 +223,7 @@ static ui_media_drive_info_t ui_drives[ SPECPLUS3_NUM_DRIVES ] = {
   },
   {
     /* .name = */ "+3 Disk B:",
-    /* .controller_index = */ UI_MEDIA_CONTROLLER_PLUS3,
+    /* .controller_index = */ FUSE_DISK_CONTROLLER_PLUS3,
     /* .drive_index = */ SPECPLUS3_DRIVE_B,
     /* .menu_item_parent = */ UI_MENU_ITEM_MEDIA_DISK_PLUS3,
     /* .menu_item_top = */ UI_MENU_ITEM_MEDIA_DISK_PLUS3_B,

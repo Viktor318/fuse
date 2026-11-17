@@ -112,16 +112,17 @@ main( int argc, char **argv )
   int prepared = 0, status = EXIT_FAILURE;
   int disk_lifecycle = argc == 4 && !strcmp( argv[2], "--disk-lifecycle" );
   int tape_record = argc == 4 && !strcmp( argv[2], "--record-tape" );
+  int snapshot_save = argc == 4 && !strcmp( argv[2], "--save-snapshot" );
   int disk_save = argc == 5 && !strcmp( argv[2], "--save-disk" );
   int tape_lifecycle = argc == 5 && !strcmp( argv[2], "--tape-lifecycle" );
 
   if( ( argc != 2 && argc != 3 && argc != 4 && argc != 5 ) ||
-      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle && !tape_record ) ||
+      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle && !tape_record && !snapshot_save ) ||
       ( argc == 5 && !disk_save && !tape_lifecycle ) ||
       ( argc == 3 && ( !strcmp( argv[2], "--open" ) || !strcmp( argv[2], "--save-disk" ) ||
                       !strcmp( argv[2], "--disk-lifecycle" ) || !strcmp( argv[2], "--tape-lifecycle" ) ||
-                      !strcmp( argv[2], "--record-tape" ) ) ) ) {
-    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT | --tape-lifecycle INPUT OUTPUT | --record-tape OUTPUT]\n", argv[0] );
+                      !strcmp( argv[2], "--record-tape" ) || !strcmp( argv[2], "--save-snapshot" ) ) ) ) {
+    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT | --tape-lifecycle INPUT OUTPUT | --record-tape OUTPUT | --save-snapshot OUTPUT]\n", argv[0] );
     return EXIT_FAILURE;
   }
   provider.directory = argv[1]; /* Borrowed through shutdown, not passed as engine CLI. */
@@ -143,6 +144,16 @@ main( int argc, char **argv )
   }
   prepared = 1;
   puts( disk_save || disk_lifecycle ? "host: prepared plus3" : "host: prepared 48" );
+  if( snapshot_save ) {
+    if( frames( 2, &frame_turns ) ||
+        operation( "save snapshot", fuse_host_save_snapshot_file( argv[3] ) ) ||
+        operation( "reset", fuse_host_reset( FUSE_HOST_RESET_HARD ) ) ||
+        operation( "reopen snapshot", fuse_host_open_file( argv[3] ) ) ||
+        frames( 1, &frame_turns ) ) goto cleanup;
+    puts( "host: saved snapshot; reset and reopened" );
+    status = EXIT_SUCCESS;
+    goto cleanup;
+  }
   if( tape_record ) {
     if( operation( "start tape recording", fuse_host_start_tape_recording() ) ||
         frames( 2, &frame_turns ) ||

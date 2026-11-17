@@ -371,6 +371,8 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-tape-life; \
 	  printf '%s\n' 'host: prepared 48' 'host: recorded two frames; saved and ejected tape' \
 	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-record; \
+	  printf '%s\n' 'host: prepared 48' 'host: saved snapshot; reset and reopened' \
+	    'host: shutdown; frame turns=3; budget turns=0; ROM requests=3; releases=3' > expected-snapshot; \
 	  printf '%s\n' 'host: prepared plus3' 'host: saved disk through plus3 drive 0' \
 	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-disk; \
 	  printf '%s\n' 'host: prepared plus3' \
@@ -396,6 +398,17 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	      > "$$consumer-tape-roundtrip.out" 2> "$$consumer-tape-roundtrip.err"; \
 	    cmp expected-tape-life "$$consumer-tape-roundtrip.out"; cmp sample.tap tape-roundtrip.tap; \
 	    rm tape-life.tzx tape-roundtrip.tap; \
+	    for target in saved.szx fallback.output; do \
+	      printf 'old target' > "$$target"; \
+	      "$$program" only48 --save-snapshot "$$target" > "$$consumer-snapshot-$$target.out" 2> "$$consumer-snapshot-$$target.err"; \
+	      cmp expected-snapshot "$$consumer-snapshot-$$target.out"; rm "$$target"; \
+	    done; \
+	    if "$$program" only48 --save-snapshot missing-directory/failed.szx \
+	      > "$$consumer-snapshot-fail.out" 2> "$$consumer-snapshot-fail.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    test -s "$$consumer-snapshot-fail.err"; \
+	    grep -Fx 'host: stopped; frame turns=2; budget turns=0; ROM requests=1; releases=1' \
+	      "$$consumer-snapshot-fail.out" > /dev/null; \
 	    "$$program" only48 --record-tape recorded.pzx > "$$consumer-record.out" 2> "$$consumer-record.err"; \
 	    cmp expected-record "$$consumer-record.out"; \
 	    "$$root/legacyenginelinktest$(EXEEXT)" --host-operations-test recording-readback "$$roms"; \
@@ -478,7 +491,7 @@ check-snapshot-file: unittests/legacyenginelinktest unittests/legacyenginesource
 	      --rom-48 "$$rom" --no-sound --no-autosave-settings; \
 	  done; \
 	  test -z "$$(find . -type f -print)"; \
-	  echo 'Existing snapshot file save and failure cleanup passed for both consumers'
+	  echo 'Host/legacy snapshot saves, formats, IO failures, pause and cleanup passed for both consumers'
 
 check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesourcetest
 	@set -e; root="$(abs_top_builddir)/unittests"; \
@@ -486,7 +499,7 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
-	    for mode in success tape-contract trapped-recording autoload-success autoload-failure \
+	    for mode in success tape-contract trapped-recording snapshot-roundtrip autoload-success autoload-failure \
 	      open-auto open-noauto open-custom open-reset-failure open-snapshot open-fallback open-rzx-stop \
 	      disk-save disk-save-beta \
 	      reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \

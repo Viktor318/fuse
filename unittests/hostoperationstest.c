@@ -50,6 +50,7 @@ check_tape_deck_blocked( fuse_host_operation_result expected )
   assert( fuse_host_eject_tape() == expected );
   assert( fuse_host_start_tape_recording() == expected );
   assert( fuse_host_stop_tape_recording() == expected );
+  assert( fuse_host_save_snapshot_file( "not-written.szx" ) == expected );
 }
 
 static void
@@ -489,6 +490,22 @@ check_trap_recording( void )
   assert( libspectrum_tape_block_data_length( block ) == 3 );
   assert( !memcmp( libspectrum_tape_block_data( block ), "\xff\x42\xbd", 3 ) );
   assert( fuse_host_eject_tape() == OK && !remove( "automatic.tap" ) );
+}
+
+static void
+check_snapshot_roundtrip( void )
+{
+  int acquired = provider.acquired;
+  z80.pc.w = 0x8000; z80.sp.w = 0x9000;
+  writebyte_internal( 0x8100, 0x5a );
+  assert( fuse_host_save_snapshot_file( "host-state.szx" ) == OK );
+  assert( provider.acquired == acquired );
+  assert( fuse_host_reset( FUSE_HOST_RESET_HARD ) == OK );
+  z80.pc.w = 0; writebyte_internal( 0x8100, 0 );
+  assert( fuse_host_open_file( "host-state.szx" ) == OK );
+  assert( machine_current->machine == LIBSPECTRUM_MACHINE_48 );
+  assert( z80.pc.w == 0x8000 && z80.sp.w == 0x9000 && readbyte_internal( 0x8100 ) == 0x5a );
+  assert( !remove( "host-state.szx" ) );
 }
 
 static compat_file_vtable_t tape_file_io;
@@ -951,6 +968,8 @@ host_operations_test( int argc, char **argv )
     check_tape_deck( !strcmp( argv[1], "tape-deck" ) );
   } else if( !strcmp( argv[1], "tape-recording" ) || !strcmp( argv[1], "legacy-tape-recording" ) ) {
     check_tape_recording( !strcmp( argv[1], "tape-recording" ) );
+  } else if( !strcmp( argv[1], "snapshot-roundtrip" ) ) {
+    check_snapshot_roundtrip();
   } else if( !strcmp( argv[1], "trapped-recording" ) ) {
     check_trap_recording();
   } else if( !strcmp( argv[1], "recording-readback" ) ) {

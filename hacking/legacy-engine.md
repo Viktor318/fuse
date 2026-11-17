@@ -235,6 +235,27 @@ can partially mutate state and retains legacy fatal paths. No rollback, extra
 cleanup, strict-ID failure rule or new fallback policy is imposed. The example
 shuts down on failure; this is not a universal error-safe loading API.
 
+## Snapshot file save
+
+`fuse_host_save_snapshot_file(path)` is chosen-target Save Snapshot, separate from
+File Open and not a checkpoint/buffer interface. The borrowed path must be
+nonempty. `snapshot_write` owns filename format inference, fallback to SZX for
+unknown/non-snapshot names, conversion-loss warnings, export and encoding.
+Warnings do not turn a successful legacy save into an error.
+
+The engine entry uses the menu's nested pause/write/unpause sequence. First pause
+can finalize competition-mode RZX recording even if the snapshot write fails;
+non-competition RZX recording remains active. Existing pause/unpause return
+conventions are retained, and the operation maps the writer's nonzero result to
+MEDIA_ERROR, not machine FAILED. Reentrant caller operations remain BUSY.
+
+No chooser or extra overwrite confirmation is added: target approval belongs to
+the selected UI/host before this chosen-target call, and existing files can be
+truncated/replaced. A codec failure before output may leave a target untouched;
+a write/close failure may leave partial or even complete bytes. No cleanup retry,
+output rollback, durability or full deterministic-state guarantee is imposed.
+Actual snapshot restore still uses existing File Open semantics and limitations.
+
 ## Tape operations
 
 `fuse_host_insert_tape_file(path)` exposes the existing **Media → Tape → Open**
@@ -366,6 +387,9 @@ The codec owns conversion; this does not prove program-loading completion.
 records two frames on a fresh 48K machine, then stops recording, saves and ejects
 through engine entries. No input image or host-side
 pulse encoding is needed; the engine handles timestamps, signal and codec.
+`--save-snapshot OUTPUT` runs two frames, saves through the engine, hard-resets,
+reopens through general File Open, then runs one frame. Format/bytes stay in the
+engine; the example is not evidence of complete checkpoint determinism.
 
 In a configured null-UI build:
 
@@ -379,6 +403,7 @@ make unittests/nullhostlink unittests/nullhostsource
 ./unittests/nullhostlink /path/to/fuse/roms --disk-lifecycle /path/to/new.udi
 ./unittests/nullhostlink /path/to/fuse/roms --tape-lifecycle /path/to/input.tap /path/to/copy.tzx
 ./unittests/nullhostlink /path/to/fuse/roms --record-tape /path/to/recording.pzx
+./unittests/nullhostlink /path/to/fuse/roms --save-snapshot /path/to/state.szx
 make check-null-host
 ```
 
@@ -399,7 +424,7 @@ Null-UI builds include these checks in `make check`:
 | `check-legacy-lifecycle` | One-attempt lifecycle, reentry, pause, frame/budget boundaries and clock replacement; automation builds also cover bounded RZX/finalization cases. |
 | `check-host-prepare` | Configuration, all eight joystick interfaces on three slots, invalid inputs, ROM ownership/provenance and preference isolation. |
 | `check-host-operations` | Typed machine/input behaviour, tape and +3/Beta disk lifecycle, File Open eligibility/restore/RZX stop, admission and errors. |
-| `check-snapshot-file` | Existing file serialization and error cleanup. |
+| `check-snapshot-file` | Host/legacy chosen-target saves: formats/fallback/overwrite, codec/write/close failures and allocation cleanup, nested pauses/reentry and RZX pause side effects. |
 | `check-tape-save-ui` | UI Save and host eject retain modified/playing tape on failed/cancelled Save, nested pause ownership and re-entry rejection. |
 | `check-tape-recording` | Recorder append failures before/after partial progress, cleanup/retention, subsequent work and selected-menu re-entry under nested pause. |
 | `check-floppy-save-ui` | Host/legacy lifecycle, decisions/failure retention, flags and owned observation lifetime across changes/shutdown, nested/unpaused. |

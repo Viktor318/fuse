@@ -141,6 +141,15 @@ fuse_host_operation_result fuse_host_nmi( void );
    unchanged-state or safe-continuation promise on error; legacy fatal paths
    remain. This is not strict ID selection or the tape-only insertion intent. */
 fuse_host_operation_result fuse_host_open_file( const char *filename );
+
+/* Chosen-target Save Snapshot, not File Open or an owned checkpoint/buffer API.
+   Borrows a nonempty path through return; engine infers format from the filename
+   and retains the existing SZX fallback and conversion-loss warnings. No chooser
+   or new overwrite confirmation: an existing target can be truncated/replaced.
+   Uses the menu's nested pause/write/unpause sequence (including competition
+   RZX finalization on first pause). Nonzero writer result maps MEDIA_ERROR;
+   no rollback, durability or complete-state preservation guarantee. */
+fuse_host_operation_result fuse_host_save_snapshot_file( const char *filename );
 /* Media > Tape > Open intent: the existing tape_open(path, 0) workflow, not
    File > Open (which uses tape_can_autoload()). The auto_load preference is not
    consulted for this intent, exactly as in the legacy menu. Path is borrowed

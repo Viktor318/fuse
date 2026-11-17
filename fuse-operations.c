@@ -31,6 +31,7 @@
 #include "peripherals/joystick.h"
 #include "peripherals/kempmouse.h"
 #include "settings.h"
+#include "snapshot.h"
 #include "tape.h"
 #include "utils.h"
 #include "z80/z80.h"
@@ -83,6 +84,23 @@ fuse_host_open_file( const char *filename )
   fuse_engine_begin_operation();
   error = utils_open_file( filename, tape_can_autoload(), NULL );
   display_refresh_all(); /* Same post-operation refresh as menu_file_open. */
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_save_snapshot_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  /* Chosen-target portion of menu_file_savesnapshot; no second chooser or
+     overwrite decision. Preserve its pause/unpause side effects and ordering. */
+  fuse_emulation_pause();
+  error = snapshot_write( filename );
+  fuse_emulation_unpause();
   fuse_engine_end_operation();
   return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
 }

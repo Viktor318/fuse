@@ -39,9 +39,12 @@ The host API is declared in `fuse-internal.h`; CLI adapter entries are in
 `fuse-legacy.h`, which includes the host header for shared types and operations.
 `fuse-host.c` retains only host ROM-provider callback storage/routing.
 `fuse-config.c` owns the opaque configuration, engine defaults and application.
-`fuse-operations.c` implements machine/input/File Open entries; `tape.c` owns
-tape insertion/deck/save/eject entries, and `uimedia.c` owns the disk entries. These engine implementations own admission
-and completion, rather than caller-side wrappers. `fuse.c` owns preparation,
+`fuse-operations.c` implements routine-backed machine/input/File Open and tape
+insertion/deck/save/eject/recording entries, including admission, eligibility and
+completion. Tape modules retain the existing mechanics. `uimedia.c` keeps disk
+entries that depend on its private registry/save helpers; no extra delegates or
+private interfaces are introduced merely to centralize names. These are engine
+implementations, not caller-side wrappers. `fuse.c` owns preparation,
 lifecycle state and execution. `fuse-engine.h` declares private implementation
 hooks without exposing lifecycle state; it is not a second operation API.
 `fuse.h` contains other engine globals/service hooks, not the host interface.

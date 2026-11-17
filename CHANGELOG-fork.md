@@ -5,15 +5,7 @@
 Changes of this fork on top of Fuse 1.10.1 (until v1.10.0-hu.1: 1.10.0).
 The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
-## Unreleased
-
-### Spectrum 128 keypad
-
-- The rest of the keypad's editing functions: Ctrl + Home / End go to the
-  first / last line of the program, Ctrl + Backspace / Delete delete to
-  the start / end of the word, Ctrl + Insert switches between the upper
-  and lower screen (TOGGLE). Deleting to the start / end of the line moved
-  to Shift + Backspace / Delete (it was Ctrl + Backspace / Delete).
+## v1.10.1-hu.4 – 2026-11-17
 
 ### Sound settings
 
@@ -83,7 +75,7 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 ### User interface
 
 - *Help > About* and `fuse --version` show the version of this edition
-  ("Fuse 1.10.1-hu.3"), not only that of the Fuse it is based on; so does
+  ("Fuse 1.10.1-hu.4"), not only that of the Fuse it is based on; so does
   the version information of `fuse.exe`.
 - **Recent files** (*File > Recent files*): the last 10 files opened, newest
   first, numbered 1–9, 10, long paths shortened in the middle; *Clear list*
@@ -106,23 +98,7 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   in the browser; a missing file gives a message. `build-windows-cross.sh`
   makes them with pandoc, and leaves them out with a warning without it.
 
-### Memory browser
-
-- *Machine > Memory Browser* can change memory: double-click a byte (or
-  press Enter on a row for its first byte), type the new value in
-  hexadecimal (`$3A`, `#3A`, `0x3A`, `3Ah`) or decimal, *OK*. The address
-  can be changed there too. ROM is written only with *Options > General >
-  Allow writes to ROM* on; otherwise Fuse says so.
-
-### Movies
-
-- **`fmfconv.exe` in the package**, from the Fuse utilities: it converts the
-  movies recorded with *File > Movie > Record...* (`.fmf`) to AVI (with
-  sound), WAV or pictures, e.g. `fmfconv film.fmf film.avi`. Until now the
-  movies could not be played on Windows. `build-windows-cross.sh` builds it
-  statically from a fixed commit of fuse-utils; if that fails, the package
-  is made without it, with a warning.
-
+### Keyboard
 
 - *Type using the Windows keyboard layout* is on by default when the
   interface is Hungarian (*Language* Magyar, or Automatic on a Hungarian
@@ -147,6 +123,14 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   picture is drawn for this edition (`lib/keypad.png`, made from
   `data/keypad.svg`).
 
+### Spectrum 128 keypad
+
+- The rest of the keypad's editing functions: Ctrl + Home / End go to the
+  first / last line of the program, Ctrl + Backspace / Delete delete to
+  the start / end of the word, Ctrl + Insert switches between the upper
+  and lower screen (TOGGLE). Deleting to the start / end of the line moved
+  to Shift + Backspace / Delete (it was Ctrl + Backspace / Delete).
+
 ### Joysticks
 
 - **Autofire**: an *Autofire* box in the settings of Joystick 1, Joystick 2
@@ -155,6 +139,23 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
   shots a second), with every joystick type (Kempston, Sinclair 1 and 2,
   Cursor, Fuller, Timex 1 and 2). Kept in `fuse.cfg`
   (`joystick1autofire`, `joystick2autofire`, `joystickkeyboardautofire`).
+
+### Memory browser
+
+- *Machine > Memory Browser* can change memory: double-click a byte (or
+  press Enter on a row for its first byte), type the new value in
+  hexadecimal (`$3A`, `#3A`, `0x3A`, `3Ah`) or decimal, *OK*. The address
+  can be changed there too. ROM is written only with *Options > General >
+  Allow writes to ROM* on; otherwise Fuse says so.
+
+### Movies
+
+- **`fmfconv.exe` in the package**, from the Fuse utilities: it converts the
+  movies recorded with *File > Movie > Record...* (`.fmf`) to AVI (with
+  sound), WAV or pictures, e.g. `fmfconv film.fmf film.avi`. Until now the
+  movies could not be played on Windows. `build-windows-cross.sh` builds it
+  statically from a fixed commit of fuse-utils; if that fails, the package
+  is made without it, with a warning.
 
 ### Upstream Fuse
 

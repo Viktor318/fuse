@@ -6,15 +6,7 @@ Ennek a változatnak a módosításai a Fuse 1.10.1-hez képest (a
 v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
-## Kiadatlan
-
-### Spectrum 128 keypad
-
-- A keypad többi szerkesztőfunkciója: a Ctrl + Home / End a program első /
-  utolsó sorára ugrik, a Ctrl + Backspace / Delete a szó elejéig / végéig
-  töröl, a Ctrl + Insert vált a felső és az alsó képernyőrész között
-  (TOGGLE). A sor elejéig / végéig törlés a Shift + Backspace / Delete-re
-  került (eddig Ctrl + Backspace / Delete volt).
+## v1.10.1-hu.4 – 2026-11-17
 
 ### Hangbeállítások
 
@@ -88,7 +80,7 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 ### Felhasználói felület
 
 - A *Súgó > Névjegy* és a `fuse --version` ennek a kiadásnak a verzióját
-  mutatja („Fuse 1.10.1-hu.3”), nem csak az alapul szolgáló Fuse-ét; a
+  mutatja („Fuse 1.10.1-hu.4”), nem csak az alapul szolgáló Fuse-ét; a
   `fuse.exe` verzióinformációja is.
 - **Legutóbbi fájlok** (*Fájl > Legutóbbi fájlok*): az utolsó 10 megnyitott
   fájl, a legújabb elöl, 1–9, 10 számozással, a hosszú útvonalak közepe
@@ -113,24 +105,7 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   `build-windows-cross.sh` pandockal készíti el őket, pandoc nélkül
   figyelmeztetéssel kihagyja.
 
-### Memóriaböngésző
-
-- A *Gép > Memóriaböngésző* már a memóriát is módosítja: kattints duplán
-  egy bájtra (vagy nyomj Entert egy sor első bájtjához), írd be az új
-  értéket hexadecimálisan (`$3A`, `#3A`, `0x3A`, `3Ah`) vagy decimálisan,
-  majd *OK*. A cím is átírható ott. A ROM-ba csak akkor ír, ha be van
-  kapcsolva a *Beállítások > Általános > Írás engedélyezése a ROM-ba*;
-  különben szól.
-
-### Filmek
-
-- **`fmfconv.exe` a csomagban** a Fuse segédprogramjai közül: a *Fájl >
-  Film > Felvétel...* filmjeit (`.fmf`) AVI-vá (hanggal), WAV-vá vagy
-  képekké alakítja, pl. `fmfconv film.fmf film.avi`. Eddig a filmeket
-  Windowson nem lehetett lejátszani. A `build-windows-cross.sh` a
-  fuse-utils egy rögzített változatából, statikusan fordítja; ha ez nem
-  sikerül, a csomag figyelmeztetéssel nélküle készül el.
-
+### Billentyűzet
 
 - A *Gépelés a Windows billentyűkiosztása szerint* alapból be van
   kapcsolva, ha a felület magyar (*Nyelv*: Magyar, vagy Automatikus magyar
@@ -156,6 +131,14 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   oldala a helyén marad. A kép ehhez a kiadáshoz készült (`lib/keypad.png`,
   a `data/keypad.svg`-ből).
 
+### Spectrum 128 keypad
+
+- A keypad többi szerkesztőfunkciója: a Ctrl + Home / End a program első /
+  utolsó sorára ugrik, a Ctrl + Backspace / Delete a szó elejéig / végéig
+  töröl, a Ctrl + Insert vált a felső és az alsó képernyőrész között
+  (TOGGLE). A sor elejéig / végéig törlés a Shift + Backspace / Delete-re
+  került (eddig Ctrl + Backspace / Delete volt).
+
 ### Joystickok
 
 - **Automatikus tűz**: *Automatikus tűz* jelölőnégyzet a Joystick 1, a
@@ -165,6 +148,24 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
   kb. 8 lövés), minden joysticktípussal (Kempston, Sinclair 1 és 2,
   Cursor, Fuller, Timex 1 és 2). A `fuse.cfg`-ben tárolódik
   (`joystick1autofire`, `joystick2autofire`, `joystickkeyboardautofire`).
+
+### Memóriaböngésző
+
+- A *Gép > Memóriaböngésző* már a memóriát is módosítja: kattints duplán
+  egy bájtra (vagy nyomj Entert egy sor első bájtjához), írd be az új
+  értéket hexadecimálisan (`$3A`, `#3A`, `0x3A`, `3Ah`) vagy decimálisan,
+  majd *OK*. A cím is átírható ott. A ROM-ba csak akkor ír, ha be van
+  kapcsolva a *Beállítások > Általános > Írás engedélyezése a ROM-ba*;
+  különben szól.
+
+### Filmek
+
+- **`fmfconv.exe` a csomagban** a Fuse segédprogramjai közül: a *Fájl >
+  Videó > Felvétel indítása...* filmjeit (`.fmf`) AVI-vá (hanggal), WAV-vá vagy
+  képekké alakítja, pl. `fmfconv film.fmf film.avi`. Eddig a filmeket
+  Windowson nem lehetett lejátszani. A `build-windows-cross.sh` a
+  fuse-utils egy rögzített változatából, statikusan fordítja; ha ez nem
+  sikerül, a csomag figyelmeztetéssel nélküle készül el.
 
 ### Upstream Fuse
 

@@ -23,6 +23,6 @@
 /* The version of this fork: the Fuse version it is based on and -hu.N.
    Bumped here, and only here, for each release (Help > About, --version,
    the version information of fuse.exe) */
-#define FUSE_FORK_VERSION "1.10.1-hu.3"
+#define FUSE_FORK_VERSION "1.10.1-hu.4"
 
 #endif			/* #ifndef FUSE_FORK_VERSION_H */

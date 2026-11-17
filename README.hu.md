@@ -20,7 +20,7 @@ olvashatók.
 ## Letöltés
 
 A [Releases](https://github.com/Viktor318/fuse/releases) oldalról töltsd le
-a `Fuse-1.10.1-hu.3-windows.zip` fájlt, csomagold ki egy tetszőleges
+a `Fuse-1.10.1-hu.4-windows.zip` fájlt, csomagold ki egy tetszőleges
 mappába, és indítsd el a `fuse.exe`-t. Telepíteni nem kell semmit.
 
 A csomagban két program van, közös beállításokkal:
@@ -243,8 +243,8 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
 
 ### Filmek
 
-- A **Fájl > Film > Felvétel...** a képet és a hangot egy `.fmf` fájlba
-  (a Fuse saját filmformátumába) rögzíti. A `fuse.exe` melletti
+- A **Fájl > Videó > Felvétel indítása...** a képet és a hangot egy
+  `.fmf` fájlba (a Fuse saját filmformátumába) rögzíti. A `fuse.exe` melletti
   `fmfconv.exe` ezt más programokkal is lejátszható videóvá vagy
   hangfájllá alakítja; a Fuse mappájában megnyitott parancssorban:
 

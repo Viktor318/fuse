@@ -21,9 +21,11 @@
 #include "config.h"
 #include "libspectrum.h"
 #include "fuse.h"
+#include "fuse-engine.h"
 #include "machine.h"
 #include "peripherals/ula.h"
 #include "rzx.h"
+#include "settings.h"
 #include "tape.h"
 #include "tape_internals.h"
 #include "ui/ui.h"
@@ -50,13 +52,14 @@ tape_record_init( libspectrum_tape *current_tape )
   tape_record_set_tape( current_tape );
 }
 
-void
+int
 tape_record_start( void )
 {
-  if( tape_recording || !recording_tape ) return;
+  if( tape_recording ) return 0;
+  if( !recording_tape ) return 1;
   if( rzx_playback || rzx_recording ) {
     ui_error( UI_ERROR_ERROR, "Tape recording is unavailable during RZX" );
-    return;
+    return 1;
   }
   frame_base = remainder = 0;
   last_time = tstates;
@@ -67,6 +70,7 @@ tape_record_start( void )
   durations = libspectrum_new( libspectrum_qword, capacity );
   tape_recording = 1;
   ui_menu_activate( UI_MENU_ITEM_TAPE_RECORDING, 1 );
+  return 0;
 }
 
 /* Called with the actual amount removed from the CPU/event timestamps.
@@ -190,4 +194,31 @@ tape_record_stop( void )
   tape_recording = 0;
   ui_menu_activate( UI_MENU_ITEM_TAPE_RECORDING, 0 );
   return error;
+}
+
+fuse_host_operation_result
+fuse_host_start_tape_recording( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  /* Explicit pulse capture is the traps-disabled workflow. With traps on,
+     ROM SAVE appends decoded blocks automatically, without this command. */
+  if( settings_current.tape_traps ) return FUSE_HOST_OPERATION_MEDIA_ERROR;
+  fuse_engine_begin_operation();
+  error = tape_record_start();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_stop_tape_recording( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_record_stop();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
 }

@@ -269,8 +269,22 @@ TZX fallback, recording finalization and encoding in the engine. It need not sto
 playback; failure can follow recording finalization and is not a rollback.
 `fuse_host_eject_tape()` finalizes recording then uses Save/Discard/Cancel, retaining
 media on cancellation or failed Save. These entries own admission/completion;
-selected-UI decisions may block. Recording start/stop commands are not exposed:
-start's current void/diagnostic conventions need their own outcome boundary.
+selected-UI decisions may block.
+
+With tape traps enabled, ROM SAVE automatically appends decoded blocks; no manual
+recording command is needed. `fuse_host_config_set_tape_traps` supplies the existing
+boolean during preparation, retaining its default. Explicit pulse recording
+requires traps disabled: `fuse_host_start_tape_recording()` returns MEDIA_ERROR
+otherwise, without changing the setting or recorder. It records into the engine
+tape, including an empty deck. With traps disabled, already recording is success
+(checked before RZX); otherwise missing tape object or RZX refusal is MEDIA_ERROR.
+The RZX diagnostic remains. The core start routine returns its outcome directly;
+legacy UI callers can still ignore it. `fuse_host_stop_tape_recording()` finalizes elapsed
+intervals without implicitly stopping playback; idle Stop succeeds. On append
+failure, recording ends and buffers are released, but previously appended blocks
+remain; MEDIA_ERROR is not rollback and retry cannot recover the discarded tail.
+Neither operation changes pause nesting. Stop remains available if traps become
+enabled during an existing recording. Save/eject still finalize implicitly.
 
 ## Shared floppy save implementation
 
@@ -345,6 +359,10 @@ copy after shutdown. The driver never accesses drive/FDD internals.
 `--tape-lifecycle INPUT OUTPUT` explicitly inserts without autoload, rewinds/selects
 block 0, toggles playback, runs two frames, stops, rewinds, saves and ejects.
 The codec owns conversion; this does not prove program-loading completion.
+`--record-tape OUTPUT` explicitly disables tape traps in its preparation config,
+records two frames on a fresh 48K machine, then stops recording, saves and ejects
+through engine entries. No input image or host-side
+pulse encoding is needed; the engine handles timestamps, signal and codec.
 
 In a configured null-UI build:
 
@@ -357,6 +375,7 @@ make unittests/nullhostlink unittests/nullhostsource
 ./unittests/nullhostlink /path/to/fuse/roms --save-disk /path/to/input.dsk /path/to/copy.udi
 ./unittests/nullhostlink /path/to/fuse/roms --disk-lifecycle /path/to/new.udi
 ./unittests/nullhostlink /path/to/fuse/roms --tape-lifecycle /path/to/input.tap /path/to/copy.tzx
+./unittests/nullhostlink /path/to/fuse/roms --record-tape /path/to/recording.pzx
 make check-null-host
 ```
 
@@ -379,6 +398,7 @@ Null-UI builds include these checks in `make check`:
 | `check-host-operations` | Typed machine/input behaviour, tape and +3/Beta disk lifecycle, File Open eligibility/restore/RZX stop, admission and errors. |
 | `check-snapshot-file` | Existing file serialization and error cleanup. |
 | `check-tape-save-ui` | UI Save and host eject retain modified/playing tape on failed/cancelled Save, nested pause ownership and re-entry rejection. |
+| `check-tape-recording` | Recorder append failures before/after partial progress, cleanup/retention, subsequent work and selected-menu re-entry under nested pause. |
 | `check-floppy-save-ui` | Host/legacy lifecycle, decisions/failure retention, flags and owned observation lifetime across changes/shutdown, nested/unpaused. |
 | `check-null-host` | Direct input/Open/tape/disk lifecycle flows, ROM/media failures, saved image/legacy comparison and preference isolation in both linking forms. |
 | `check-startup-unwind` | Instrumented startup failures and reverse cleanup; requires null UI with automation. |

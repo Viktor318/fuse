@@ -111,21 +111,24 @@ main( int argc, char **argv )
   unsigned int frame_turns = 0, budget_turns = 0;
   int prepared = 0, status = EXIT_FAILURE;
   int disk_lifecycle = argc == 4 && !strcmp( argv[2], "--disk-lifecycle" );
+  int tape_record = argc == 4 && !strcmp( argv[2], "--record-tape" );
   int disk_save = argc == 5 && !strcmp( argv[2], "--save-disk" );
   int tape_lifecycle = argc == 5 && !strcmp( argv[2], "--tape-lifecycle" );
 
   if( ( argc != 2 && argc != 3 && argc != 4 && argc != 5 ) ||
-      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle ) ||
+      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle && !tape_record ) ||
       ( argc == 5 && !disk_save && !tape_lifecycle ) ||
       ( argc == 3 && ( !strcmp( argv[2], "--open" ) || !strcmp( argv[2], "--save-disk" ) ||
-                      !strcmp( argv[2], "--disk-lifecycle" ) || !strcmp( argv[2], "--tape-lifecycle" ) ) ) ) {
-    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT | --tape-lifecycle INPUT OUTPUT]\n", argv[0] );
+                      !strcmp( argv[2], "--disk-lifecycle" ) || !strcmp( argv[2], "--tape-lifecycle" ) ||
+                      !strcmp( argv[2], "--record-tape" ) ) ) ) {
+    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT | --tape-lifecycle INPUT OUTPUT | --record-tape OUTPUT]\n", argv[0] );
     return EXIT_FAILURE;
   }
   provider.directory = argv[1]; /* Borrowed through shutdown, not passed as engine CLI. */
   config = fuse_host_config_alloc();
   if( fuse_host_config_set_machine( config, disk_save || disk_lifecycle ? "plus3" : "48" ) ||
       fuse_host_config_set_sound( config, 0 ) ||
+      ( tape_record && fuse_host_config_set_tape_traps( config, 0 ) ) ||
       fuse_host_config_set_joystick( config, FUSE_HOST_JOYSTICK_1,
                                     JOYSTICK_TYPE_KEMPSTON ) ) {
     fprintf( stderr, "host: configuration rejected\n" );
@@ -140,6 +143,16 @@ main( int argc, char **argv )
   }
   prepared = 1;
   puts( disk_save || disk_lifecycle ? "host: prepared plus3" : "host: prepared 48" );
+  if( tape_record ) {
+    if( operation( "start tape recording", fuse_host_start_tape_recording() ) ||
+        frames( 2, &frame_turns ) ||
+        operation( "stop tape recording", fuse_host_stop_tape_recording() ) ||
+        operation( "save recorded tape", fuse_host_save_tape_file( argv[3] ) ) ||
+        operation( "tape eject", fuse_host_eject_tape() ) ) goto cleanup;
+    puts( "host: recorded two frames; saved and ejected tape" );
+    status = EXIT_SUCCESS;
+    goto cleanup;
+  }
   if( tape_lifecycle ) {
     if( operation( "tape insertion", fuse_host_insert_tape_file( argv[3] ) ) ||
         operation( "tape rewind", fuse_host_rewind_tape() ) ||

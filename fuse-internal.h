@@ -52,6 +52,9 @@ void fuse_host_config_free( fuse_host_config *config );
 int fuse_host_config_set_machine( fuse_host_config *config, const char *id );
 int fuse_host_config_set_sound( fuse_host_config *config, int enabled );
 int fuse_host_config_set_auto_load( fuse_host_config *config, int enabled );
+/* Existing ROM tape-trap setting (default retained). Disable for explicit
+   pulse recording; enabled SAVE traps append decoded blocks automatically. */
+int fuse_host_config_set_tape_traps( fuse_host_config *config, int enabled );
 
 /* A synchronous ROM result, not a filesystem path. Provider context remains
    borrowed through shutdown, including failed-startup cleanup. On every acquire,
@@ -162,6 +165,18 @@ fuse_host_operation_result fuse_host_rewind_tape( void );
 fuse_host_operation_result fuse_host_select_tape_block( int block );
 fuse_host_operation_result fuse_host_save_tape_file( const char *filename );
 fuse_host_operation_result fuse_host_eject_tape( void );
+
+/* Record into the engine's tape, including an empty deck; no file sink here.
+   Start requires tape traps disabled; enabled traps, missing tape object or
+   RZX refusal is MEDIA_ERROR (the existing RZX diagnostic remains). With traps
+   disabled, an already-active recorder is success. Stop remains available if
+   the setting changes during recording. It is idle-safe and finalizes intervals
+   into blocks, independently of playback. A stop
+   failure is MEDIA_ERROR but recording has ended, buffers are freed and any
+   blocks already appended remain; retry does not recover the discarded tail.
+   Save/eject retain their existing implicit recording finalization. */
+fuse_host_operation_result fuse_host_start_tape_recording( void );
+fuse_host_operation_result fuse_host_stop_tape_recording( void );
 /* Zero-based slots. Explicit Media insert, without File Open's autoload/machine
    selection. Existing replacement questions remain; OK can mean cancelled
    replacement. Save takes a borrowed chosen target, or NULL for the retained

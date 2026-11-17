@@ -294,6 +294,18 @@ check-tape-save-ui: unittests/tapesaveuitest
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  "$$program" "$$rom"; test -z "$$(find . -type f -print)"
 
+# Real recorder with controlled append failures and selected-menu reentry.
+check_PROGRAMS += unittests/taperecordtest
+unittests_taperecordtest_SOURCES = unittests/taperecordtest.c
+unittests_taperecordtest_LDADD = libfuselegacy.la
+LIFECYCLE_CHECK_TARGETS += check-tape-recording
+.PHONY: check-tape-recording
+check-tape-recording: unittests/taperecordtest
+	@set -e; program="$(abs_top_builddir)/unittests/taperecordtest$(EXEEXT)"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  "$$program"; test -z "$$(find . -type f -print)"
+
 # Shared floppy save mechanics with controlled chooser/confirmation/writer services.
 check_PROGRAMS += unittests/floppysaveuitest unittests/floppysavelegacytest
 unittests_floppysaveuitest_SOURCES = unittests/floppysaveuitest.c unittests/floppysaveui.c
@@ -357,6 +369,8 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=2; releases=2' > expected-open; \
 	  printf '%s\n' 'host: prepared 48' 'host: tape deck controls; saved and ejected' \
 	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-tape-life; \
+	  printf '%s\n' 'host: prepared 48' 'host: recorded two frames; saved and ejected tape' \
+	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-record; \
 	  printf '%s\n' 'host: prepared plus3' 'host: saved disk through plus3 drive 0' \
 	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-disk; \
 	  printf '%s\n' 'host: prepared plus3' \
@@ -382,6 +396,16 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	      > "$$consumer-tape-roundtrip.out" 2> "$$consumer-tape-roundtrip.err"; \
 	    cmp expected-tape-life "$$consumer-tape-roundtrip.out"; cmp sample.tap tape-roundtrip.tap; \
 	    rm tape-life.tzx tape-roundtrip.tap; \
+	    "$$program" only48 --record-tape recorded.pzx > "$$consumer-record.out" 2> "$$consumer-record.err"; \
+	    cmp expected-record "$$consumer-record.out"; \
+	    "$$root/legacyenginelinktest$(EXEEXT)" --host-operations-test recording-readback "$$roms"; \
+	    rm recorded.pzx; \
+	    if "$$program" only48 --record-tape missing-directory/recorded.pzx \
+	      > "$$consumer-record-fail.out" 2> "$$consumer-record-fail.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    test -s "$$consumer-record-fail.err"; \
+	    grep -Fx 'host: stopped; frame turns=2; budget turns=0; ROM requests=1; releases=1' \
+	      "$$consumer-record-fail.out" > /dev/null; \
 	    "$$program" "$$roms" --save-disk sample.udi "$$consumer-copy.udi" \
 	      > "$$consumer-disk.out" 2> "$$consumer-disk.err"; \
 	    cmp expected-disk "$$consumer-disk.out"; cmp sample.udi "$$consumer-copy.udi"; \
@@ -462,15 +486,17 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
-	    for mode in success tape-contract autoload-success autoload-failure \
+	    for mode in success tape-contract trapped-recording autoload-success autoload-failure \
 	      open-auto open-noauto open-custom open-reset-failure open-snapshot open-fallback open-rzx-stop \
 	      disk-save disk-save-beta \
 	      reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
 	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$mode" "$$roms"; \
 	    done; \
-	    "$$root/$$consumer$(EXEEXT)" --host-operations-test legacy-tape-deck "$$roms" > deck-legacy.out 2> deck-legacy.err; \
-	    "$$root/$$consumer$(EXEEXT)" --host-operations-test tape-deck "$$roms" > deck-host.out 2> deck-host.err; \
-	    cmp deck-legacy.out deck-host.out; cmp deck-legacy.err deck-host.err; \
+	    for kind in tape-deck tape-recording; do \
+	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "legacy-$$kind" "$$roms" > deck-legacy.out 2> deck-legacy.err; \
+	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$kind" "$$roms" > deck-host.out 2> deck-host.err; \
+	      cmp deck-legacy.out deck-host.out; cmp deck-legacy.err deck-host.err; \
+	    done; \
 	    rm deck-legacy.out deck-host.out deck-legacy.err deck-host.err; \
 	  done; \
 	  test -z "$$(find . -type f -print)"; \

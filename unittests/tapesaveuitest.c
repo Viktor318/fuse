@@ -41,6 +41,8 @@ check_deck_busy( void )
   assert( fuse_host_select_tape_block( 0 ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_save_tape_file( "not-written.tzx" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_eject_tape() == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_start_tape_recording() == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_stop_tape_recording() == FUSE_HOST_OPERATION_BUSY );
 }
 
 static fuse_host_operation_result

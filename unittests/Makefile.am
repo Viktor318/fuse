@@ -367,9 +367,23 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=1; releases=1' > expected-tape; \
 	  printf '%s\n' 'host: prepared 48' 'host: File Open returned legacy success' \
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=2; releases=2' > expected-open; \
-	  printf '%s\n' 'host: prepared 48' 'host: tape deck controls; saved and ejected' \
+	  printf '%s\n' 'host: prepared 48' \
+	    'host: playing tape copy; present=1; playing=1; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Standard Speed Data; 2 bytes' \
+	    'host: saved tape copy; present=1; playing=0; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Standard Speed Data; 2 bytes' \
+	    'host: ejected tape copy; present=0; playing=0; recording=0; modified=0; current=-1; blocks=0' \
+	    'host: tape deck controls; saved and ejected' \
+	    'host: retained tape copy after shutdown; present=1; playing=0; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Standard Speed Data; 2 bytes' \
 	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-tape-life; \
-	  printf '%s\n' 'host: prepared 48' 'host: recorded two frames; saved and ejected tape' \
+	  printf '%s\n' 'host: prepared 48' \
+	    'host: recording tape copy; present=0; playing=0; recording=1; modified=0; current=-1; blocks=0' \
+	    'host: saved recorded tape copy; present=1; playing=0; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Pause; 0 ms' \
+	    'host: recorded two frames; saved and ejected tape' \
+	    'host: retained tape copy after shutdown; present=1; playing=0; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Pause; 0 ms' \
 	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-record; \
 	  printf '%s\n' 'host: prepared 48' 'host: saved snapshot; reset and reopened' \
 	    'host: shutdown; frame turns=3; budget turns=0; ROM requests=3; releases=3' > expected-snapshot; \
@@ -499,7 +513,7 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
-	    for mode in success tape-contract trapped-recording snapshot-roundtrip autoload-success autoload-failure \
+	    for mode in success tape-contract tape-info trapped-recording snapshot-roundtrip autoload-success autoload-failure \
 	      open-auto open-noauto open-custom open-reset-failure open-snapshot open-fallback open-rzx-stop \
 	      disk-save disk-save-beta \
 	      reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \

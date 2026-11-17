@@ -47,7 +47,9 @@ static int append_calls, fail_at, inside_operation, menu_calls;
 static void
 check_busy( void )
 {
+  fuse_tape_info *info = (fuse_tape_info *)1;
   if( !inside_operation ) return;
+  assert( fuse_host_copy_tape_info( &info ) == FUSE_HOST_OPERATION_BUSY && !info );
   assert( fuse_host_start_tape_recording() == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_stop_tape_recording() == FUSE_HOST_OPERATION_BUSY );
 }

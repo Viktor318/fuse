@@ -41,7 +41,8 @@ The host API is declared in `fuse-internal.h`; CLI adapter entries are in
 `fuse-config.c` owns the opaque configuration, engine defaults and application.
 `fuse-operations.c` implements routine-backed machine/input/File Open and tape
 insertion/deck/save/eject/recording entries, including admission, eligibility and
-completion. Tape modules retain the existing mechanics. `uimedia.c` keeps disk
+completion. Tape modules retain the existing mechanics; `tape.c` also owns tape
+observation copying/freeing alongside the live tape state. `uimedia.c` keeps disk
 entries that depend on its private registry/save helpers; no extra delegates or
 private interfaces are introduced merely to centralize names. These are engine
 implementations, not caller-side wrappers. `fuse.c` owns preparation,
@@ -310,6 +311,27 @@ remain; MEDIA_ERROR is not rollback and retry cannot recover the discarded tail.
 Neither operation changes pause nesting. Stop remains available if traps become
 enabled during an existing recording. Save/eject still finalize implicitly.
 
+## Owned tape browser/transport observations
+
+`fuse_host_copy_tape_info(&info)` returns an allocated `fuse_tape_info` defined in
+`fuse-tape.h`. It copies presence, playing, recording, modified, zero-based current
+block (-1 when none) and ordered browser rows. Each row owns its description and
+detail strings using the existing GTK/widget/Win32 browser formatting: description
+is an ASCII type label, details are UTF-8 and may be empty or long. This is display
+text, not raw block metadata, a parallel type enum or the Cocoa archive-info panel.
+
+There are no live tape/libspectrum pointers or generation/decision tokens. Copies
+remain usable after cursor changes, replacement, eject and shutdown; release the
+whole value with `fuse_tape_info_free`, which accepts NULL and accesses no engine
+state. Later commands resolve then-current state, not the copied rows.
+
+Copy uses normal owner-thread/lifecycle guards, clears output on failure and does
+not pause, select/rewind, advance time or finalize recording. In particular polling
+must not stop competition RZX recording. Recording on an empty deck reports
+recording=true with no blocks until finalization appends intervals. A formatter
+failure returns MEDIA_ERROR with no partial copy; availability is not inferred
+from dirty/playing/recording flags. It is not a complete emulator status API.
+
 ## Shared floppy save implementation
 
 `ui_media_drive_save` retains the selected-UI filename chooser. The private engine
@@ -383,10 +405,15 @@ copy after shutdown. The driver never accesses drive/FDD internals.
 `--tape-lifecycle INPUT OUTPUT` explicitly inserts without autoload, rewinds/selects
 block 0, toggles playback, runs two frames, stops, rewinds, saves and ejects.
 The codec owns conversion; this does not prove program-loading completion.
+It prints owned playing/saved/ejected tape views, including browser rows, and
+retains a saved view for reading/freeing after shutdown.
 `--record-tape OUTPUT` explicitly disables tape traps in its preparation config,
 records two frames on a fresh 48K machine, then stops recording, saves and ejects
 through engine entries. No input image or host-side
 pulse encoding is needed; the engine handles timestamps, signal and codec.
+It also reads an empty-but-recording view and retains the finalized saved view.
+Detail strings preserve existing browser formatting (including the current
+millisecond label for pulse holds); they are not a new precise timing interface.
 `--save-snapshot OUTPUT` runs two frames, saves through the engine, hard-resets,
 reopens through general File Open, then runs one frame. Format/bytes stay in the
 engine; the example is not evidence of complete checkpoint determinism.

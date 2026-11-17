@@ -34,7 +34,9 @@ static int expected_pause, host_eject;
 static void
 check_deck_busy( void )
 {
+  fuse_tape_info *info = (fuse_tape_info *)1;
   if( !host_eject ) return;
+  assert( fuse_host_copy_tape_info( &info ) == FUSE_HOST_OPERATION_BUSY && !info );
   assert( fuse_host_toggle_tape_play() == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_stop_tape() == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_rewind_tape() == FUSE_HOST_OPERATION_BUSY );

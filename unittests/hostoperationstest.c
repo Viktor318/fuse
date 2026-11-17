@@ -38,10 +38,14 @@ static struct {
 } provider;
 
 static fuse_disk_drive_info *retained_disk_info;
+static fuse_tape_info *retained_tape_info;
 
 static void
 check_tape_deck_blocked( fuse_host_operation_result expected )
 {
+  fuse_tape_info *info = (fuse_tape_info *)1;
+  assert( fuse_host_copy_tape_info( &info ) == expected && !info );
+  assert( fuse_host_copy_tape_info( NULL ) == expected );
   assert( fuse_host_toggle_tape_play() == expected );
   assert( fuse_host_stop_tape() == expected );
   assert( fuse_host_rewind_tape() == expected );
@@ -329,6 +333,121 @@ deck_edges( void )
 {
   struct deck_edges edges = { 0, 0 };
   event_foreach( count_deck_edges, &edges ); return edges;
+}
+
+static libspectrum_error
+info_error( libspectrum_error error, const char *format, va_list ap )
+{
+  fuse_tape_info *info = (fuse_tape_info *)1;
+  (void)format; (void)ap;
+  assert( fuse_host_copy_tape_info( &info ) == FUSE_HOST_OPERATION_BUSY && !info );
+  assert( fuse_host_select_tape_block( 0 ) == FUSE_HOST_OPERATION_BUSY );
+  return error;
+}
+
+static void
+check_tape_info( void )
+{
+  const unsigned char bytes[] = { 2, 0, 0xff, 0xff, 2, 0, 0, 0 };
+  fuse_tape_info *a, *b, *empty;
+  libspectrum_tape_block *comment, *bad, *current, *active;
+  libspectrum_tape_iterator iterator;
+  libspectrum_error_function_t previous_error;
+  struct deck_edges edges, after;
+  libspectrum_dword clock;
+  char *text = libspectrum_new( char, 20001 );
+  FILE *file;
+  size_t i;
+  assert( fuse_host_copy_tape_info( NULL ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+  fuse_tape_info_free( NULL );
+  assert( fuse_host_copy_tape_info( &empty ) == OK );
+  assert( !empty->present && !empty->playing && !empty->recording && !empty->modified );
+  assert( empty->current_block == -1 && !empty->block_count && !empty->blocks );
+  file = fopen( "info.tap", "wb" ); assert( file );
+  assert( fwrite( bytes, 1, sizeof(bytes), file ) == sizeof(bytes) && !fclose( file ) );
+  assert( fuse_host_insert_tape_file( "info.tap" ) == OK );
+  for( i = 0; i < 20000; i += 2 ) memcpy( text + i, "\xc2\xa3", 2 );
+  text[20000] = 0;
+  comment = libspectrum_tape_block_alloc( LIBSPECTRUM_TAPE_BLOCK_COMMENT );
+  assert( !libspectrum_tape_block_set_text( comment, text ) );
+  assert( !libspectrum_tape_append_block( tape, comment ) );
+  bad = libspectrum_tape_block_alloc( LIBSPECTRUM_TAPE_BLOCK_GROUP_END );
+  assert( !libspectrum_tape_append_block( tape, bad ) );
+  tape_modified = 1;
+  /* A formatter error after several copied rows frees the whole partial copy.
+     Restore the controlled invalid type before normal playback/disposal. */
+  assert( !libspectrum_tape_block_set_type( bad, (libspectrum_tape_type)0x7fff ) );
+  previous_error = libspectrum_error_function; libspectrum_error_function = info_error;
+  a = (fuse_tape_info *)1;
+  assert( fuse_host_copy_tape_info( &a ) == FUSE_HOST_OPERATION_MEDIA_ERROR && !a );
+  libspectrum_error_function = previous_error;
+  assert( !libspectrum_tape_block_set_type( bad, LIBSPECTRUM_TAPE_BLOCK_GROUP_END ) );
+  assert( fuse_host_select_tape_block( 1 ) == OK );
+  assert( fuse_host_toggle_tape_play() == OK );
+  assert( fuse_run_tstates( 4000 ) == FUSE_RUN_COMPLETED );
+  active = libspectrum_tape_current_block( tape ); clock = tstates; edges = deck_edges();
+  assert( !fuse_emulation_pause() && !fuse_emulation_pause() );
+  assert( fuse_host_copy_tape_info( &a ) == OK && fuse_host_copy_tape_info( &b ) == OK );
+  assert( a != b && a->blocks != b->blocks && a->block_count == 4 && b->block_count == 4 );
+  assert( a->present && a->playing && !a->recording && a->modified && a->current_block == 1 );
+  current = libspectrum_tape_iterator_init( &iterator, tape );
+  for( i = 0; i < a->block_count; i++, current = libspectrum_tape_iterator_next( &iterator ) ) {
+    char description[80], *details;
+    assert( !libspectrum_tape_block_description( description, sizeof(description), current ) );
+    assert( !tape_block_details( &details, current ) );
+    assert( !strcmp( description, a->blocks[i].description ) && !strcmp( details, a->blocks[i].details ) );
+    assert( !strcmp( a->blocks[i].description, b->blocks[i].description ) );
+    assert( !strcmp( a->blocks[i].details, b->blocks[i].details ) );
+    assert( a->blocks[i].description != b->blocks[i].description && a->blocks[i].details != b->blocks[i].details );
+    libspectrum_free( details );
+  }
+  assert( strlen( a->blocks[2].details ) == 20000 && !strcmp( a->blocks[2].details, text ) );
+  assert( a->blocks[2].details != text && !*a->blocks[3].details );
+  b->blocks[2].details[0] = 'X'; b->present = 0;
+  fuse_tape_info_free( b );
+  for( i = 0; i < 8; i++ ) {
+    assert( fuse_host_copy_tape_info( &b ) == OK && b->present );
+    assert( !strcmp( b->blocks[2].details, text ) ); fuse_tape_info_free( b );
+  }
+  after = deck_edges();
+  assert( after.count == edges.count && after.when == edges.when && tstates == clock );
+  assert( libspectrum_tape_current_block( tape ) == active );
+  assert( tape_get_current_block() == 1 && tape_modified && tape_is_playing() && fuse_emulation_paused == 2 );
+  assert( !fuse_emulation_unpause() && !fuse_emulation_unpause() );
+  assert( fuse_host_select_tape_block( 0 ) == OK );
+  assert( fuse_host_copy_tape_info( &b ) == OK && b->current_block == 0 );
+  assert( a->current_block == 1 && a->playing && a->block_count == 4 );
+  fuse_tape_info_free( b );
+  /* Replacement disposes the old blocks, including long metadata, not the copy. */
+  file = fopen( "replacement.tap", "wb" ); assert( file );
+  assert( fwrite( bytes, 1, 4, file ) == 4 && !fclose( file ) );
+  assert( fuse_host_insert_tape_file( "replacement.tap" ) == OK );
+  assert( fuse_host_copy_tape_info( &b ) == OK );
+  assert( b->present && !b->playing && !b->modified && b->block_count == 1 && b->current_block == 0 );
+  fuse_tape_info_free( b );
+  assert( a->playing && a->modified && a->current_block == 1 && strlen( a->blocks[2].details ) == 20000 );
+  assert( !empty->present && !empty->block_count && empty->current_block == -1 );
+  fuse_tape_info_free( empty );
+  retained_tape_info = a;
+  assert( fuse_host_eject_tape() == OK );
+  assert( !remove( "info.tap" ) && !remove( "replacement.tap" ) );
+  settings_current.competition_mode = 1;
+  assert( !rzx_start_recording( "info.rzx", 0 ) && rzx_recording );
+  assert( fuse_host_copy_tape_info( &b ) == OK && rzx_recording );
+  assert( !b->present && !b->playing && !b->recording && b->current_block == -1 );
+  fuse_tape_info_free( b );
+  assert( !rzx_stop_recording() && !remove( "info.rzx" ) );
+  settings_current.competition_mode = 0;
+  assert( fuse_host_start_tape_recording() == OK ); tstates += 37;
+  assert( fuse_host_copy_tape_info( &b ) == OK );
+  assert( b->recording && !b->present && !b->modified && !b->block_count && b->current_block == -1 );
+  assert( tape_recording );
+  fuse_tape_info_free( b );
+  assert( fuse_host_stop_tape_recording() == OK );
+  assert( fuse_host_copy_tape_info( &b ) == OK );
+  assert( b->present && !b->recording && b->modified && b->block_count == 1 && b->current_block == 0 );
+  fuse_tape_info_free( b );
+  assert( fuse_host_eject_tape() == OK );
 }
 
 static void
@@ -947,7 +1066,8 @@ host_operations_test( int argc, char **argv )
   assert( !fuse_host_config_set_tape_traps( config, 1 ) );
   assert( fuse_host_config_set_tape_traps( config, -1 ) );
   assert( fuse_host_config_set_tape_traps( config, 2 ) );
-  if( !strcmp( argv[1], "tape-recording" ) || !strcmp( argv[1], "legacy-tape-recording" ) )
+  if( !strcmp( argv[1], "tape-recording" ) || !strcmp( argv[1], "legacy-tape-recording" ) ||
+      !strcmp( argv[1], "tape-info" ) )
     assert( !fuse_host_config_set_tape_traps( config, 0 ) );
   if( !strncmp( argv[1], "open-", 5 ) )
     assert( !fuse_host_config_set_auto_load( config, strcmp( argv[1], "open-noauto" ) != 0 ) );
@@ -963,8 +1083,11 @@ host_operations_test( int argc, char **argv )
   assert( settings_current.joystick_2_output == JOYSTICK_TYPE_FULLER );
   assert( settings_current.mouse_swap_buttons == 1 );
   assert( settings_current.tape_traps ==
-          ( strcmp( argv[1], "tape-recording" ) && strcmp( argv[1], "legacy-tape-recording" ) ? 1 : 0 ) );
-  if( !strcmp( argv[1], "tape-deck" ) || !strcmp( argv[1], "legacy-tape-deck" ) ) {
+          ( strcmp( argv[1], "tape-recording" ) && strcmp( argv[1], "legacy-tape-recording" ) &&
+            strcmp( argv[1], "tape-info" ) ? 1 : 0 ) );
+  if( !strcmp( argv[1], "tape-info" ) ) {
+    check_tape_info();
+  } else if( !strcmp( argv[1], "tape-deck" ) || !strcmp( argv[1], "legacy-tape-deck" ) ) {
     check_tape_deck( !strcmp( argv[1], "tape-deck" ) );
   } else if( !strcmp( argv[1], "tape-recording" ) || !strcmp( argv[1], "legacy-tape-recording" ) ) {
     check_tape_recording( !strcmp( argv[1], "tape-recording" ) );
@@ -1048,6 +1171,12 @@ host_operations_test( int argc, char **argv )
   assert( !fuse_host_resources_active() );
   check_disk_info_blocked( FUSE_HOST_OPERATION_NOT_READY );
   check_tape_deck_blocked( FUSE_HOST_OPERATION_NOT_READY );
+  if( retained_tape_info ) {
+    assert( retained_tape_info->playing && retained_tape_info->modified && retained_tape_info->current_block == 1 );
+    assert( retained_tape_info->block_count == 4 && strlen( retained_tape_info->blocks[2].details ) == 20000 );
+    assert( !strcmp( retained_tape_info->blocks[0].description, "Standard Speed Data" ) );
+    fuse_tape_info_free( retained_tape_info );
+  }
   if( retained_disk_info ) {
     assert( retained_disk_info->loaded && !strcmp( retained_disk_info->filename, "api-copy.udi" ) );
     assert( retained_disk_info->name && retained_disk_info->enabled && retained_disk_info->available );

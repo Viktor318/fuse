@@ -84,6 +84,18 @@ print_disk_info( const char *label, const fuse_disk_drive_info *info )
           info->write_protected, info->filename ? info->filename : "(none)" );
 }
 
+static void
+print_tape_info( const char *label, const fuse_tape_info *info )
+{
+  size_t i;
+  printf( "host: %s; present=%d; playing=%d; recording=%d; modified=%d; current=%d; blocks=%zu\n",
+          label, info->present, info->playing, info->recording, info->modified,
+          info->current_block, info->block_count );
+  for( i = 0; i < info->block_count; i++ )
+    printf( "host: tape row %zu; %s; %s\n", i,
+            info->blocks[i].description, info->blocks[i].details );
+}
+
 static int
 frames( unsigned int count, unsigned int *completed )
 {
@@ -106,6 +118,7 @@ main( int argc, char **argv )
   fuse_host_resources resources = { &provider, acquire_rom };
   fuse_host_config *config;
   fuse_disk_drive_info *disk = NULL, *saved_disk = NULL;
+  fuse_tape_info *tape_info = NULL, *saved_tape_info = NULL;
   fuse_init_result init;
   fuse_run_result run;
   unsigned int frame_turns = 0, budget_turns = 0;
@@ -156,10 +169,15 @@ main( int argc, char **argv )
   }
   if( tape_record ) {
     if( operation( "start tape recording", fuse_host_start_tape_recording() ) ||
-        frames( 2, &frame_turns ) ||
+        operation( "recording info", fuse_host_copy_tape_info( &tape_info ) ) ) goto cleanup;
+    print_tape_info( "recording tape copy", tape_info );
+    fuse_tape_info_free( tape_info ); tape_info = NULL;
+    if( frames( 2, &frame_turns ) ||
         operation( "stop tape recording", fuse_host_stop_tape_recording() ) ||
         operation( "save recorded tape", fuse_host_save_tape_file( argv[3] ) ) ||
+        operation( "saved tape info", fuse_host_copy_tape_info( &saved_tape_info ) ) ||
         operation( "tape eject", fuse_host_eject_tape() ) ) goto cleanup;
+    print_tape_info( "saved recorded tape copy", saved_tape_info );
     puts( "host: recorded two frames; saved and ejected tape" );
     status = EXIT_SUCCESS;
     goto cleanup;
@@ -169,11 +187,18 @@ main( int argc, char **argv )
         operation( "tape rewind", fuse_host_rewind_tape() ) ||
         operation( "tape selection", fuse_host_select_tape_block( 0 ) ) ||
         operation( "tape play toggle", fuse_host_toggle_tape_play() ) ||
-        frames( 2, &frame_turns ) ||
+        operation( "playing tape info", fuse_host_copy_tape_info( &tape_info ) ) ) goto cleanup;
+    print_tape_info( "playing tape copy", tape_info );
+    fuse_tape_info_free( tape_info ); tape_info = NULL;
+    if( frames( 2, &frame_turns ) ||
         operation( "tape stop", fuse_host_stop_tape() ) ||
         operation( "tape rewind", fuse_host_rewind_tape() ) ||
         operation( "tape save", fuse_host_save_tape_file( argv[4] ) ) ||
-        operation( "tape eject", fuse_host_eject_tape() ) ) goto cleanup;
+        operation( "saved tape info", fuse_host_copy_tape_info( &saved_tape_info ) ) ||
+        operation( "tape eject", fuse_host_eject_tape() ) ||
+        operation( "empty tape info", fuse_host_copy_tape_info( &tape_info ) ) ) goto cleanup;
+    print_tape_info( "saved tape copy", saved_tape_info );
+    print_tape_info( "ejected tape copy", tape_info );
     puts( "host: tape deck controls; saved and ejected" );
     status = EXIT_SUCCESS;
     goto cleanup;
@@ -253,6 +278,9 @@ cleanup:
   if( saved_disk ) print_disk_info( "retained copy after shutdown", saved_disk );
   fuse_disk_drive_info_free( saved_disk );
   fuse_disk_drive_info_free( disk );
+  if( saved_tape_info ) print_tape_info( "retained tape copy after shutdown", saved_tape_info );
+  fuse_tape_info_free( saved_tape_info );
+  fuse_tape_info_free( tape_info );
   if( provider.requests != provider.releases || provider.pending ) {
     fprintf( stderr, "host: ROM ownership mismatch\n" );
     status = EXIT_FAILURE;

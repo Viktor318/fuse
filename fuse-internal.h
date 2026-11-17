@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include "input.h"
 #include "fuse-disk.h"
+#include "fuse-tape.h"
 #include "fuse-joystick.h"
 
 /* Private, selected-UI-bound engine lifecycle. Not an installed embedding API:
@@ -186,6 +187,14 @@ fuse_host_operation_result fuse_host_eject_tape( void );
    Save/eject retain their existing implicit recording finalization. */
 fuse_host_operation_result fuse_host_start_tape_recording( void );
 fuse_host_operation_result fuse_host_stop_tape_recording( void );
+
+/* Owned copy of current browser rows and transport state. Same owner-thread /
+   lifecycle guards as operations; failure sets *info=NULL. No pause, selection,
+   playback change or implicit recording finalization. Strings/values survive
+   replacement/eject/shutdown. A copy describes then-current state, not a handle
+   or authorization for later commands. Recording can be active on an empty deck.
+   Archive-info panels/raw block metadata are not represented by these rows. */
+fuse_host_operation_result fuse_host_copy_tape_info( fuse_tape_info **info );
 /* Zero-based slots. Explicit Media insert, without File Open's autoload/machine
    selection. Existing replacement questions remain; OK can mean cancelled
    replacement. Save takes a borrowed chosen target, or NULL for the retained

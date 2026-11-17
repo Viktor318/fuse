@@ -39,8 +39,8 @@ The host API is declared in `fuse-internal.h`; CLI adapter entries are in
 `fuse-legacy.h`, which includes the host header for shared types and operations.
 `fuse-host.c` retains only host ROM-provider callback storage/routing.
 `fuse-config.c` owns the opaque configuration, engine defaults and application.
-`fuse-operations.c` implements machine/input/File Open/tape operation entries;
-`uimedia.c` implements the disk entries. These engine implementations own admission
+`fuse-operations.c` implements machine/input/File Open entries; `tape.c` owns
+tape insertion/deck/save/eject entries, and `uimedia.c` owns the disk entries. These engine implementations own admission
 and completion, rather than caller-side wrappers. `fuse.c` owns preparation,
 lifecycle state and execution. `fuse-engine.h` declares private implementation
 hooks without exposing lifecycle state; it is not a second operation API.
@@ -232,7 +232,7 @@ can partially mutate state and retains legacy fatal paths. No rollback, extra
 cleanup, strict-ID failure rule or new fallback policy is imposed. The example
 shuts down on failure; this is not a universal error-safe loading API.
 
-## Tape-file insertion
+## Tape operations
 
 `fuse_host_insert_tape_file(path)` exposes the existing **Media → Tape → Open**
 intent: `tape_open(path, 0)`. That menu action does not consult `auto_load`; it
@@ -252,10 +252,25 @@ MEDIA_ERROR maps the legacy nonzero result, which can also mean cancellation.
 The session remains runnable, but there is no tape rollback guarantee: read
 failure can leave old media untouched, cancellation retains the existing tape,
 and a decode failure can leave the old tape removed and partial new blocks.
-The wrapper neither retries close nor adds cleanup after a failed operation.
-This uses the existing filesystem reader, not the ROM provider; separate save/
-eject commands and non-path resources are not exposed.
-Success reports insertion, not playback or program-loading completion.
+The entry neither retries close nor adds cleanup after a failed operation.
+This uses the existing filesystem reader, not the ROM provider; non-path resources
+are not exposed. Success reports insertion, not playback/loading completion.
+
+`fuse_host_toggle_tape_play()` uses manual `tape_toggle_play(0)`, not ensure-playing
+or autoload. `fuse_host_stop_tape()` affects playback only, not recording.
+`fuse_host_rewind_tape()` succeeds on an empty deck. Selection uses zero-based
+`fuse_host_select_tape_block(int)`: negative is invalid, missing block is
+MEDIA_ERROR. Neither rewind nor selection implicitly stops playback; queued-edge
+and partial-interval behaviour remain the existing mechanics (including partial
+interval reset before a failed selection).
+
+`fuse_host_save_tape_file(path)` borrows the target and keeps format inference,
+TZX fallback, recording finalization and encoding in the engine. It need not stop
+playback; failure can follow recording finalization and is not a rollback.
+`fuse_host_eject_tape()` finalizes recording then uses Save/Discard/Cancel, retaining
+media on cancellation or failed Save. These entries own admission/completion;
+selected-UI decisions may block. Recording start/stop commands are not exposed:
+start's current void/diagnostic conventions need their own outcome boundary.
 
 ## Shared floppy save implementation
 
@@ -327,6 +342,9 @@ on +3 slot 0 without running the CPU. Geometry and encoding stay in the engine;
 it is a bounded API example, not a new replacement/overwrite policy. It prints
 owned drive copies at New, control changes and eject, then reads a retained saved
 copy after shutdown. The driver never accesses drive/FDD internals.
+`--tape-lifecycle INPUT OUTPUT` explicitly inserts without autoload, rewinds/selects
+block 0, toggles playback, runs two frames, stops, rewinds, saves and ejects.
+The codec owns conversion; this does not prove program-loading completion.
 
 In a configured null-UI build:
 
@@ -338,6 +356,7 @@ make unittests/nullhostlink unittests/nullhostsource
 ./unittests/nullhostlink /path/to/fuse/roms --open /path/to/demo.tap
 ./unittests/nullhostlink /path/to/fuse/roms --save-disk /path/to/input.dsk /path/to/copy.udi
 ./unittests/nullhostlink /path/to/fuse/roms --disk-lifecycle /path/to/new.udi
+./unittests/nullhostlink /path/to/fuse/roms --tape-lifecycle /path/to/input.tap /path/to/copy.tzx
 make check-null-host
 ```
 
@@ -359,9 +378,9 @@ Null-UI builds include these checks in `make check`:
 | `check-host-prepare` | Configuration, all eight joystick interfaces on three slots, invalid inputs, ROM ownership/provenance and preference isolation. |
 | `check-host-operations` | Typed machine/input behaviour, tape and +3/Beta disk lifecycle, File Open eligibility/restore/RZX stop, admission and errors. |
 | `check-snapshot-file` | Existing file serialization and error cleanup. |
-| `check-tape-save-ui` | Save failures retain modified/playing tape, save/cancel/discard and nested pause ownership, using selected-service doubles. |
+| `check-tape-save-ui` | UI Save and host eject retain modified/playing tape on failed/cancelled Save, nested pause ownership and re-entry rejection. |
 | `check-floppy-save-ui` | Host/legacy lifecycle, decisions/failure retention, flags and owned observation lifetime across changes/shutdown, nested/unpaused. |
-| `check-null-host` | Direct input/Open/disk lifecycle driver flows, ROM/media failures, saved image/legacy comparison and preference isolation in both linking forms. |
+| `check-null-host` | Direct input/Open/tape/disk lifecycle flows, ROM/media failures, saved image/legacy comparison and preference isolation in both linking forms. |
 | `check-startup-unwind` | Instrumented startup failures and reverse cleanup; requires null UI with automation. |
 
 Startup-unwind hooks compile out of the production engine. Tests run accepted

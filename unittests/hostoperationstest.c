@@ -39,6 +39,17 @@ static struct {
 static fuse_disk_drive_info *retained_disk_info;
 
 static void
+check_tape_deck_blocked( fuse_host_operation_result expected )
+{
+  assert( fuse_host_toggle_tape_play() == expected );
+  assert( fuse_host_stop_tape() == expected );
+  assert( fuse_host_rewind_tape() == expected );
+  assert( fuse_host_select_tape_block( 0 ) == expected );
+  assert( fuse_host_save_tape_file( "not-written.tzx" ) == expected );
+  assert( fuse_host_eject_tape() == expected );
+}
+
+static void
 check_disk_info_blocked( fuse_host_operation_result expected )
 {
   fuse_disk_drive_info dummy, *info = &dummy;
@@ -67,6 +78,7 @@ acquire_rom( void *context, const char *name, fuse_host_rom *rom )
   rom->context = &provider; rom->release = release_rom;
   rom->custom = provider.custom || provider.synthetic_beta;
   check_disk_info_blocked( FUSE_HOST_OPERATION_BUSY );
+  check_tape_deck_blocked( FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_select_machine( "48" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_release_all() == FUSE_HOST_OPERATION_BUSY );
@@ -261,6 +273,124 @@ check_input( void )
   assert( joystick_kempston_read( 0, &attached ) == 0x10 );
   assert( fuse_host_release_all() == OK );
   assert( tstates == clock );
+}
+
+static int
+manual_tape_toggle( void ) { return tape_toggle_play( 0 ); }
+
+static int
+deck_call( int host, fuse_host_operation_result (*entry)( void ), int (*legacy)( void ) )
+{
+  if( host ) {
+    fuse_host_operation_result result = entry();
+    assert( result == OK || result == FUSE_HOST_OPERATION_MEDIA_ERROR );
+    return result != OK;
+  }
+  return !!legacy();
+}
+
+static int
+select_deck_block( int host, int block )
+{
+  if( host ) {
+    fuse_host_operation_result result = fuse_host_select_tape_block( block );
+    assert( result == OK || result == FUSE_HOST_OPERATION_MEDIA_ERROR );
+    return result != OK;
+  }
+  return !!tape_select_block( block );
+}
+
+static int
+save_deck( int host, const char *filename )
+{
+  if( host ) {
+    fuse_host_operation_result result = fuse_host_save_tape_file( filename );
+    assert( result == OK || result == FUSE_HOST_OPERATION_MEDIA_ERROR );
+    return result != OK;
+  }
+  return !!tape_write( filename );
+}
+
+struct deck_edges { int count; libspectrum_dword when; };
+static void
+count_deck_edges( gpointer data, gpointer user_data )
+{
+  event_t *event = data;
+  struct deck_edges *edges = user_data;
+  if( event->type == tape_edge_event ) { edges->count++; edges->when = event->tstates; }
+}
+
+static struct deck_edges
+deck_edges( void )
+{
+  struct deck_edges edges = { 0, 0 };
+  event_foreach( count_deck_edges, &edges ); return edges;
+}
+
+static void
+check_tape_deck( int host )
+{
+  unsigned char bytes[] = { 2, 0, 0xff, 0xff, 2, 0, 0, 0 };
+  libspectrum_tape_block *block;
+  struct deck_edges edges, changed;
+  libspectrum_dword clock = tstates;
+  assert( !deck_call( host, fuse_host_stop_tape, tape_stop ) );
+  assert( !deck_call( host, fuse_host_rewind_tape, tape_rewind ) );
+  assert( !deck_call( host, fuse_host_eject_tape, tape_close ) );
+  assert( deck_call( host, fuse_host_toggle_tape_play, manual_tape_toggle ) == 1 );
+  if( host ) {
+    assert( fuse_host_select_tape_block( -1 ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+    assert( fuse_host_save_tape_file( NULL ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+    assert( fuse_host_save_tape_file( "" ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+  }
+  assert( !tape_read_buffer( bytes, sizeof(bytes), LIBSPECTRUM_ID_TAPE_TAP, "deck.tap", 0 ) );
+  phantom_typist_activate( machine_current->machine, 0 );
+  assert( phantom_typist_is_active() );
+  assert( !deck_call( host, fuse_host_toggle_tape_play, manual_tape_toggle ) && tape_is_playing() );
+  /* Deactivation releases keys now, but the state settles at its frame tick. */
+  phantom_typist_frame();
+  assert( !phantom_typist_is_active() );
+  edges = deck_edges(); assert( edges.count == 1 && tstates == clock );
+  assert( !select_deck_block( host, 1 ) && tape_get_current_block() == 1 && tape_is_playing() );
+  changed = deck_edges(); assert( changed.count == 1 && changed.when == edges.when );
+  assert( select_deck_block( host, 99 ) == 1 && tape_get_current_block() == 1 && tape_is_playing() );
+  assert( !deck_call( host, fuse_host_rewind_tape, tape_rewind ) );
+  assert( tape_get_current_block() == 0 && tape_is_playing() );
+  changed = deck_edges(); assert( changed.count == 1 && changed.when == edges.when );
+  assert( !deck_call( host, fuse_host_toggle_tape_play, manual_tape_toggle ) && !tape_is_playing() );
+  assert( !deck_edges().count );
+  assert( !deck_call( host, fuse_host_toggle_tape_play, manual_tape_toggle ) );
+  assert( fuse_run_tstates( 4000 ) == FUSE_RUN_COMPLETED );
+  block = libspectrum_tape_current_block( tape ); tape_modified = 1;
+  assert( save_deck( host, "missing-directory/deck.tzx" ) == 1 );
+  assert( tape_modified && tape_is_playing() && libspectrum_tape_current_block( tape ) == block );
+  edges = deck_edges(); assert( edges.count == 1 );
+  assert( !save_deck( host, "deck-copy.tzx" ) && !tape_modified && tape_is_playing() );
+  changed = deck_edges(); assert( changed.count == 1 && changed.when == edges.when );
+  assert( !deck_call( host, fuse_host_stop_tape, tape_stop ) && !tape_is_playing() );
+  assert( !deck_call( host, fuse_host_stop_tape, tape_stop ) && !deck_edges().count );
+  tape_record_start(); assert( tape_recording );
+  assert( !deck_call( host, fuse_host_stop_tape, tape_stop ) && tape_recording );
+  tstates += 37;
+  assert( save_deck( host, "missing-directory/recorded.pzx" ) == 1 );
+  assert( !tape_recording && tape_modified && tape_present() );
+  assert( !select_deck_block( host, 2 ) );
+  block = libspectrum_tape_current_block( tape );
+  assert( libspectrum_tape_block_type( block ) == LIBSPECTRUM_TAPE_BLOCK_PAUSE );
+  assert( libspectrum_tape_block_pause_tstates( block ) == 37 );
+  assert( !save_deck( host, "deck-recorded.pzx" ) && !tape_modified );
+  tape_record_start(); assert( tape_recording ); tstates += 11;
+  assert( !deck_call( host, fuse_host_eject_tape, tape_close ) );
+  assert( !tape_recording && !tape_present() );
+  assert( !tape_open( "deck-recorded.pzx", 0 ) && tape_present() );
+  assert( !select_deck_block( host, 2 ) ); /* Reopened extended tape is navigable. */
+  assert( !deck_call( host, fuse_host_eject_tape, tape_close ) );
+  assert( !tape_open( "deck-copy.tzx", 0 ) );
+  block = libspectrum_tape_current_block( tape );
+  assert( libspectrum_tape_block_data_length( block ) == 2 &&
+          !memcmp( libspectrum_tape_block_data( block ), bytes + 2, 2 ) );
+  assert( !deck_call( host, fuse_host_eject_tape, tape_close ) );
+  assert( !remove( "deck-copy.tzx" ) && !remove( "deck-recorded.pzx" ) );
 }
 
 static compat_file_vtable_t tape_file_io;
@@ -660,6 +790,7 @@ active_callback( libspectrum_dword ts, int type, void *data )
 {
   (void)ts; (void)type; (void)data;
   check_disk_info_blocked( FUSE_HOST_OPERATION_BUSY );
+  check_tape_deck_blocked( FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_insert_disk_file( FUSE_DISK_CONTROLLER_PLUS3, 0, "not-opened.udi" ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_save_disk_file( FUSE_DISK_CONTROLLER_PLUS3, 0, NULL ) == FUSE_HOST_OPERATION_BUSY );
   assert( fuse_host_nmi() == FUSE_HOST_OPERATION_BUSY );
@@ -682,6 +813,7 @@ host_operations_test( int argc, char **argv )
   provider.synthetic_beta = !strcmp( argv[1], "disk-save-beta" );
   assert( fuse_host_release_all() == FUSE_HOST_OPERATION_NOT_READY );
   check_disk_info_blocked( FUSE_HOST_OPERATION_NOT_READY );
+  check_tape_deck_blocked( FUSE_HOST_OPERATION_NOT_READY );
   assert( fuse_host_new_disk( FUSE_DISK_CONTROLLER_PLUS3, 0 ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( fuse_host_eject_disk( FUSE_DISK_CONTROLLER_PLUS3, 0 ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( fuse_host_set_disk_flipped( FUSE_DISK_CONTROLLER_PLUS3, 0, 1 ) == FUSE_HOST_OPERATION_NOT_READY );
@@ -709,7 +841,9 @@ host_operations_test( int argc, char **argv )
   assert( settings_current.joystick_1_output == JOYSTICK_TYPE_KEMPSTON );
   assert( settings_current.joystick_2_output == JOYSTICK_TYPE_FULLER );
   assert( settings_current.mouse_swap_buttons == 1 );
-  if( !strcmp( argv[1], "disk-fixture" ) ) {
+  if( !strcmp( argv[1], "tape-deck" ) || !strcmp( argv[1], "legacy-tape-deck" ) ) {
+    check_tape_deck( !strcmp( argv[1], "tape-deck" ) );
+  } else if( !strcmp( argv[1], "disk-fixture" ) ) {
     write_disk_fixture( "sample.udi" );
   } else if( !strcmp( argv[1], "disk-lifecycle-readback" ) ) {
     check_lifecycle_disk_file();
@@ -765,6 +899,7 @@ host_operations_test( int argc, char **argv )
     event_do_events(); assert( z80.pc.w == 0x66 && z80.sp.w == 0x8ffe );
     fuse_exiting = 1;
     check_disk_info_blocked( FUSE_HOST_OPERATION_EXITING );
+    check_tape_deck_blocked( FUSE_HOST_OPERATION_EXITING );
     assert( fuse_host_keyboard_event( INPUT_KEY_a, 1 ) == FUSE_HOST_OPERATION_EXITING );
     assert( fuse_host_new_disk( FUSE_DISK_CONTROLLER_PLUS3, 0 ) == FUSE_HOST_OPERATION_EXITING );
     assert( fuse_host_eject_disk( FUSE_DISK_CONTROLLER_PLUS3, 0 ) == FUSE_HOST_OPERATION_EXITING );
@@ -779,6 +914,7 @@ host_operations_test( int argc, char **argv )
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( !fuse_host_resources_active() );
   check_disk_info_blocked( FUSE_HOST_OPERATION_NOT_READY );
+  check_tape_deck_blocked( FUSE_HOST_OPERATION_NOT_READY );
   if( retained_disk_info ) {
     assert( retained_disk_info->loaded && !strcmp( retained_disk_info->filename, "api-copy.udi" ) );
     assert( retained_disk_info->name && retained_disk_info->enabled && retained_disk_info->available );

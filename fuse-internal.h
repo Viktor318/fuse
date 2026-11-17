@@ -145,9 +145,23 @@ fuse_host_operation_result fuse_host_open_file( const char *filename );
    use the existing selected-UI services, which may block. MEDIA_ERROR maps the
    legacy nonzero return, including cancellation; the session remains usable,
    but tape state follows the legacy operation (no rollback guarantee). There
-   is no extra close/cleanup after a failed or cancelled open. Separate save/
-   eject commands and non-path access are not exposed here. */
+   is no extra close/cleanup after a failed or cancelled open. Non-path access
+   is not exposed here. */
 fuse_host_operation_result fuse_host_insert_tape_file( const char *filename );
+/* Explicit deck controls: toggle is the existing manual Play/Stop intent, not
+   File Open/autoload. Stop affects playback, not recording. Rewind succeeds on
+   an empty deck; block selection is zero-based and does not implicitly stop.
+   A missing block returns MEDIA_ERROR and can reset partial-interval state.
+   Named Save borrows its path, keeps encoding in the engine and finalizes any
+   recording before serialization; format/IO failure is not a rollback. Eject
+   finalizes recording then uses existing Save/Discard/Cancel. Ordinary legacy
+   nonzero (including cancellation) maps to MEDIA_ERROR, with no cleanup retry. */
+fuse_host_operation_result fuse_host_toggle_tape_play( void );
+fuse_host_operation_result fuse_host_stop_tape( void );
+fuse_host_operation_result fuse_host_rewind_tape( void );
+fuse_host_operation_result fuse_host_select_tape_block( int block );
+fuse_host_operation_result fuse_host_save_tape_file( const char *filename );
+fuse_host_operation_result fuse_host_eject_tape( void );
 /* Zero-based slots. Explicit Media insert, without File Open's autoload/machine
    selection. Existing replacement questions remain; OK can mean cancelled
    replacement. Save takes a borrowed chosen target, or NULL for the retained

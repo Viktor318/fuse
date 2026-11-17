@@ -29,7 +29,27 @@
 
 static unsigned char rom_bytes[0x4000];
 static int write_result, cancel_filename, writes, filenames, confirmations;
-static int expected_pause;
+static int expected_pause, host_eject;
+
+static void
+check_deck_busy( void )
+{
+  if( !host_eject ) return;
+  assert( fuse_host_toggle_tape_play() == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_stop_tape() == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_rewind_tape() == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_select_tape_block( 0 ) == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_save_tape_file( "not-written.tzx" ) == FUSE_HOST_OPERATION_BUSY );
+  assert( fuse_host_eject_tape() == FUSE_HOST_OPERATION_BUSY );
+}
+
+static fuse_host_operation_result
+host_close( void )
+{
+  fuse_host_operation_result result;
+  host_eject = 1; result = fuse_host_eject_tape(); host_eject = 0;
+  return result;
+}
 static const char *output_filename = "tape-save.tzx";
 static ui_confirm_save_t choice = UI_CONFIRM_SAVE_SAVE;
 
@@ -43,6 +63,7 @@ int
 test_tape_save_write( const char *filename )
 {
   assert( fuse_emulation_paused == expected_pause );
+  check_deck_busy();
   writes++;
   return write_result < 0 ? tape_write( filename ) : write_result;
 }
@@ -53,6 +74,7 @@ test_tape_save_filename( const char *title )
   char *filename;
   (void)title;
   assert( fuse_emulation_paused == expected_pause );
+  check_deck_busy();
   filenames++;
   if( cancel_filename ) return NULL;
   filename = libspectrum_new( char, strlen(output_filename) + 1 );
@@ -64,6 +86,7 @@ ui_confirm_save_t
 test_tape_save_confirm( const char *message )
 {
   assert( message );
+  check_deck_busy();
   confirmations++;
   return choice;
 }
@@ -126,6 +149,10 @@ main( int argc, char **argv )
   assert( tape_close() == 37 ); /* SAVE must not become a discard on failure. */
   assert( writes == 1 && filenames == 1 && confirmations == 1 );
   check_retained( block );
+  reset_counts();
+  assert( host_close() == FUSE_HOST_OPERATION_MEDIA_ERROR );
+  assert( writes == 1 && filenames == 1 && confirmations == 1 );
+  check_retained( block );
 
   reset_counts(); write_result = -1;
   output_filename = "missing-directory/tape-save.tzx";
@@ -135,17 +162,17 @@ main( int argc, char **argv )
   output_filename = "tape-save.tzx";
 
   reset_counts(); cancel_filename = 1;
-  assert( tape_close() == 1 ); /* Cancel save destination selection. */
+  assert( host_close() == FUSE_HOST_OPERATION_MEDIA_ERROR ); /* Cancel destination. */
   assert( writes == 0 && filenames == 1 && confirmations == 1 );
   check_retained( block );
 
   reset_counts(); cancel_filename = 0; choice = UI_CONFIRM_SAVE_CANCEL;
-  assert( tape_close() == 1 );
+  assert( host_close() == FUSE_HOST_OPERATION_MEDIA_ERROR );
   assert( writes == 0 && filenames == 0 && confirmations == 1 );
   check_retained( block );
 
   reset_counts(); choice = UI_CONFIRM_SAVE_SAVE; write_result = -1;
-  assert( !tape_close() ); /* Real serialization/write succeeds before removal. */
+  assert( host_close() == FUSE_HOST_OPERATION_OK ); /* Save succeeds before removal. */
   assert( writes == 1 && filenames == 1 && confirmations == 1 );
   assert( !tape_present() && !tape_modified && !tape_is_playing() );
   assert( fuse_emulation_paused == expected_pause - 1 );
@@ -156,10 +183,18 @@ main( int argc, char **argv )
   assert( !remove( "tape-save.tzx" ) );
 
   reset_counts(); choice = UI_CONFIRM_SAVE_DONTSAVE; tape_modified = 1;
-  assert( !tape_close() );
+  assert( host_close() == FUSE_HOST_OPERATION_OK );
   assert( writes == 0 && filenames == 0 && confirmations == 1 );
   assert( !tape_present() && !tape_modified );
   assert( fuse_emulation_paused == expected_pause - 1 );
+  assert( !tape_read_buffer( bytes, sizeof(bytes), LIBSPECTRUM_ID_TAPE_TAP, "recording.tap", 0 ) );
+  tape_record_start(); assert( tape_recording ); tstates += 37;
+  reset_counts(); choice = UI_CONFIRM_SAVE_CANCEL;
+  assert( host_close() == FUSE_HOST_OPERATION_MEDIA_ERROR );
+  assert( !tape_recording && tape_present() && tape_modified );
+  assert( confirmations == 1 && !writes && !filenames );
+  reset_counts(); choice = UI_CONFIRM_SAVE_DONTSAVE;
+  assert( host_close() == FUSE_HOST_OPERATION_OK && !tape_present() );
   assert( !fuse_emulation_unpause() && !fuse_emulation_unpause() );
   fuse_shutdown(); fuse_shutdown();
   puts( "Tape Save error propagation, retention, choices and pause balance passed" );

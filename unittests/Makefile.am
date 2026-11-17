@@ -355,6 +355,8 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=1; releases=1' > expected-tape; \
 	  printf '%s\n' 'host: prepared 48' 'host: File Open returned legacy success' \
 	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=2; releases=2' > expected-open; \
+	  printf '%s\n' 'host: prepared 48' 'host: tape deck controls; saved and ejected' \
+	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-tape-life; \
 	  printf '%s\n' 'host: prepared plus3' 'host: saved disk through plus3 drive 0' \
 	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-disk; \
 	  printf '%s\n' 'host: prepared plus3' \
@@ -373,6 +375,13 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    cmp expected-tape "$$consumer-tape.out"; \
 	    "$$program" only48 --open sample.tap > "$$consumer-open.out" 2> "$$consumer-open.err"; \
 	    cmp expected-open "$$consumer-open.out"; \
+	    "$$program" only48 --tape-lifecycle sample.tap tape-life.tzx \
+	      > "$$consumer-tape-life.out" 2> "$$consumer-tape-life.err"; \
+	    cmp expected-tape-life "$$consumer-tape-life.out"; \
+	    "$$program" only48 --tape-lifecycle tape-life.tzx tape-roundtrip.tap \
+	      > "$$consumer-tape-roundtrip.out" 2> "$$consumer-tape-roundtrip.err"; \
+	    cmp expected-tape-life "$$consumer-tape-roundtrip.out"; cmp sample.tap tape-roundtrip.tap; \
+	    rm tape-life.tzx tape-roundtrip.tap; \
 	    "$$program" "$$roms" --save-disk sample.udi "$$consumer-copy.udi" \
 	      > "$$consumer-disk.out" 2> "$$consumer-disk.err"; \
 	    cmp expected-disk "$$consumer-disk.out"; cmp sample.udi "$$consumer-copy.udi"; \
@@ -459,6 +468,10 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	      reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
 	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$mode" "$$roms"; \
 	    done; \
+	    "$$root/$$consumer$(EXEEXT)" --host-operations-test legacy-tape-deck "$$roms" > deck-legacy.out 2> deck-legacy.err; \
+	    "$$root/$$consumer$(EXEEXT)" --host-operations-test tape-deck "$$roms" > deck-host.out 2> deck-host.err; \
+	    cmp deck-legacy.out deck-host.out; cmp deck-legacy.err deck-host.err; \
+	    rm deck-legacy.out deck-host.out deck-legacy.err deck-host.err; \
 	  done; \
 	  test -z "$$(find . -type f -print)"; \
 	  echo 'Private machine/input/tape operations passed for both consumers'

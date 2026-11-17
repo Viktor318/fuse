@@ -1,7 +1,7 @@
 /* tape.c: tape handling routines
    Copyright (c) 1999-2017 Philip Kendall, Darren Salt, Witold Filipczyk
    Copyright (c) 2015-2018 UB880D
-   Copyright (c) 2016-2021 Fredrick Meunier
+   Copyright (c) 2016-2021, 2026 Fredrick Meunier
    Copyright (c) 2026 Alberto Garcia
 
    This program is free software; you can redistribute it and/or modify
@@ -35,6 +35,7 @@
 #include "debugger/debugger.h"
 #include "event.h"
 #include "fuse.h"
+#include "fuse-engine.h"
 #include "infrastructure/startup_manager.h"
 #include "loader.h"
 #include "machine.h"
@@ -619,4 +620,93 @@ tape_foreach( void (*function)( libspectrum_tape_block *block,
     function( block, user_data );
 
   return 0;
+}
+
+fuse_host_operation_result
+fuse_host_insert_tape_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = tape_open( filename, 0 ); /* Same intent as menu_media_tape_open. */
+  /* tape_open owns replacement and selected-UI save/discard/cancel handling.
+     Do not retry close on failure: it may represent a cancelled replacement. */
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_toggle_tape_play( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_toggle_play( 0 );
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_stop_tape( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_stop();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_rewind_tape( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_rewind();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_select_tape_block( int block )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( block < 0 ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = tape_select_block( block );
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_save_tape_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = tape_write( filename );
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_eject_tape( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_close();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
 }

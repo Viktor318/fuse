@@ -10,7 +10,7 @@ group	context	english	hungarian
 1 Menü	File > Recording	Roll&back	&Visszalépés
 1 Menü	File > Recording	Rollback &to...	Visszalépés &adott pontra...
 1 Menü	File > Recording	&Play...	&Lejátszás...
-1 Menü	File > Recording; File > AY Logging; File > Movie; Machine > Profiler	&Stop	&Megállítás
+1 Menü	File > Recording; File > AY Logging; File > Movie; Machine > Profiler	&Stop	Leállí&tás
 1 Menü	File > Recording	&Finalise...	Le&zárás...
 1 Menü	File	A&Y Logging	A&Y naplózás
 1 Menü	File	S&creenshot	Kép&ernyőkép
@@ -96,7 +96,7 @@ group	context	english	hungarian
 1 Menü	Media > Tape	&Clear	&Eltávolítás
 1 Menü	Media > Tape	&Write...	&Kiírás fájlba...
 1 Menü	Media > Tape	R&ecord Start	Felvétel i&ndítása
-1 Menü	Media > Tape	Recor&d Stop	Felvétel me&gállítása
+1 Menü	Media > Tape	Recor&d Stop	Felvétel leállítá&sa
 1 Menü	Media	&Interface 1	&Interface 1
 1 Menü	Media > Interface 1	Microdrive &1	Microdrive &1
 1 Menü	Media > Interface 1 > Microdrive 1; Media > Interface 1 > Microdrive 2; Media > Interface 1 > Microdrive 3; Media > Interface 1 > Microdrive 4; Media > Interface 1 > Microdrive 5; Media > Interface 1 > Microdrive 6; Media > Interface 1 > Microdrive 7; Media > Interface 1 > Microdrive 8; Media > Disk > +3 > Drive A:; Media > Disk > +3 > Drive B:; Media > Disk > Beta > Drive A:; Media > Disk > Beta > Drive B:; Media > Disk > Beta > Drive C:; Media > Disk > Beta > Drive D:; Media > Disk > +D > Drive 1; Media > Disk > +D > Drive 2; Media > Disk > DISCiPLE > Drive 1; Media > Disk > DISCiPLE > Drive 2; Media > Disk > Opus > Drive 1; Media > Disk > Opus > Drive 2; Media > Disk > Didaktik 80 > Drive A; Media > Disk > Didaktik 80 > Drive B	Insert &New	Új &behelyezése
@@ -507,8 +507,8 @@ group	context	english	hungarian
 4 Üzenetek	hibaüzenet	Couldn't re-seek on file, graphics printout disabled	Fájlhiba, a grafikus nyomtatás kikapcsolva
 4 Üzenetek	figyelmeztetés	Networking blocked (loopback/firewall?); Spectranet disabled	A hálózat le van tiltva (tűzfal?); a Spectranet kikapcsolva
 4 Üzenetek	hibaüzenet	RZX recording contains no embedded snapshot and no external snapshot was loaded	Az RZX felvételben nincs pillanatkép, és külön sem lett betöltve
-4 Üzenetek	tájékoztatás	This RZX was recorded by a Spectaculator version with selectable CPU behaviour. Replaying it with the CMOS Z80 option %s may help	Ezt az RZX-et a Spectaculator egy olyan verziója vette fel, amelyben a CPU viselkedése választható. A visszajátszásban segíthet, ha a CMOS Z80 beállítást %s
-4 Üzenetek	tájékoztatás	Finished RZX playback	Az RZX visszajátszás véget ért
+4 Üzenetek	tájékoztatás	This RZX was recorded by a Spectaculator version with selectable CPU behaviour. Replaying it with the CMOS Z80 option %s may help	Ezt az RZX-et a Spectaculator egy olyan verziója vette fel, amelyben a CPU viselkedése választható. Lejátszáskor segíthet, ha a CMOS Z80 beállítást %s
+4 Üzenetek	tájékoztatás	Finished RZX playback	Az RZX lejátszása véget ért
 4 Üzenetek	figyelmeztetés	gcrypt not available: recording will NOT be signed	A gcrypt nem érhető el: a felvétel NEM lesz aláírva
 4 Üzenetek	tájékoztatás	emulator speed is %d%%: stopping competition mode RZX recording	Az emuláció sebessége %d%%: a verseny módú RZX felvétel leáll
 4 Üzenetek	hibaüzenet	Couldn't open `%s': %s	A(z) „%s” nem nyitható meg: %s
@@ -694,7 +694,7 @@ extra	Sound settings	Fuse - Sound Settings	Fuse - Hangbeállítások
 extra	Sound settings	Stereo &mode (AY):	Sztereó &mód (AY):
 extra	Sound settings	Speaker &type:	Hangszóró &típusa:
 extra	Sound settings	Mixing	Keverés
-extra	Sound settings	Mute	Néma
+extra	Sound settings	Mute	Némítás
 extra	Sound settings	Mi&xer	&Keverő
 extra	Sound settings	Double-click a slider: default value. Mouse wheel or arrows: 1%, with Shift 10%.	Dupla kattintás egy csúszkán: alapérték. Egérgörgő vagy nyilak: 1%, Shifttel 10%.
 extra	Sound settings	Output: %s, %d Hz	Kimenet: %s, %d Hz

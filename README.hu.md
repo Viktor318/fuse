@@ -231,7 +231,7 @@ Z80-a) saját AY hanggenerátorral, az emulált géptől függetlenül.
   hangja*, az AY sztereó mód, a hangszóró típusa és az *Alaphelyzet*;
   alattuk egy-egy oszlop a fő hangerőnek, az AY-nak, a beepernek, a
   µSpeech-nek, a SpecDrumnak és a Covoxnak, mindegyikben csúszka,
-  szintjelző, a hangerő százalékban és *Néma* (az AY oszlopban az AY
+  szintjelző, a hangerő százalékban és *Némítás* (az AY oszlopban az AY
   keverőt megnyitó *Keverő* gomb is). A változtatások azonnal hallhatók,
   és a többi beállítással együtt mentődnek; nincs Mégse. Az ablak nem
   állítja meg az emulációt, a szintjelzők a hanggal együtt mozognak. Dupla

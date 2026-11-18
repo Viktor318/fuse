@@ -5,6 +5,21 @@
 Changes of this fork on top of Fuse 1.10.1 (until v1.10.0-hu.1: 1.10.0).
 The changes of Fuse itself are in [ChangeLog](ChangeLog).
 
+## Unreleased
+
+### Hungarian translation
+
+- Words made the same as in the shared glossary of the Hungarian editions
+  of the ZX emulators (Fuse, ZEsarUX, EightyOne, ZXTune):
+  - *Stop* is „Leállítás” (it was „Megállítás”) in the *File > Recording*,
+    *AY Logging* and *Movie* menus and in *Machine > Profiler*; *Media >
+    Tape > Record Stop* is „Felvétel leállítása” (was „Felvétel
+    megállítása”);
+  - the *Mute* boxes of the Sound settings are „Némítás” (were „Néma”);
+  - RZX playback is „lejátszás” in the messages (was „visszajátszás”).
+- The menu letters don't clash: Leállí**t**ás (L is taken by Lejátszás),
+  Felvétel leállítá**s**a.
+
 ## v1.10.1-hu.4 – 2026-11-17
 
 ### Sound settings

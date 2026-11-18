@@ -6,6 +6,21 @@ Ennek a változatnak a módosításai a Fuse 1.10.1-hez képest (a
 v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 [ChangeLog](ChangeLog) fájlban vannak (angolul).
 
+## Kiadatlan
+
+### Magyar fordítás
+
+- A szavak a magyar ZX-emulátorkiadások (Fuse, ZEsarUX, EightyOne, ZXTune)
+  közös szójegyzéke szerint:
+  - a *Stop* „Leállítás” (eddig „Megállítás”) a *Fájl > RZX felvétel*, az
+    *AY naplózás* és a *Videó* menüben, valamint a *Gép > Profilozó*
+    alatt; a *Média > Kazetta* menüben a „Felvétel megállítása” helyett
+    „Felvétel leállítása” áll;
+  - a Hangbeállítások *Néma* jelölőnégyzetei „Némítás” feliratot kaptak;
+  - az üzenetekben az RZX „lejátszása” áll („visszajátszás” helyett).
+- A menük gyorsbillentyűi nem ütköznek: Leállí**t**ás (az L a Lejátszásé),
+  Felvétel leállítá**s**a.
+
 ## v1.10.1-hu.4 – 2026-11-17
 
 ### Hangbeállítások

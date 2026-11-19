@@ -23,6 +23,7 @@
 #include "input.h"
 #include "fuse-disk.h"
 #include "fuse-tape.h"
+#include "fuse-filesystem.h"
 #include "fuse-joystick.h"
 
 /* Private, selected-UI-bound engine lifecycle. Not an installed embedding API:

@@ -24,6 +24,7 @@
 */
 
 #include "config.h"
+#include "compat.h"
 
 #ifdef HAVE_LIB_XML2
 #include <errno.h>
@@ -275,7 +276,7 @@ svg_closepath( void )
 static void
 svg_closefile( void )
 {
-  FILE *fp;
+  compat_fd fp;
 
   if( svg_write_metadata() != 0 ) {
     ui_error( UI_ERROR_ERROR, "error writing the SVG metadata" );
@@ -298,10 +299,11 @@ svg_closefile( void )
   snprintf( svg_fname, strlen( svg_fnameroot ) + BUFSIZ, "%s%d.svg", 
             svg_fnameroot, svg_filecount++ );
 
-  if( ( fp = fopen( svg_fname, "w" ) ) != NULL ) {
-    fprintf( fp, "%s", xmlBufferContent( buffer ) );
+  fp = compat_file_open( svg_fname, COMPAT_FILE_WRITE );
+  if( fp != COMPAT_FILE_OPEN_FAILED ) {
+    compat_file_write( fp, xmlBufferContent( buffer ), xmlBufferLength( buffer ) );
 
-    if( fclose( fp ) != 0 ) {
+    if( compat_file_close( fp ) ) {
       ui_error( UI_ERROR_ERROR, "error closing SVG file '%s': %s", svg_fname,
                 strerror( errno ) );
     }

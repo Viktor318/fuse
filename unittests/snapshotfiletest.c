@@ -37,7 +37,7 @@
 static void *allocations[4096];
 static size_t allocation_count;
 static int malformed_export, in_save, in_host_save, expected_pause;
-static compat_file_vtable_t normal_io;
+static compat_file_test_hooks normal_io;
 static int io_fault, io_closes;
 
 static void
@@ -135,14 +135,14 @@ save_file( int host, const char *filename )
 }
 
 static int
-controlled_write( compat_fd fd, const unsigned char *buffer, size_t length )
+controlled_write( compat_fd fd, const unsigned char *buffer, size_t length, size_t *put )
 {
   check_save_callback();
   if( io_fault == 1 ) {
-    assert( length > 7 && !normal_io.write( fd, buffer, 7 ) );
+    assert( length > 7 && !normal_io.write( fd, buffer, 7, put ) );
     return 37;
   }
-  return normal_io.write( fd, buffer, length );
+  return normal_io.write( fd, buffer, length, put );
 }
 
 static int
@@ -166,7 +166,7 @@ snapshot_file_test( int argc, char **argv )
   size_t length = 0, z80_length = 0;
   int flags = 0, host, nested;
   FILE *file;
-  compat_file_vtable_t failing_io;
+  compat_file_test_hooks failing_io;
   assert( fuse_legacy_prepare( argc, argv ) == FUSE_INIT_READY );
   assert( !module_register( &export_module ) );
   assert( fuse_host_save_snapshot_file( NULL ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
@@ -180,7 +180,7 @@ snapshot_file_test( int argc, char **argv )
   assert( !libspectrum_snap_write( &z80_expected, &z80_length, &flags, snap,
                                   LIBSPECTRUM_ID_SNAPSHOT_Z80, fuse_creator, 0 ) );
   assert( !libspectrum_snap_free( snap ) );
-  compat_file_get_vtable( &normal_io ); failing_io = normal_io;
+  compat_file_test_get_hooks( &normal_io ); failing_io = normal_io;
   failing_io.write = controlled_write; failing_io.close = controlled_close;
   for( host = 0; host <= 1; host++ ) for( nested = 0; nested <= 1; nested++ ) {
     if( nested ) assert( !fuse_emulation_pause() && !fuse_emulation_pause() );
@@ -206,14 +206,14 @@ snapshot_file_test( int argc, char **argv )
     compare_file( "failed.sna", (const unsigned char *)"keep", 4 );
     z80.sp.w = 0x9000;
     assert( save_file( host, "missing-directory/failed.szx" ) );
-    compat_file_set_vtable( &failing_io );
+    compat_file_test_set_hooks( &failing_io );
     io_fault = 1; io_closes = 0;
     assert( save_file( host, "short.szx" ) && io_closes == 1 );
     compare_file( "short.szx", expected, 7 ); /* No invented output rollback. */
     io_fault = 2; io_closes = 0;
     assert( save_file( host, "close.szx" ) && io_closes == 1 );
     compare_file( "close.szx", expected, length ); /* Complete bytes can still fail. */
-    io_fault = 0; compat_file_set_vtable( &normal_io );
+    io_fault = 0; compat_file_test_set_hooks( &normal_io );
     assert( !save_file( host, "recovered.szx" ) );
     compare_file( "recovered.szx", expected, length );
     assert( z80.pc.w == 0x8000 && z80.sp.w == 0x9000 && readbyte_internal(0x8100) == 0x5a );

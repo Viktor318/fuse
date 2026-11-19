@@ -37,6 +37,11 @@ static struct {
   unsigned char *bytes;
 } provider;
 
+void filesystem_tests( void );
+void filesystem_prepare( void );
+void filesystem_finish( void );
+void filesystem_write_oracle( void );
+
 static fuse_disk_drive_info *retained_disk_info;
 static fuse_tape_info *retained_tape_info;
 
@@ -627,10 +632,10 @@ check_snapshot_roundtrip( void )
   assert( !remove( "host-state.szx" ) );
 }
 
-static compat_file_vtable_t tape_file_io;
+static compat_file_test_hooks tape_file_io;
 static int tape_file_closes;
 
-static off_t
+static int64_t
 tape_size_failure( compat_fd fd )
 {
   (void)fd;
@@ -659,7 +664,7 @@ check_tape_workflow( void )
   static const unsigned char bad[] = { 2, 0, 0xff, 0xff, 5, 0, 0xff };
   char filename[] = "host-driver.tap";
   FILE *file;
-  compat_file_vtable_t failing;
+  compat_file_test_hooks failing;
   libspectrum_error_function_t previous_error;
   libspectrum_tape_block *block;
   libspectrum_dword clock = tstates;
@@ -702,11 +707,11 @@ check_tape_workflow( void )
   /* Empty TAP is valid insertion; playability is not an insertion condition. */
   assert( fuse_host_insert_tape_file( "host-empty.tap" ) == OK );
   assert( !tape_present() && !tape_is_playing() && tstates == clock );
-  compat_file_get_vtable( &tape_file_io ); failing = tape_file_io;
+  compat_file_test_get_hooks( &tape_file_io ); failing = tape_file_io;
   failing.get_length = tape_size_failure; failing.close = tape_file_close;
-  compat_file_set_vtable( &failing );
+  compat_file_test_set_hooks( &failing );
   assert( fuse_host_insert_tape_file( filename ) == FUSE_HOST_OPERATION_MEDIA_ERROR );
-  compat_file_set_vtable( &tape_file_io );
+  compat_file_test_set_hooks( &tape_file_io );
   assert( tape_file_closes == 1 && !tape_present() );
   libspectrum_error_function = previous_error;
   assert( fuse_host_keyboard_event( INPUT_KEY_space, 0 ) == OK );
@@ -1071,6 +1076,9 @@ host_operations_test( int argc, char **argv )
     assert( !fuse_host_config_set_tape_traps( config, 0 ) );
   if( !strncmp( argv[1], "open-", 5 ) )
     assert( !fuse_host_config_set_auto_load( config, strcmp( argv[1], "open-noauto" ) != 0 ) );
+  if( !strcmp( argv[1], "filesystem" ) || !strcmp( argv[1], "filesystem-oracle" ) )
+    assert( !fuse_host_config_set_auto_load( config, 0 ) );
+  if( !strcmp( argv[1], "filesystem" ) ) filesystem_prepare();
   assert( fuse_host_config_set_joystick( config, 3, 0 ) );
   assert( fuse_host_config_set_joystick( config, 0, 8 ) );
   assert( !fuse_host_config_set_joystick( config, FUSE_HOST_JOYSTICK_1, JOYSTICK_TYPE_KEMPSTON ) );
@@ -1085,7 +1093,11 @@ host_operations_test( int argc, char **argv )
   assert( settings_current.tape_traps ==
           ( strcmp( argv[1], "tape-recording" ) && strcmp( argv[1], "legacy-tape-recording" ) &&
             strcmp( argv[1], "tape-info" ) ? 1 : 0 ) );
-  if( !strcmp( argv[1], "tape-info" ) ) {
+  if( !strcmp( argv[1], "filesystem" ) ) {
+    filesystem_tests();
+  } else if( !strcmp( argv[1], "filesystem-oracle" ) ) {
+    filesystem_write_oracle();
+  } else if( !strcmp( argv[1], "tape-info" ) ) {
     check_tape_info();
   } else if( !strcmp( argv[1], "tape-deck" ) || !strcmp( argv[1], "legacy-tape-deck" ) ) {
     check_tape_deck( !strcmp( argv[1], "tape-deck" ) );
@@ -1167,6 +1179,7 @@ host_operations_test( int argc, char **argv )
   }
   assert( provider.acquired == provider.released );
   fuse_shutdown(); fuse_shutdown();
+  if( !strcmp( argv[1], "filesystem" ) ) filesystem_finish();
   assert( fuse_host_reset( FUSE_HOST_RESET_SOFT ) == FUSE_HOST_OPERATION_NOT_READY );
   assert( !fuse_host_resources_active() );
   check_disk_info_blocked( FUSE_HOST_OPERATION_NOT_READY );

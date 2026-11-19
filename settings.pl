@@ -68,6 +68,7 @@ print hashline( __LINE__ ), << 'CODE';
 #include "config.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -192,6 +193,22 @@ void settings_defaults( settings_info *settings )
   settings_copy_internal( settings, &settings_default );
 }
 
+/* Only an open failure selects the fallback; malformed config does not. */
+static compat_fd
+open_config_file( const char *cfgdir, char *path )
+{
+  compat_fd fd;
+  const char *fallbackdir;
+
+  snprintf( path, PATH_MAX, "%s/%s", cfgdir, CONFIG_FILE_NAME );
+  fd = compat_file_open( path, COMPAT_FILE_READ );
+  if( fd != COMPAT_FILE_OPEN_FAILED ) return fd;
+  fallbackdir = compat_get_fallback_config_path();
+  if( !fallbackdir ) return COMPAT_FILE_OPEN_FAILED;
+  snprintf( path, PATH_MAX, "%s/%s", fallbackdir, FALLBACK_CONFIG_FILE_NAME );
+  return compat_file_open( path, COMPAT_FILE_READ );
+}
+
 #ifdef HAVE_LIB_XML2
 
 /* Read options from the config file (if libxml2 is available) */
@@ -201,26 +218,23 @@ read_config_file( settings_info *settings )
 {
   const char *cfgdir; char path[ PATH_MAX ];
   settings_info new_settings;
-
+  utils_file file;
+  int read_error;
+  compat_fd fd;
   xmlDocPtr doc;
 
   cfgdir = compat_get_config_path(); if( !cfgdir ) return 1;
-
-  snprintf( path, PATH_MAX, "%s/%s", cfgdir, CONFIG_FILE_NAME );
-
-  /* See if the file exists; if doesn't, it's not a problem */
-  if( !compat_file_exists( path ) ) {
-    /* Look for the config file in the fallback location, if there is one */
-    const char *fallbackdir = compat_get_fallback_config_path();
-    if( !fallbackdir ) return 0;
-    snprintf( path, PATH_MAX, "%s/%s", fallbackdir, FALLBACK_CONFIG_FILE_NAME );
-    if( !compat_file_exists( path ) ) return 0;
-  }
+  fd = open_config_file( cfgdir, path );
+  if( fd == COMPAT_FILE_OPEN_FAILED ) return 0;
 
   memset( &new_settings, 0, sizeof( new_settings ) );
   settings_copy_internal( &new_settings, settings );
 
-  doc = xmlReadFile( path, NULL, 0 );
+  utils_file_init( &file, path );
+  read_error = utils_read_fd( fd, path, &file );
+  doc = read_error || file.length > INT_MAX ? NULL :
+    xmlReadMemory( (const char *)file.buffer, (int)file.length, path, NULL, 0 );
+  utils_close_file( &file );
   if( !doc ) {
     settings_free( &new_settings );
     ui_error( UI_ERROR_WARNING,
@@ -383,6 +397,8 @@ settings_write_config( settings_info *settings )
   const char *cfgdir; char path[ PATH_MAX ], buffer[80];
 
   xmlDocPtr doc; xmlNodePtr root;
+  xmlChar *output = NULL;
+  int output_length = 0;
 
   cfgdir = compat_get_config_path(); if( !cfgdir ) return 1;
 
@@ -422,7 +438,13 @@ CODE
 
   print hashline( __LINE__ ), << 'CODE';
 
-  xmlSaveFormatFile( path, doc, 1 );
+  xmlDocDumpFormatMemory( doc, &output, &output_length, 1 );
+  if( output ) {
+    /* Retain the legacy ignored write-result convention, but use the effective
+       filesystem instead of letting libxml reopen a native pathname. */
+    (void)utils_write_file( path, output, (size_t)output_length );
+    xmlFree( output );
+  }
 
   xmlFreeDoc( doc );
 
@@ -441,25 +463,19 @@ read_config_file( settings_info *settings )
   settings_info new_settings;
 
   utils_file file;
+  compat_fd fd;
 
   cfgdir = compat_get_config_path(); if( !cfgdir ) return 1;
-
-  snprintf( path, PATH_MAX, "%s/%s", cfgdir, CONFIG_FILE_NAME );
-
-  /* See if the file exists; if doesn't, it's not a problem */
-  if( !compat_file_exists( path ) ) {
-    /* Look for the config file in the fallback location, if there is one */
-    const char *fallbackdir = compat_get_fallback_config_path();
-    if( !fallbackdir ) return 0;
-    snprintf( path, PATH_MAX, "%s/%s", fallbackdir, FALLBACK_CONFIG_FILE_NAME );
-    if( !compat_file_exists( path ) ) return 0;
-  }
+  fd = open_config_file( cfgdir, path );
+  if( fd == COMPAT_FILE_OPEN_FAILED ) return 0;
 
   memset( &new_settings, 0, sizeof( new_settings ) );
   settings_copy_internal( &new_settings, settings );
 
-  error = utils_read_file( path, &file );
+  utils_file_init( &file, path );
+  error = utils_read_fd( fd, path, &file );
   if( error ) {
+    utils_close_file( &file );
     settings_free( &new_settings );
     ui_error( UI_ERROR_WARNING,
               "ignoring unrecognised config file '%s'; using defaults", path );

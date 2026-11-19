@@ -30,6 +30,7 @@ EXTRA_DIST += \
               hacking/implementation_notes.txt \
               hacking/input.txt \
               hacking/legacy-engine.md \
+              hacking/libspectrum-filesystem.md \
               hacking/metrics.txt \
               hacking/peripheral_tests.txt \
               hacking/releasing.md \

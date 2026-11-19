@@ -161,6 +161,18 @@ fi)
 
 dnl Check that libspectrum is available and that it is new enough
 PKG_CHECK_MODULES([LIBSPECTRUM], [libspectrum >= 1.8.0])
+AC_MSG_CHECKING([for the libspectrum filesystem API])
+fuse_save_CPPFLAGS="$CPPFLAGS"
+fuse_save_LIBS="$LIBS"
+CPPFLAGS="$CPPFLAGS $LIBSPECTRUM_CFLAGS"
+LIBS="$LIBSPECTRUM_LIBS $LIBS"
+AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <libspectrum.h>]], [[
+  int exists;
+  return libspectrum_fs.exists("", &exists);
+]])], [AC_MSG_RESULT([yes])],
+    [AC_MSG_FAILURE([libspectrum with the regular-file filesystem API is required])])
+CPPFLAGS="$fuse_save_CPPFLAGS"
+LIBS="$fuse_save_LIBS"
 
 dnl Check if supplied libspectrum has its own internal GLib replacement
 AC_MSG_CHECKING(whether libspectrum has its own internal GLib replacement)

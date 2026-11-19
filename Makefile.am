@@ -158,6 +158,7 @@ noinst_HEADERS = bitmap.h \
 	fuse-internal.h \
 	fuse-disk.h \
 	fuse-tape.h \
+	fuse-filesystem.h \
 	fuse-joystick.h \
 	fuse-engine.h \
 	fuse-legacy.h \

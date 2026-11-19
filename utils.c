@@ -313,30 +313,27 @@ utils_open_snap( void )
   return error;
 }
 
-/* Find the auxiliary file called `filename'; returns a fd for the
-   file on success, -1 if it couldn't find the file */
+static compat_fd find_readable_path( const char *, char *, utils_aux_type );
+
+int
+utils_file_is_readable( const char *name )
+{
+  compat_fd fd = compat_file_open( name, COMPAT_FILE_READ );
+  if( fd == COMPAT_FILE_OPEN_FAILED ) return 0;
+  compat_file_close( fd );
+  return 1;
+}
+
+/* Return an open handle for the first readable candidate, or NULL. */
 static compat_fd
 utils_find_auxiliary_file( const char *filename, utils_aux_type type )
 {
-  compat_fd fd;
-
   char path[ PATH_MAX ];
 
-  /* If given an absolute path, just look there */
   if( compat_is_absolute_path( filename ) )
-    return compat_file_open( filename, 0 );
+    return compat_file_open( filename, COMPAT_FILE_READ );
 
-  /* Otherwise look in some likely locations */
-  if( utils_find_file_path( filename, path, type ) ) {
-    return COMPAT_FILE_OPEN_FAILED;
-  }
-
-  fd = compat_file_open( path, 0 );
-
-  if( fd != COMPAT_FILE_OPEN_FAILED ) return fd;
-
-  /* Give up. Couldn't find this file */
-  return COMPAT_FILE_OPEN_FAILED;
+  return find_readable_path( filename, path, type );
 }
 
 
@@ -344,7 +341,7 @@ int
 utils_find_file_path( const char *filename, char *ret_path,
 		      utils_aux_type type )
 {
-  path_context ctx;
+  compat_fd fd;
 
   /* If given an absolute path, just look there */
   if( compat_is_absolute_path( filename ) ) {
@@ -353,7 +350,17 @@ utils_find_file_path( const char *filename, char *ret_path,
     return 0;
   }
 
-  /* Otherwise look in some likely locations */
+  fd = find_readable_path( filename, ret_path, type );
+  if( fd == COMPAT_FILE_OPEN_FAILED ) return 1;
+  compat_file_close( fd );
+  return 0;
+}
+
+static compat_fd
+find_readable_path( const char *filename, char *ret_path, utils_aux_type type )
+{
+  path_context ctx;
+
   init_path_context( &ctx, type );
 
   while( compat_get_next_path( &ctx ) ) {
@@ -364,10 +371,13 @@ utils_find_file_path( const char *filename, char *ret_path,
     bytes_written = snprintf( ret_path, PATH_MAX, "%s" FUSE_DIR_SEP_STR "%s",
         ctx.path, filename );
 #endif
-    if( bytes_written < PATH_MAX && compat_file_exists(ret_path) ) return 0;
+    if( bytes_written >= 0 && bytes_written < PATH_MAX ) {
+      compat_fd fd = compat_file_open( ret_path, COMPAT_FILE_READ );
+      if( fd != COMPAT_FILE_OPEN_FAILED ) return fd;
+    }
   }
 
-  return 1;
+  return COMPAT_FILE_OPEN_FAILED;
 }
 
 /* Something similar to that described at
@@ -441,7 +451,7 @@ utils_file_identify( utils_file *file )
 {
   utils_file header, remainder;
   compat_fd fd;
-  off_t length;
+  int64_t length;
   libspectrum_id_t filename_type;
   libspectrum_class_t filename_class;
   int error;
@@ -459,7 +469,7 @@ utils_file_identify( utils_file *file )
   }
 
   length = compat_file_get_length( fd );
-  if( length == -1 ) {
+  if( length < 0 || (uint64_t)length > SIZE_MAX ) {
     compat_file_close( fd );
     return 1;
   }
@@ -468,7 +478,7 @@ utils_file_identify( utils_file *file )
   header.length = length < UTILS_IDENTIFY_LENGTH ?
                   length : UTILS_IDENTIFY_LENGTH;
   header.buffer = libspectrum_new( unsigned char, header.length );
-  if( compat_file_read( fd, &header ) ) {
+  if( compat_file_read( fd, header.buffer, header.length ) ) {
     utils_file_free( &header );
     compat_file_close( fd );
     return 1;
@@ -513,7 +523,7 @@ utils_file_identify( utils_file *file )
   remainder.length = file->length - header.length;
   utils_file_free( &header );
 
-  if( remainder.length && compat_file_read( fd, &remainder ) ) {
+  if( remainder.length && compat_file_read( fd, remainder.buffer, remainder.length ) ) {
     libspectrum_free( file->buffer );
     file->buffer = NULL;
     file->length = 0;
@@ -540,15 +550,16 @@ utils_read_file( const char *filename, utils_file *file )
 int
 utils_read_fd( compat_fd fd, const char *filename, utils_file *file )
 {
-  file->length = compat_file_get_length( fd );
-  if( file->length == -1 ) {
+  int64_t length = compat_file_get_length( fd );
+  if( length < 0 || (uint64_t)length > SIZE_MAX ) {
     compat_file_close( fd );
     return 1;
   }
+  file->length = (size_t)length;
 
   file->buffer = libspectrum_new( unsigned char, file->length );
 
-  if( compat_file_read( fd, file ) ) {
+  if( compat_file_read( fd, file->buffer, file->length ) ) {
     libspectrum_free( file->buffer );
     file->buffer = NULL;
     compat_file_close( fd );

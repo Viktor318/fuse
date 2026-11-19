@@ -67,6 +67,29 @@ acquire_rom( void *context, const char *name, fuse_host_rom *rom )
   return 0;
 }
 
+#include "memory-filesystem.h"
+
+/* Platform input import only; all engine media operations use the installed
+   filesystem, not resource variants or emulator serialization in this host. */
+static int
+import_file( const char *path, const char *name )
+{
+  unsigned char buffer[4096];
+  size_t length;
+  int failed = 0;
+  FILE *input = fopen( path, "rb" );
+  compat_fd output;
+  if( !input ) return 1;
+  output = compat_file_open( name, COMPAT_FILE_WRITE );
+  if( !output ) { fclose( input ); return 1; }
+  while( ( length = fread( buffer, 1, sizeof(buffer), input ) ) )
+    if( compat_file_write( output, buffer, length ) ) { failed = 1; break; }
+  if( ferror( input ) ) failed = 1;
+  if( fclose( input ) ) failed = 1;
+  if( compat_file_close( output ) ) failed = 1;
+  return failed;
+}
+
 static int
 operation( const char *name, fuse_host_operation_result result )
 {
@@ -126,23 +149,35 @@ main( int argc, char **argv )
   int disk_lifecycle = argc == 4 && !strcmp( argv[2], "--disk-lifecycle" );
   int tape_record = argc == 4 && !strcmp( argv[2], "--record-tape" );
   int snapshot_save = argc == 4 && !strcmp( argv[2], "--save-snapshot" );
+  int filesystem = argc == 4 && !strcmp( argv[2], "--filesystem" );
+  int filesystem_installed = 0;
+  memory_filesystem memory = { 0 };
   int disk_save = argc == 5 && !strcmp( argv[2], "--save-disk" );
   int tape_lifecycle = argc == 5 && !strcmp( argv[2], "--tape-lifecycle" );
 
   if( ( argc != 2 && argc != 3 && argc != 4 && argc != 5 ) ||
-      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle && !tape_record && !snapshot_save ) ||
+      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle && !tape_record && !snapshot_save && !filesystem ) ||
       ( argc == 5 && !disk_save && !tape_lifecycle ) ||
       ( argc == 3 && ( !strcmp( argv[2], "--open" ) || !strcmp( argv[2], "--save-disk" ) ||
                       !strcmp( argv[2], "--disk-lifecycle" ) || !strcmp( argv[2], "--tape-lifecycle" ) ||
-                      !strcmp( argv[2], "--record-tape" ) || !strcmp( argv[2], "--save-snapshot" ) ) ) ) {
-    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT | --tape-lifecycle INPUT OUTPUT | --record-tape OUTPUT | --save-snapshot OUTPUT]\n", argv[0] );
+                      !strcmp( argv[2], "--record-tape" ) || !strcmp( argv[2], "--save-snapshot" ) || !strcmp( argv[2], "--filesystem" ) ) ) ) {
+    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT | --tape-lifecycle INPUT OUTPUT | --record-tape OUTPUT | --save-snapshot OUTPUT | --filesystem TAPE_FILE]\n", argv[0] );
     return EXIT_FAILURE;
+  }
+  if( filesystem ) {
+    memory.chunk = 7; /* Exercise successful short transfers at the boundary. */
+    if( memory_filesystem_install( &memory ) ) goto cleanup;
+    filesystem_installed = 1;
+    if( import_file( argv[3], "media/input.tap" ) ) {
+      fputs( "host: filesystem input import failed\n", stderr ); goto cleanup;
+    }
   }
   provider.directory = argv[1]; /* Borrowed through shutdown, not passed as engine CLI. */
   config = fuse_host_config_alloc();
   if( fuse_host_config_set_machine( config, disk_save || disk_lifecycle ? "plus3" : "48" ) ||
       fuse_host_config_set_sound( config, 0 ) ||
       ( tape_record && fuse_host_config_set_tape_traps( config, 0 ) ) ||
+      ( filesystem && fuse_host_config_set_auto_load( config, 0 ) ) ||
       fuse_host_config_set_joystick( config, FUSE_HOST_JOYSTICK_1,
                                     JOYSTICK_TYPE_KEMPSTON ) ) {
     fprintf( stderr, "host: configuration rejected\n" );
@@ -157,6 +192,20 @@ main( int argc, char **argv )
   }
   prepared = 1;
   puts( disk_save || disk_lifecycle ? "host: prepared plus3" : "host: prepared 48" );
+  if( filesystem ) {
+    if( operation( "filesystem Tape Open", fuse_host_open_file( "media/input.tap" ) ) ||
+        operation( "filesystem tape save", fuse_host_save_tape_file( "media/copy.pzx" ) ) ||
+        operation( "tape eject", fuse_host_eject_tape() ) ||
+        operation( "filesystem tape reopen", fuse_host_open_file( "media/copy.pzx" ) ) ||
+        frames( 2, &frame_turns ) ||
+        operation( "filesystem snapshot save", fuse_host_save_snapshot_file( "media/state.szx" ) ) ||
+        operation( "reset", fuse_host_reset( FUSE_HOST_RESET_HARD ) ) ||
+        operation( "filesystem snapshot reopen", fuse_host_open_file( "media/state.szx" ) ) ||
+        frames( 1, &frame_turns ) ) goto cleanup;
+    puts( "host: effective filesystem; tape/snapshot roundtrip; handles balanced" );
+    status = EXIT_SUCCESS;
+    goto cleanup;
+  }
   if( snapshot_save ) {
     if( frames( 2, &frame_turns ) ||
         operation( "save snapshot", fuse_host_save_snapshot_file( argv[3] ) ) ||
@@ -281,6 +330,11 @@ cleanup:
   if( saved_tape_info ) print_tape_info( "retained tape copy after shutdown", saved_tape_info );
   fuse_tape_info_free( saved_tape_info );
   fuse_tape_info_free( tape_info );
+  if( filesystem_installed ) {
+    if( memory.opens != memory.closes ) {
+      fputs( "host: filesystem ownership mismatch\n", stderr ); status = EXIT_FAILURE;
+    } else memory_filesystem_free( &memory );
+  }
   if( provider.requests != provider.releases || provider.pending ) {
     fprintf( stderr, "host: ROM ownership mismatch\n" );
     status = EXIT_FAILURE;

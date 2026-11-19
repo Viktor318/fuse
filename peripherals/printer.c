@@ -35,6 +35,7 @@
 #include <ctype.h>
 
 #include "fuse.h"
+#include "compat.h"
 #include "infrastructure/startup_manager.h"
 #include "machine.h"
 #include "memory_pages.h"
@@ -45,8 +46,8 @@
 
 static int printer_graphics_enabled=0;
 static int printer_text_enabled=0;
-static FILE *printer_graphics_file=NULL;
-static FILE *printer_text_file=NULL;
+static compat_fd printer_graphics_file;
+static compat_fd printer_text_file;
 
 /* for the ZX Printer */
 static int zxpframes,zxpspeed,zxpnewspeed;
@@ -143,19 +144,19 @@ static void printer_text_init(void)
 static int printer_zxp_open_file(void)
 {
 static const char * const pbmstart="P4\n256 ";
-FILE *tmpf;
+compat_fd tmpf;
 int overwrite=1;
 
 if(!printer_graphics_enabled || !settings_current.printer_graphics_filename)
   return(0);
-
 /* first, see if there's an existing file we can add to. */
-if((tmpf=fopen(settings_current.printer_graphics_filename,"rb"))!=NULL)
+if((tmpf=compat_file_open(settings_current.printer_graphics_filename,
+                         COMPAT_FILE_READ))!=COMPAT_FILE_OPEN_FAILED)
   {
   char buf[7+10+1];		/* 7 being length of pbmstart */
 
   /* check it has a header in our slightly odd format. */
-  if(fread(buf,1,sizeof(buf),tmpf)==sizeof(buf) &&
+  if(!compat_file_read(tmpf,(unsigned char *)buf,sizeof(buf)) &&
      memcmp(buf,pbmstart,strlen(pbmstart))==0 &&
      buf[sizeof(buf)-1]=='\n')
     {
@@ -190,11 +191,12 @@ if((tmpf=fopen(settings_current.printer_graphics_filename,"rb"))!=NULL)
       }
     }
 
-  fclose(tmpf);
+  compat_file_close(tmpf);
   }
 
-if((printer_graphics_file=fopen(settings_current.printer_graphics_filename,
-                                overwrite?"wb":"r+b"))==NULL)
+printer_graphics_file=compat_file_open(settings_current.printer_graphics_filename,
+                                      overwrite?COMPAT_FILE_WRITE:COMPAT_FILE_READ_WRITE);
+if(printer_graphics_file==COMPAT_FILE_OPEN_FAILED)
   {
   ui_error(UI_ERROR_ERROR,"Couldn't open '%s', graphics printout disabled",
 	   settings_current.printer_graphics_filename);
@@ -205,21 +207,28 @@ if((printer_graphics_file=fopen(settings_current.printer_graphics_filename,
 if(overwrite)
   {
   /* we reserve 10 chars for height */
-  fputs(pbmstart,printer_graphics_file);
-  fprintf(printer_graphics_file,"%10d\n",0);
+  static const unsigned char header[]="P4\n256          0\n";
+  if(compat_file_write(printer_graphics_file,header,sizeof(header)-1))
+    {
+    compat_file_close(printer_graphics_file);
+    printer_graphics_file=NULL;
+    printer_graphics_enabled=0;
+    return(0);
+    }
   }
 else
   {
   /* if appending, seek to the correct place */
-  if(fseek(printer_graphics_file,
-           strlen(pbmstart)+10+1+(256/8)*zxpheight,
-           SEEK_SET)!=0)
+  if(compat_file_seek(printer_graphics_file,
+                      (int64_t)strlen(pbmstart)+10+1+(int64_t)(256/8)*zxpheight,
+                      COMPAT_SEEK_SET))
     {
     ui_error(UI_ERROR_ERROR,
 	     "Couldn't seek on file, graphics printout disabled");
-    fclose(printer_graphics_file);
+    compat_file_close(printer_graphics_file);
     printer_graphics_file=NULL;
     printer_graphics_enabled=0;
+    return(0);
     }
   }
 
@@ -231,18 +240,16 @@ static int printer_text_open_file(void)
 {
 if(!printer_text_enabled || !settings_current.printer_text_filename)
   return(0);
-
 /* append to any existing file... */
-if((printer_text_file=fopen(settings_current.printer_text_filename,"ab"))==NULL)
+printer_text_file=compat_file_open(settings_current.printer_text_filename,
+                                  COMPAT_FILE_APPEND);
+if(printer_text_file==COMPAT_FILE_OPEN_FAILED)
   {
   ui_error(UI_ERROR_ERROR,"Couldn't open '%s', text printout disabled",
 	   settings_current.printer_text_filename);
   printer_text_enabled=0;
   return(0);
   }
-
-/* ensure users have immediate access to text file contents */
-setbuf( printer_text_file, NULL );
 
 return(1);
 }
@@ -260,13 +267,18 @@ if(!printer_text_enabled)
 if(!printer_text_file && !printer_text_open_file())
   return;
 
-fputc(c,printer_text_file);
+{
+  unsigned char byte=c;
+  /* Keep each character visible immediately, as with the old unbuffered stream. */
+  if(!compat_file_write(printer_text_file,&byte,1))
+    compat_file_flush(printer_text_file);
+}
 }
 
 
 static void printer_zxp_update_header(void)
 {
-long pos;
+int64_t pos;
 
 /* Finalise rows already written even if the printer was disconnected. */
 if(!printer_graphics_enabled || !zxpheight)
@@ -275,10 +287,10 @@ if(!printer_graphics_enabled || !zxpheight)
 if(!printer_graphics_file && !printer_zxp_open_file())
   return;
 
-pos=ftell(printer_graphics_file);
+pos=compat_file_tell(printer_graphics_file);
 
 /* seek back to write the image height */
-if(fseek(printer_graphics_file,strlen("P4\n256 "),SEEK_SET)!=0)
+if(pos<0 || compat_file_seek(printer_graphics_file,strlen("P4\n256 "),COMPAT_SEEK_SET))
   ui_error(UI_ERROR_ERROR,
 	   "Couldn't seek to write graphics printout image height");
 else
@@ -287,14 +299,16 @@ else
    * breaks the format as defined in pbm(5) (not to mention breaking
    * when read by zgv :-)). So they're now before the height.
    */
-  fprintf(printer_graphics_file,"%10d",zxpheight);
+  char height[32];
+  if(snprintf(height,sizeof(height),"%10d",zxpheight)==10)
+    compat_file_write(printer_graphics_file,(const unsigned char *)height,10);
   }
 
-if(fseek(printer_graphics_file,pos,SEEK_SET)!=0)
+if(pos<0 || compat_file_seek(printer_graphics_file,pos,COMPAT_SEEK_SET))
   {
   ui_error(UI_ERROR_ERROR,
 	   "Couldn't re-seek on file, graphics printout disabled");
-  fclose(printer_graphics_file);
+  compat_file_close(printer_graphics_file);
   printer_graphics_file=NULL;
   printer_graphics_enabled=0;
   }
@@ -307,13 +321,13 @@ static void printer_zxp_end(void)
 printer_zxp_write(0xfb,4);
 
 /* if not enabled or not opened, can't have written anything */
-if(!printer_graphics_enabled || !printer_graphics_file || zxpheight==0)
+if(!printer_graphics_file)
   return;
 
 /* write header */
 printer_zxp_update_header();
 
-fclose(printer_graphics_file);
+if(printer_graphics_file) compat_file_close(printer_graphics_file);
 printer_graphics_file=NULL;
 printer_graphics_enabled=0;
 }
@@ -326,7 +340,7 @@ if(!printer_text_enabled)
 
 if(printer_text_file)
   {
-  fclose(printer_text_file);
+  compat_file_close(printer_text_file);
   printer_text_file=NULL;
   }
 }
@@ -417,7 +431,7 @@ for(i=0;i<32;i++)
   
   *ptr++=d;
   
-  fputc(d,printer_graphics_file);
+  { unsigned char byte=d; compat_file_write(printer_graphics_file,&byte,1); }
   }
 
 if(zxplineofchar>=8)

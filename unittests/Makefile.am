@@ -267,12 +267,14 @@ unittests_legacyenginelinktest_SOURCES = unittests/legacyenginetest.c \
                                        unittests/hostpreparetest.c \
                                        unittests/hostoperationstest.c \
                                        unittests/snapshotfiletest.c \
+                                       unittests/filesystemtest.c \
                                        unittests/legacylifecycletest.c
 unittests_legacyenginelinktest_LDADD = libfuselegacy.la
 unittests_legacyenginesourcetest_SOURCES = unittests/legacyenginetest.c \
                                         unittests/hostpreparetest.c \
                                         unittests/hostoperationstest.c \
                                         unittests/snapshotfiletest.c \
+                                        unittests/filesystemtest.c \
                                         unittests/legacylifecycletest.c \
                                         $(libfuselegacy_la_SOURCES)
 unittests_legacyenginesourcetest_CPPFLAGS = $(AM_CPPFLAGS)
@@ -336,6 +338,8 @@ check-floppy-save-ui: unittests/floppysaveuitest unittests/floppysavelegacytest
 	  test -z "$$(find . -type f -print)"; \
 	  echo 'Shared floppy target/chooser saves match; choices, failure retention and pauses passed'
 
+noinst_HEADERS += hacking/memory-filesystem.h
+
 # A separate own-main consumer: no legacy CLI/test dispatcher or core globals.
 check_PROGRAMS += unittests/nullhostlink unittests/nullhostsource
 unittests_nullhostlink_SOURCES = hacking/null-host.c
@@ -387,6 +391,8 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-record; \
 	  printf '%s\n' 'host: prepared 48' 'host: saved snapshot; reset and reopened' \
 	    'host: shutdown; frame turns=3; budget turns=0; ROM requests=3; releases=3' > expected-snapshot; \
+	  printf '%s\n' 'host: prepared 48' 'host: effective filesystem; tape/snapshot roundtrip; handles balanced' \
+	    'host: shutdown; frame turns=3; budget turns=0; ROM requests=3; releases=3' > expected-filesystem; \
 	  printf '%s\n' 'host: prepared plus3' 'host: saved disk through plus3 drive 0' \
 	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-disk; \
 	  printf '%s\n' 'host: prepared plus3' \
@@ -412,6 +418,11 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	      > "$$consumer-tape-roundtrip.out" 2> "$$consumer-tape-roundtrip.err"; \
 	    cmp expected-tape-life "$$consumer-tape-roundtrip.out"; cmp sample.tap tape-roundtrip.tap; \
 	    rm tape-life.tzx tape-roundtrip.tap; \
+	    "$$program" only48 --filesystem sample.tap > "$$consumer-filesystem.out" 2> "$$consumer-filesystem.err"; \
+	    cmp expected-filesystem "$$consumer-filesystem.out"; \
+	    if "$$program" only48 --filesystem missing.tap > "$$consumer-filesystem-fail.out" 2> "$$consumer-filesystem-fail.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    test -s "$$consumer-filesystem-fail.err"; \
 	    for target in saved.szx fallback.output; do \
 	      printf 'old target' > "$$target"; \
 	      "$$program" only48 --save-snapshot "$$target" > "$$consumer-snapshot-$$target.out" 2> "$$consumer-snapshot-$$target.err"; \
@@ -513,7 +524,7 @@ check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesour
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
-	    for mode in success tape-contract tape-info trapped-recording snapshot-roundtrip autoload-success autoload-failure \
+	    for mode in success filesystem-oracle filesystem tape-contract tape-info trapped-recording snapshot-roundtrip autoload-success autoload-failure \
 	      open-auto open-noauto open-custom open-reset-failure open-snapshot open-fallback open-rzx-stop \
 	      disk-save disk-save-beta \
 	      reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \

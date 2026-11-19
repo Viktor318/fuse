@@ -22,6 +22,7 @@
 */
 
 #include "config.h"
+#include "compat.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -119,10 +120,10 @@ profile_from_snapshot( libspectrum_snap *snap GCC_UNUSED )
 void
 profile_finish( const char *filename )
 {
-  FILE *f;
+  compat_fd f;
   size_t i;
 
-  f = fopen( filename, "w" );
+  f = compat_file_open( filename, COMPAT_FILE_WRITE );
   if( !f ) {
     ui_error( UI_ERROR_ERROR, "unable to open profile map '%s' for writing",
 	      filename );
@@ -133,11 +134,15 @@ profile_finish( const char *filename )
 
     if( !total_tstates[ i ] ) continue;
 
-    fprintf( f, "0x%04lx,%d\n", (unsigned long)i, total_tstates[ i ] );
+    char line[64];
+    int length = snprintf( line, sizeof( line ), "0x%04lx,%d\n",
+                           (unsigned long)i, total_tstates[ i ] );
+    if( length < 0 || (size_t)length >= sizeof( line ) ||
+        compat_file_write( f, (const unsigned char *)line, (size_t)length ) ) break;
 
   }
 
-  fclose( f );
+  compat_file_close( f );
 
   profile_active = 0;
 

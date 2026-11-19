@@ -28,6 +28,7 @@
 
 #include "infrastructure/startup_manager.h"
 #include "psg.h"
+#include "compat.h"
 #include "ui/ui.h"
 
 /* Are we currently recording a .psg file? */
@@ -41,7 +42,13 @@ static int psg_registers_written[ AY_REGISTERS ];
 /* number of prior frames with no AY events */
 static int psg_empty_frame_count;
 
-static FILE *psg_file;
+static compat_fd psg_file;
+
+static int
+psg_putc( unsigned char value )
+{
+  return compat_file_write( psg_file, &value, 1 );
+}
 
 static int write_frame_separator( void );
 
@@ -60,18 +67,19 @@ psg_start_recording( const char *filename )
 
   if( psg_recording ) return 1;
   
-  psg_file = fopen( filename, "wb" );
+  psg_file = compat_file_open( filename, COMPAT_FILE_WRITE );
   if( psg_file == NULL ) {
     ui_error( UI_ERROR_ERROR, "unable to open PSG file for writing" );
     return 1;
   }
 
   /* write PSG file header */
-  if( fprintf( psg_file, "PSG\x1a" ) < 0 ) {
+  if( compat_file_write( psg_file, (const unsigned char *)"PSG\x1a", 4 ) ) {
     ui_error( UI_ERROR_ERROR, "unable to write PSG file header" );
+    compat_file_close( psg_file ); psg_file = NULL;
     return 1;
   }
-  for( i = 0; i < PSG_HEADER_PADDING; i++ ) putc( 0, psg_file );
+  for( i = 0; i < PSG_HEADER_PADDING; i++ ) psg_putc( 0 );
 
   /* begin with no registers written */
   for( i = 0; i < AY_REGISTERS; i++ ) psg_registers_written[i] = 0;
@@ -93,7 +101,7 @@ psg_stop_recording( void )
   /* end file with the appropriate end-frame marker */
   write_frame_separator();
 
-  fclose( psg_file );
+  compat_file_close( psg_file );
 
   psg_recording = 0;
   return 0;
@@ -109,14 +117,14 @@ write_frame_separator( void )
     count = psg_empty_frame_count / PSG_FRAMES_PER_BLOCK;
     if( count > 0xff ) count = 0xff;
 
-    putc( PSG_MULTI_FRAME_MARKER, psg_file );
-    putc( count, psg_file );
+    psg_putc( PSG_MULTI_FRAME_MARKER );
+    psg_putc( count );
 
     psg_empty_frame_count -= PSG_FRAMES_PER_BLOCK * count;
   }
 
   for( ; psg_empty_frame_count; psg_empty_frame_count-- )
-    putc( PSG_SINGLE_FRAME_MARKER, psg_file );
+    psg_putc( PSG_SINGLE_FRAME_MARKER );
 
   return 0;
 }
@@ -139,8 +147,8 @@ psg_frame( void )
     write_frame_separator();
     for( i = 0; i < PSG_REGISTERS; i++ ) {
       if( psg_registers_written[i] ) {
-	putc( i, psg_file );
-	putc( psg_register_values[i], psg_file );
+	psg_putc( i );
+	psg_putc( psg_register_values[i] );
       }
     }
     psg_empty_frame_count = 1;

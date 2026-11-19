@@ -130,6 +130,21 @@ snapshot loading and synchronous decisions retain their existing internal paths.
 In particular, legacy snapshot machine fallback can abort. There is no general
 host-services or deterministic-checkpoint contract.
 
+## Effective filesystem
+
+Libspectrum owns the effective regular-file filesystem. Platforms select their
+backend once with `libspectrum_fs_install`, before any filesystem operation;
+otherwise the first operation selects native IO permanently. Keep the backend
+state valid for all subsequent calls, including shutdown. Fuse's compatibility
+calls use the library's canonical handles and checked operations. There is no
+Fuse backend registry or fallback to native IO on a custom-backend failure.
+
+Common media IO and related POK lookup, WAV tape input, IDE/MMC backing, binary
+floppy images and text logs, PNG, XML/plain preferences, PSG, FMF, printer, SVG
+and profile output use this filesystem. Directory and environment providers are
+separate platform services. The development runner's `result.json` is a native
+host artifact. ROM provenance retains its existing separate policy.
+
 ## Execution turns
 
 `fuse_run_frame()` advances to the next completed frame boundary, not necessarily
@@ -278,8 +293,8 @@ The session remains runnable, but there is no tape rollback guarantee: read
 failure can leave old media untouched, cancellation retains the existing tape,
 and a decode failure can leave the old tape removed and partial new blocks.
 The entry neither retries close nor adds cleanup after a failed operation.
-This uses the existing filesystem reader, not the ROM provider; non-path resources
-are not exposed. Success reports insertion, not playback/loading completion.
+This uses the effective filesystem reader, not the ROM provider. Names can be
+virtual; no per-operation media resource callbacks are exposed. Success reports insertion, not playback/loading completion.
 
 `fuse_host_toggle_tape_play()` uses manual `tape_toggle_play(0)`, not ensure-playing
 or autoload. `fuse_host_stop_tape()` affects playback only, not recording.
@@ -417,6 +432,12 @@ millisecond label for pulse holds); they are not a new precise timing interface.
 `--save-snapshot OUTPUT` runs two frames, saves through the engine, hard-resets,
 reopens through general File Open, then runs one frame. Format/bytes stay in the
 engine; the example is not evidence of complete checkpoint determinism.
+`--filesystem TAPE_FILE` imports an encoded input into an example RAM filesystem,
+installs that backend before prepare, then uses the unchanged File Open/tape save/
+snapshot save/reset/Open operations against its names. It configures autoload0
+for this IO demonstration, exercises successful short transfers, checks balanced
+handles through shutdown, then exits. The host adapter handles storage,
+not codecs. ROM provenance/provider handling remains its existing separate policy.
 
 In a configured null-UI build:
 
@@ -431,6 +452,7 @@ make unittests/nullhostlink unittests/nullhostsource
 ./unittests/nullhostlink /path/to/fuse/roms --tape-lifecycle /path/to/input.tap /path/to/copy.tzx
 ./unittests/nullhostlink /path/to/fuse/roms --record-tape /path/to/recording.pzx
 ./unittests/nullhostlink /path/to/fuse/roms --save-snapshot /path/to/state.szx
+./unittests/nullhostlink /path/to/fuse/roms --filesystem /path/to/input.tap
 make check-null-host
 ```
 

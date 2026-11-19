@@ -42,6 +42,7 @@ libfuselegacy_la_SOURCES = display.c \
 	event.c \
 	fuse.c \
 	fuse-config.c \
+	fuse-filesystem.c \
 	fuse-host.c \
 	fuse-operations.c \
 	input.c \

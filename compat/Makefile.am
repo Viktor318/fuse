@@ -53,7 +53,6 @@ endif
 if COMPAT_AMIGA
 libfuselegacy_la_SOURCES += \
                 compat/unix/dir.c \
-                compat/unix/file.c \
                 compat/amiga/osname.c \
                 compat/amiga/paths.c \
                 compat/unix/timer.c \
@@ -64,7 +63,6 @@ endif
 if COMPAT_LINUX
 libfuselegacy_la_SOURCES += \
                 compat/unix/dir.c \
-                compat/unix/file.c \
                 compat/unix/osname.c \
                 compat/linux/relative_paths.c \
                 compat/unix/paths.c \
@@ -80,7 +78,6 @@ endif
 if COMPAT_MORPHOS
 libfuselegacy_la_SOURCES += \
                 compat/unix/dir.c \
-                compat/unix/file.c \
                 compat/morphos/osname.c \
                 compat/amiga/paths.c \
                 compat/unix/timer.c \
@@ -91,7 +88,6 @@ endif
 if COMPAT_UNIX
 libfuselegacy_la_SOURCES += \
                 compat/unix/dir.c \
-                compat/unix/file.c \
                 compat/unix/osname.c \
                 compat/unix/relative_paths.c \
                 compat/unix/paths.c \
@@ -107,7 +103,6 @@ endif
 if COMPAT_WII
 libfuselegacy_la_SOURCES += \
                 compat/unix/dir.c \
-                compat/unix/file.c \
                 compat/wii/osname.c \
                 compat/wii/paths.c \
                 compat/wii/timer.c \
@@ -118,7 +113,6 @@ endif
 if COMPAT_WIN32
 libfuselegacy_la_SOURCES += \
                 compat/unix/dir.c \
-                compat/unix/file.c \
                 compat/win32/osname.c \
                 compat/win32/paths.c \
                 compat/win32/timer.c \

@@ -83,7 +83,8 @@ int
 tape_autoload( libspectrum_machine hardware )
 {
   int needs_code = does_tape_load_with_code();
-  machine_reset( 0 );
+  int error = machine_reset( 0 );
+  if( error ) return error;
   phantom_typist_activate( hardware, needs_code );
   return 0;
 }

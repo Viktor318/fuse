@@ -321,9 +321,17 @@ check_PROGRAMS += unittests/legacyenginelinktest unittests/legacyenginesourcetes
 unittests_startupownershiptest_SOURCES = unittests/startupownershiptest.c
 unittests_startupownershiptest_LDADD = libfuselegacy.la
 unittests_legacyenginelinktest_SOURCES = unittests/legacyenginetest.c \
+                                       unittests/hostpreparetest.c \
+                                       unittests/hostoperationstest.c \
+                                       unittests/snapshotfiletest.c \
+                                       unittests/filesystemtest.c \
                                        unittests/legacylifecycletest.c
 unittests_legacyenginelinktest_LDADD = libfuselegacy.la
 unittests_legacyenginesourcetest_SOURCES = unittests/legacyenginetest.c \
+                                        unittests/hostpreparetest.c \
+                                        unittests/hostoperationstest.c \
+                                        unittests/snapshotfiletest.c \
+                                        unittests/filesystemtest.c \
                                         unittests/legacylifecycletest.c \
                                         $(libfuselegacy_la_SOURCES)
 unittests_legacyenginesourcetest_CPPFLAGS = $(AM_CPPFLAGS)
@@ -331,9 +339,296 @@ unittests_legacyenginesourcetest_LDADD = $(libfuselegacy_la_LIBADD)
 unittests_legacyenginesourcetest_DEPENDENCIES = $(libfuselegacy_la_DEPENDENCIES)
 $(unittests_legacyenginesourcetest_OBJECTS): config.h
 
+# Exercise the original common UI helper with selected-service doubles; the
+# normal engine archive supplies the real tape implementation and teardown.
+check_PROGRAMS += unittests/tapesaveuitest
+unittests_tapesaveuitest_SOURCES = unittests/tapesaveuitest.c unittests/tapesaveui.c
+unittests_tapesaveuitest_LDADD = libfuselegacy.la
+LIFECYCLE_CHECK_TARGETS += check-tape-save-ui
+.PHONY: check-tape-save-ui
+check-tape-save-ui: unittests/tapesaveuitest
+	@set -e; program="$(abs_top_builddir)/unittests/tapesaveuitest$(EXEEXT)"; \
+	  rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  "$$program" "$$rom"; test -z "$$(find . -type f -print)"
+
+# Real recorder with controlled append failures and selected-menu reentry.
+check_PROGRAMS += unittests/taperecordtest
+unittests_taperecordtest_SOURCES = unittests/taperecordtest.c
+unittests_taperecordtest_LDADD = libfuselegacy.la
+LIFECYCLE_CHECK_TARGETS += check-tape-recording
+.PHONY: check-tape-recording
+check-tape-recording: unittests/taperecordtest
+	@set -e; program="$(abs_top_builddir)/unittests/taperecordtest$(EXEEXT)"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  "$$program"; test -z "$$(find . -type f -print)"
+
+# Shared floppy save mechanics with controlled chooser/confirmation/writer services.
+check_PROGRAMS += unittests/floppysaveuitest unittests/floppysavelegacytest
+unittests_floppysaveuitest_SOURCES = unittests/floppysaveuitest.c unittests/floppysaveui.c
+unittests_floppysaveuitest_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_floppysaveuitest_LDADD = libfuselegacy.la
+unittests_floppysavelegacytest_SOURCES = $(unittests_floppysaveuitest_SOURCES)
+unittests_floppysavelegacytest_CPPFLAGS = $(AM_CPPFLAGS) -DFUSE_MEDIA_SAVE_BASELINE
+unittests_floppysavelegacytest_LDADD = libfuselegacy.la
+LIFECYCLE_CHECK_TARGETS += check-floppy-save-ui
+.PHONY: check-floppy-save-ui
+check-floppy-save-ui: unittests/floppysaveuitest unittests/floppysavelegacytest
+	@set -e; root="$(abs_top_builddir)/unittests"; rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  for mode in nested unpaused; do \
+	    if test "$$mode" = unpaused; then set -- --unpaused; else set --; fi; \
+	    "$$root/floppysaveuitest$(EXEEXT)" "$$rom" "$$@" > target.out 2> target.err; \
+	    "$$root/floppysavelegacytest$(EXEEXT)" "$$rom" "$$@" > legacy.out 2> legacy.err; \
+	    cmp target.out legacy.out; cmp target.err legacy.err; \
+	    rm target.out target.err legacy.out legacy.err; \
+	    "$$root/floppysaveuitest$(EXEEXT)" "$$rom" "$$@" --lifecycle > target.out 2> target.err; \
+	    "$$root/floppysavelegacytest$(EXEEXT)" "$$rom" "$$@" --lifecycle > legacy.out 2> legacy.err; \
+	    cmp target.out legacy.out; cmp target.err legacy.err; \
+	    rm target.out target.err legacy.out legacy.err; \
+	    "$$root/floppysaveuitest$(EXEEXT)" "$$rom" "$$@" --observations; \
+	    "$$root/floppysavelegacytest$(EXEEXT)" "$$rom" "$$@" --observations; \
+	  done; \
+	  test -z "$$(find . -type f -print)"; \
+	  echo 'Shared floppy target/chooser saves match; choices, failure retention and pauses passed'
+
+noinst_HEADERS += hacking/memory-filesystem.h
+
+# A separate own-main consumer: no legacy CLI/test dispatcher or core globals.
+check_PROGRAMS += unittests/nullhostlink unittests/nullhostsource
+unittests_nullhostlink_SOURCES = hacking/null-host.c
+unittests_nullhostlink_LDADD = libfuselegacy.la
+unittests_nullhostsource_SOURCES = hacking/null-host.c $(libfuselegacy_la_SOURCES)
+unittests_nullhostsource_CPPFLAGS = $(AM_CPPFLAGS)
+unittests_nullhostsource_LDADD = $(libfuselegacy_la_LIBADD)
+unittests_nullhostsource_DEPENDENCIES = $(libfuselegacy_la_DEPENDENCIES)
+$(unittests_nullhostsource_OBJECTS): config.h
+LIFECYCLE_CHECK_TARGETS += check-null-host
+.PHONY: check-null-host
+
+check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legacyenginelinktest
+	@set -e; root="$(abs_top_builddir)/unittests"; roms="$(abs_top_srcdir)/roms"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=config-blocker USERPROFILE=. WINDIR=. APPDATA=.; \
+	  printf 'not a configuration directory\n' > config-blocker; \
+	  mkdir empty invalid only48; printf x > invalid/48.rom; \
+	  printf '\002\000\377\377' > sample.tap; printf x > malformed.tap; printf x > malformed.udi; \
+	  "$$root/legacyenginelinktest$(EXEEXT)" --host-operations-test disk-fixture "$$roms"; \
+	  cp "$$roms/48.rom" 48.rom; cp "$$roms/48.rom" only48/48.rom; \
+	  printf '%s\n' 'host: prepared 48' \
+	    'host: holding execution; delivering Space and joystick 1 fire' \
+	    'host: resuming execution' 'host: focus lost; inputs released' \
+	    'host: completed relative 997-T-state budget' 'host: reset 48' \
+	    'host: selected 128' \
+	    'host: shutdown; frame turns=5; budget turns=1; ROM requests=4; releases=4' > expected; \
+	  printf '%s\n' 'host: prepared 48' 'host: inserted tape; deck stopped' \
+	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=1; releases=1' > expected-tape; \
+	  printf '%s\n' 'host: prepared 48' 'host: File Open returned legacy success' \
+	    'host: shutdown; frame turns=5; budget turns=0; ROM requests=2; releases=2' > expected-open; \
+	  printf '%s\n' 'host: prepared 48' \
+	    'host: playing tape copy; present=1; playing=1; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Standard Speed Data; 2 bytes' \
+	    'host: saved tape copy; present=1; playing=0; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Standard Speed Data; 2 bytes' \
+	    'host: ejected tape copy; present=0; playing=0; recording=0; modified=0; current=-1; blocks=0' \
+	    'host: tape deck controls; saved and ejected' \
+	    'host: retained tape copy after shutdown; present=1; playing=0; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Standard Speed Data; 2 bytes' \
+	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-tape-life; \
+	  printf '%s\n' 'host: prepared 48' \
+	    'host: recording tape copy; present=0; playing=0; recording=1; modified=0; current=-1; blocks=0' \
+	    'host: saved recorded tape copy; present=1; playing=0; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Pause; 0 ms' \
+	    'host: recorded two frames; saved and ejected tape' \
+	    'host: retained tape copy after shutdown; present=1; playing=0; recording=0; modified=0; current=0; blocks=1' \
+	    'host: tape row 0; Pause; 0 ms' \
+	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-record; \
+	  printf '%s\n' 'host: prepared 48' 'host: saved snapshot; reset and reopened' \
+	    'host: shutdown; frame turns=3; budget turns=0; ROM requests=3; releases=3' > expected-snapshot; \
+	  printf '%s\n' 'host: prepared 48' 'host: effective filesystem; tape/snapshot roundtrip; ZXCF lifecycle; handles balanced' \
+	    'host: shutdown; frame turns=3; budget turns=0; ROM requests=3; releases=3' > expected-filesystem; \
+	  printf '%s\n' 'host: prepared plus3' 'host: saved disk through plus3 drive 0' \
+	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-disk; \
+	  printf '%s\n' 'host: prepared plus3' \
+	    'host: new disk copy; controller=0; slot=0; name=+3 Disk A:; available=1; enabled=1; loaded=1; flipped=0; protected=0; target=(none)' \
+	    'host: controls copy; controller=0; slot=0; name=+3 Disk A:; available=1; enabled=1; loaded=1; flipped=1; protected=1; target=(none)' \
+	    'host: ejected drive copy; controller=0; slot=0; name=+3 Disk A:; available=1; enabled=1; loaded=0; flipped=0; protected=1; target=(none)' \
+	    'host: new disk; flip/WP controls; saved and ejected plus3 drive 0' \
+	    'host: retained copy after shutdown; controller=0; slot=0; name=+3 Disk A:; available=1; enabled=1; loaded=1; flipped=0; protected=0; target=lifecycle.udi' \
+	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-lifecycle; \
+	  before=$$(find . -type f -exec cksum {} \; | sort); directories=$$(find . -type d | sort); \
+	  for consumer in nullhostlink nullhostsource; do \
+	    program="$$root/$$consumer$(EXEEXT)"; \
+	    "$$program" "$$roms" > "$$consumer-valid.out" 2> "$$consumer-valid.err"; \
+	    cmp expected "$$consumer-valid.out"; \
+	    "$$program" only48 sample.tap > "$$consumer-tape.out" 2> "$$consumer-tape.err"; \
+	    cmp expected-tape "$$consumer-tape.out"; \
+	    "$$program" only48 --open sample.tap > "$$consumer-open.out" 2> "$$consumer-open.err"; \
+	    cmp expected-open "$$consumer-open.out"; \
+	    "$$program" only48 --tape-lifecycle sample.tap tape-life.tzx \
+	      > "$$consumer-tape-life.out" 2> "$$consumer-tape-life.err"; \
+	    cmp expected-tape-life "$$consumer-tape-life.out"; \
+	    "$$program" only48 --tape-lifecycle tape-life.tzx tape-roundtrip.tap \
+	      > "$$consumer-tape-roundtrip.out" 2> "$$consumer-tape-roundtrip.err"; \
+	    cmp expected-tape-life "$$consumer-tape-roundtrip.out"; cmp sample.tap tape-roundtrip.tap; \
+	    rm tape-life.tzx tape-roundtrip.tap; \
+	    "$$program" only48 --filesystem sample.tap > "$$consumer-filesystem.out" 2> "$$consumer-filesystem.err"; \
+	    cmp expected-filesystem "$$consumer-filesystem.out"; \
+	    { printf 'RS-IDE\032\021\000\200\000'; printf '\000%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13; \
+	      printf '\040\000\000\000\001\000\000\000\000\000\040'; \
+	      dd if=/dev/zero bs=1 count=93 2>/dev/null; dd if=/dev/zero bs=512 count=1024 2>/dev/null; } > divmmc.hdf; \
+	    "$$program" only48 --divmmc divmmc.hdf > "$$consumer-divmmc.out" 2> "$$consumer-divmmc.err"; \
+	    printf '%s\n' 'host: prepared 48' 'host: DivMMC lifecycle; handles balanced' \
+	      'host: shutdown; frame turns=0; budget turns=0; ROM requests=1; releases=1' > expected-divmmc; \
+	    cmp expected-divmmc "$$consumer-divmmc.out"; rm divmmc.hdf expected-divmmc; \
+	    if "$$program" only48 --filesystem missing.tap > "$$consumer-filesystem-fail.out" 2> "$$consumer-filesystem-fail.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    test -s "$$consumer-filesystem-fail.err"; \
+	    for target in saved.szx fallback.output; do \
+	      printf 'old target' > "$$target"; \
+	      "$$program" only48 --save-snapshot "$$target" > "$$consumer-snapshot-$$target.out" 2> "$$consumer-snapshot-$$target.err"; \
+	      cmp expected-snapshot "$$consumer-snapshot-$$target.out"; rm "$$target"; \
+	    done; \
+	    if "$$program" only48 --save-snapshot missing-directory/failed.szx \
+	      > "$$consumer-snapshot-fail.out" 2> "$$consumer-snapshot-fail.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    test -s "$$consumer-snapshot-fail.err"; \
+	    grep -Fx 'host: stopped; frame turns=2; budget turns=0; ROM requests=1; releases=1' \
+	      "$$consumer-snapshot-fail.out" > /dev/null; \
+	    "$$program" only48 --record-tape recorded.pzx > "$$consumer-record.out" 2> "$$consumer-record.err"; \
+	    cmp expected-record "$$consumer-record.out"; \
+	    "$$root/legacyenginelinktest$(EXEEXT)" --host-operations-test recording-readback "$$roms"; \
+	    rm recorded.pzx; \
+	    if "$$program" only48 --record-tape missing-directory/recorded.pzx \
+	      > "$$consumer-record-fail.out" 2> "$$consumer-record-fail.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    test -s "$$consumer-record-fail.err"; \
+	    grep -Fx 'host: stopped; frame turns=2; budget turns=0; ROM requests=1; releases=1' \
+	      "$$consumer-record-fail.out" > /dev/null; \
+	    "$$program" "$$roms" --save-disk sample.udi "$$consumer-copy.udi" \
+	      > "$$consumer-disk.out" 2> "$$consumer-disk.err"; \
+	    cmp expected-disk "$$consumer-disk.out"; cmp sample.udi "$$consumer-copy.udi"; \
+	    rm "$$consumer-copy.udi"; \
+	    "$$program" "$$roms" --disk-lifecycle lifecycle.udi \
+	      > "$$consumer-lifecycle.out" 2> "$$consumer-lifecycle.err"; \
+	    cmp expected-lifecycle "$$consumer-lifecycle.out"; \
+	    "$$root/legacyenginelinktest$(EXEEXT)" --host-operations-test disk-lifecycle-readback "$$roms" \
+	      > "$$consumer-lifecycle-check.out" 2> "$$consumer-lifecycle-check.err"; \
+	    rm lifecycle.udi; \
+	    if "$$program" "$$roms" --disk-lifecycle sample.udi \
+	      > "$$consumer-lifecycle-decline.out" 2> "$$consumer-lifecycle-decline.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=4; releases=4' \
+	      "$$consumer-lifecycle-decline.out" > /dev/null; \
+	    for file in missing.udi malformed.udi sample.udi; do \
+	      if "$$program" "$$roms" --save-disk "$$file" sample.udi \
+	        > "$$consumer-disk-$$file.out" 2> "$$consumer-disk-$$file.err"; \
+	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	      test -s "$$consumer-disk-$$file.err"; \
+	      grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=4; releases=4' \
+	        "$$consumer-disk-$$file.out" > /dev/null; \
+	    done; \
+	    for file in missing.tap malformed.tap; do \
+	      if "$$program" only48 --open "$$file" > "$$consumer-open-$$file.out" 2> "$$consumer-open-$$file.err"; \
+	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	      test -s "$$consumer-open-$$file.err"; \
+	      grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=1; releases=1' \
+	        "$$consumer-open-$$file.out" > /dev/null; \
+	    done; \
+	    for tape in missing.tap malformed.tap; do \
+	      if "$$program" only48 "$$tape" > "$$consumer-$$tape.out" 2> "$$consumer-$$tape.err"; \
+	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	      test -s "$$consumer-$$tape.err"; \
+	      grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=1; releases=1' \
+	        "$$consumer-$$tape.out" > /dev/null; \
+	    done; \
+	    for mode in empty invalid only48; do \
+	      if "$$program" "$$mode" > "$$consumer-$$mode.out" 2> "$$consumer-$$mode.err"; \
+	      then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	      test -s "$$consumer-$$mode.err"; \
+	    done; \
+	    for mode in empty invalid; do \
+	      grep -Fx 'host: stopped; frame turns=0; budget turns=0; ROM requests=1; releases=1' \
+	        "$$consumer-$$mode.out" > /dev/null; \
+	    done; \
+	    grep -Fx 'host: stopped; frame turns=3; budget turns=1; ROM requests=3; releases=3' \
+	      "$$consumer-only48.out" > /dev/null; \
+	    if "$$program" > "$$consumer-usage.out" 2> "$$consumer-usage.err"; \
+	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
+	    test -s "$$consumer-usage.err"; \
+	  done; \
+	  test "$$directories" = "$$(find . -type d | sort)"; \
+	  test "$$before" = "$$(find . -type f ! -name '*.out' ! -name '*.err' -exec cksum {} \; | sort)"; \
+	  echo 'Direct null-backed host passed for archive/source consumers and ROM/media failures'
+
 LIFECYCLE_CHECK_TARGETS += check-legacy-engine-link check-startup-ownership \
-                           check-legacy-lifecycle
-.PHONY: check-legacy-lifecycle
+                           check-legacy-lifecycle check-host-prepare
+.PHONY: check-legacy-lifecycle check-host-prepare check-host-operations
+LIFECYCLE_CHECK_TARGETS += check-host-operations check-snapshot-file
+.PHONY: check-snapshot-file
+
+check-snapshot-file: unittests/legacyenginelinktest unittests/legacyenginesourcetest
+	@set -e; root="$(abs_top_builddir)/unittests"; \
+	  rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    "$$root/$$consumer$(EXEEXT)" --snapshot-file-test --machine 48 \
+	      --rom-48 "$$rom" --no-sound --no-autosave-settings; \
+	  done; \
+	  test -z "$$(find . -type f -print)"; \
+	  echo 'Host/legacy snapshot saves, formats, IO failures, pause and cleanup passed for both consumers'
+
+check-host-operations: unittests/legacyenginelinktest unittests/legacyenginesourcetest
+	@set -e; root="$(abs_top_builddir)/unittests"; \
+	  roms="$(abs_top_srcdir)/roms"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    for mode in success filesystem-oracle filesystem tape-contract tape-info trapped-recording snapshot-roundtrip autoload-success autoload-failure \
+	      open-auto open-noauto open-custom open-reset-failure open-snapshot open-fallback open-rzx-stop \
+	      disk-save disk-save-beta \
+	      reset-failure select-failure peripheral-reset-failure peripheral-select-failure; do \
+	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$mode" "$$roms"; \
+	    done; \
+	    for kind in tape-deck tape-recording; do \
+	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "legacy-$$kind" "$$roms" > deck-legacy.out 2> deck-legacy.err; \
+	      "$$root/$$consumer$(EXEEXT)" --host-operations-test "$$kind" "$$roms" > deck-host.out 2> deck-host.err; \
+	      cmp deck-legacy.out deck-host.out; cmp deck-legacy.err deck-host.err; \
+	    done; \
+	    rm deck-legacy.out deck-host.out deck-legacy.err deck-host.err; \
+	  done; \
+	  test -z "$$(find . -type f -print)"; \
+	  echo 'Private machine/input/tape operations passed for both consumers'
+
+check-host-prepare: unittests/legacyenginelinktest unittests/legacyenginesourcetest
+	@set -e; root="$(abs_top_builddir)/unittests"; \
+	  rom="$(abs_top_srcdir)/roms/48.rom"; \
+	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
+	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=blocked USERPROFILE=. WINDIR=. APPDATA=.; \
+	  printf 'not a directory\n' > blocked; cp "$$rom" 48.rom; \
+	  before=$$(find . -type f -exec cksum {} \;); \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    for mode in success custom missing bad-size error-bytes bad-provenance null-bytes \
+	      joystick-0 joystick-1 joystick-2 joystick-3 joystick-4 joystick-5 joystick-6 joystick-7; do \
+	      "$$root/$$consumer$(EXEEXT)" --host-prepare-test "$$mode" "$$rom"; \
+	    done; \
+	  done; \
+	  test "$$before" = "$$(find . -type f -exec cksum {} \;)"; \
+	  test -z "$$(find . -mindepth 1 -type d -print)"; \
+	  export XDG_CONFIG_HOME=.; \
+	  for consumer in legacyenginelinktest legacyenginesourcetest; do \
+	    for mode in host-state legacy-state; do \
+	      mkdir "$$consumer-$$mode"; cd "$$consumer-$$mode"; cp "$$rom" 48.rom; \
+	      "$$root/$$consumer$(EXEEXT)" --host-prepare-test "$$mode" "$$rom" > /dev/null; \
+	      cd ..; \
+	    done; \
+	    cmp "$$consumer-host-state/state.szx" "$$consumer-legacy-state/state.szx"; \
+	  done; \
+	  echo 'Private host configuration and ROM lifetimes passed for both consumers'
 
 check-legacy-lifecycle: unittests/legacyenginelinktest unittests/legacyenginesourcetest
 	@set -e; root="$(abs_top_builddir)/unittests"; \
@@ -379,6 +674,8 @@ check-startup-ownership: unittests/startupownershiptest
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  "$$program" storage; "$$program" no-save; \
+	  "$$program" ide-unwind --no-sound --no-autosave-settings \
+	    --simpleide-masterfile master.hdf --simpleide-slavefile missing.hdf; \
 	  test -z "$$(find . -type f -print)"; \
 	  "$$program" save; test -n "$$(find . -type f -print)"; \
 	  before=$$(find . -type f -exec cksum {} \;); \

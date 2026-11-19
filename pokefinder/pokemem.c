@@ -449,7 +449,7 @@ pokemem_set_pokfile( const char *filename )
 {
   pokemem_clear();
 
-  if( !compat_file_exists( filename ) )
+  if( !utils_file_is_readable( filename ) )
     return 1;
 
   pokfile = utils_safe_strdup( filename );
@@ -491,7 +491,7 @@ pokemem_find_pokfile( const char *path )
   }
 
   strcat( test_file, ".pok" );
-  if( compat_file_exists( test_file ) ) {
+  if( utils_file_is_readable( test_file ) ) {
     pokfile = test_file;
     return 0;
   }
@@ -499,7 +499,7 @@ pokemem_find_pokfile( const char *path )
   /* Try .POK extension */
   /* FIXME: Is filesystem case sensitive? */
   memcpy( &(test_file[n]), ".POK", 4 );
-  if( compat_file_exists( test_file ) ) {
+  if( utils_file_is_readable( test_file ) ) {
     pokfile = test_file;
     return 0;
   }
@@ -524,7 +524,7 @@ pokemem_find_pokfile( const char *path )
   strncat( test_file, &path[ n ], filename_size );
   strcat( test_file, ".pok" );
 
-  if( compat_file_exists( test_file ) ) {
+  if( utils_file_is_readable( test_file ) ) {
     pokfile = test_file;
     return 0;
   }
@@ -534,7 +534,7 @@ pokemem_find_pokfile( const char *path )
   n = n + 6 + filename_size;
   memcpy( &test_file[ n ], ".POK", 4 );
 
-  if( compat_file_exists( test_file ) ) {
+  if( utils_file_is_readable( test_file ) ) {
     pokfile = test_file;
     return 0;
   }

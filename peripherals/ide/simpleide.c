@@ -71,6 +71,14 @@ static module_info_t simpleide_module_info = {
 
 /* Housekeeping functions */
 
+static int attached[2];
+
+int
+simpleide_backing_attached( libspectrum_ide_unit unit )
+{
+  return ( unit == LIBSPECTRUM_IDE_MASTER || unit == LIBSPECTRUM_IDE_SLAVE ) && attached[unit];
+}
+
 static int
 simpleide_init( void *context )
 {
@@ -82,8 +90,13 @@ simpleide_init( void *context )
 		    settings_current.simpleide_master_file,
 		    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_MASTER_EJECT,
 		    settings_current.simpleide_slave_file,
-		    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_SLAVE_EJECT );
-  if( error ) return error;
+		    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_SLAVE_EJECT, attached );
+  if( error ) {
+    libspectrum_ide_free( simpleide_idechn );
+    simpleide_idechn = NULL;
+    attached[0] = attached[1] = 0;
+    return error;
+  }
 
   module_register( &simpleide_module_info );
   periph_register( PERIPH_TYPE_SIMPLEIDE, &simpleide_periph );
@@ -95,6 +108,7 @@ static void
 simpleide_end( void )
 {
   libspectrum_ide_free( simpleide_idechn );
+  attached[0] = attached[1] = 0;
 }
 
 void
@@ -123,7 +137,7 @@ simpleide_insert( const char *filename, libspectrum_ide_unit unit )
     &settings_current.simpleide_master_file,
     UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_MASTER_EJECT,
     &settings_current.simpleide_slave_file,
-    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_SLAVE_EJECT );
+    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_SLAVE_EJECT, attached );
 }
 
 int
@@ -144,7 +158,7 @@ simpleide_eject( libspectrum_ide_unit unit )
     &settings_current.simpleide_master_file,
     UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_MASTER_EJECT,
     &settings_current.simpleide_slave_file,
-    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_SLAVE_EJECT );
+    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_SLAVE_EJECT, attached );
 }
 
 /* Port read/writes */

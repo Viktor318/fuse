@@ -31,11 +31,12 @@
 
 static int
 ide_insert_file( libspectrum_ide_channel *channel, libspectrum_ide_unit unit,
-		 const char *filename, ui_menu_item menu_item )
+		 const char *filename, ui_menu_item menu_item, int *attached )
 {
   int error;
 
   error = libspectrum_ide_insert( channel, unit, filename );
+  if( attached ) *attached = !error && filename != NULL;
   if( error ) return error;
   return ui_menu_activate( menu_item, 1 );
 }
@@ -43,7 +44,7 @@ ide_insert_file( libspectrum_ide_channel *channel, libspectrum_ide_unit unit,
 int
 ide_init( libspectrum_ide_channel *channel,
 	  char *master_setting, ui_menu_item master_menu_item,
-	  char *slave_setting, ui_menu_item slave_menu_item )
+	  char *slave_setting, ui_menu_item slave_menu_item, int attached[2] )
 {
   int error;
 
@@ -52,13 +53,13 @@ ide_init( libspectrum_ide_channel *channel,
 
   if( master_setting ) {
     error = ide_insert_file( channel, LIBSPECTRUM_IDE_MASTER, master_setting,
-		             master_menu_item );
+		             master_menu_item, &attached[LIBSPECTRUM_IDE_MASTER] );
     if( error ) return error;
   }
 
   if( slave_setting ) {
     error = ide_insert_file( channel, LIBSPECTRUM_IDE_SLAVE, slave_setting,
-                             slave_menu_item );
+                             slave_menu_item, &attached[LIBSPECTRUM_IDE_SLAVE] );
     if( error ) return error;
   }
 
@@ -70,44 +71,32 @@ ide_master_slave_insert(
   libspectrum_ide_channel *channel, libspectrum_ide_unit unit,
   const char *filename,
   char **master_setting, ui_menu_item master_menu_item,
-  char **slave_setting, ui_menu_item slave_menu_item )
+  char **slave_setting, ui_menu_item slave_menu_item, int attached[2] )
 {
-  char **setting;
-  ui_menu_item item;
-
   switch( unit ) {
-
   case LIBSPECTRUM_IDE_MASTER:
-    setting = master_setting;
-    item = master_menu_item;
-    break;
-
+    return ide_insert( filename, channel, unit, master_setting, master_menu_item, &attached[unit] );
   case LIBSPECTRUM_IDE_SLAVE:
-    setting = slave_setting;
-    item = slave_menu_item;
-    break;
-
-    default: return 1;
+    return ide_insert( filename, channel, unit, slave_setting, slave_menu_item, &attached[unit] );
+  default: return 1;
   }
-
-  return ide_insert( filename, channel, unit, setting, item );
 }
 
 int
 ide_insert( const char *filename, libspectrum_ide_channel *chn,
-	    libspectrum_ide_unit unit, char **setting, ui_menu_item item )
+	    libspectrum_ide_unit unit, char **setting, ui_menu_item item, int *attached )
 {
   int error;
 
   /* Remove any currently inserted disk; abort if we want to keep the current
      disk */
   if( *setting )
-    if( ide_eject( chn, unit, setting, item ) )
+    if( ide_eject( chn, unit, setting, item, attached ) )
       return 0;
 
   settings_set_string( setting, filename );
 
-  error = ide_insert_file( chn, unit, filename, item );
+  error = ide_insert_file( chn, unit, filename, item, attached );
   if( error ) return error;
 
   return 0;
@@ -117,26 +106,15 @@ int
 ide_master_slave_eject(
   libspectrum_ide_channel *channel, libspectrum_ide_unit unit,
   char **master_setting, ui_menu_item master_menu_item,
-  char **slave_setting, ui_menu_item slave_menu_item )
+  char **slave_setting, ui_menu_item slave_menu_item, int attached[2] )
 {
-  char **setting;
-  ui_menu_item item;
-
   switch( unit ) {
   case LIBSPECTRUM_IDE_MASTER:
-    setting = master_setting;
-    item = master_menu_item;
-    break;
-
+    return ide_eject( channel, unit, master_setting, master_menu_item, &attached[unit] );
   case LIBSPECTRUM_IDE_SLAVE:
-    setting = slave_setting;
-    item = slave_menu_item;
-    break;
-
+    return ide_eject( channel, unit, slave_setting, slave_menu_item, &attached[unit] );
   default: return 1;
   }
-
-  return ide_eject( channel, unit, setting, item );
 }
 
 int
@@ -178,6 +156,7 @@ ide_eject_mass_storage(
 struct eject_fn_context {
   libspectrum_ide_channel *chn;
   libspectrum_ide_unit unit;
+  int *attached;
 };
 
 static int
@@ -198,14 +177,16 @@ static libspectrum_error
 eject_fn_wrapper( void *context )
 {
   struct eject_fn_context *ctx = (struct eject_fn_context*)context;
-  return libspectrum_ide_eject( ctx->chn, ctx->unit );
+  libspectrum_error error = libspectrum_ide_eject( ctx->chn, ctx->unit );
+  if( ctx->attached ) *ctx->attached = 0;
+  return error;
 }
 
 int
 ide_eject( libspectrum_ide_channel *chn, libspectrum_ide_unit unit,
-	   char **setting, ui_menu_item item )
+	   char **setting, ui_menu_item item, int *attached )
 {
-  struct eject_fn_context ctx = { chn, unit };
+  struct eject_fn_context ctx = { chn, unit, attached };
   return ide_eject_mass_storage( dirty_fn_wrapper, commit_fn_wrapper,
       eject_fn_wrapper, &ctx,
       "Hard disk has been modified.\nDo you want to save it?",

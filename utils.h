@@ -55,6 +55,7 @@ void utils_close_file( utils_file *file );
 int utils_write_file( const char *filename, const unsigned char *buffer,
 		      size_t length );
 
+int utils_file_is_readable( const char *filename );
 int utils_find_file_path( const char *filename, char *path,
                           utils_aux_type type );
 

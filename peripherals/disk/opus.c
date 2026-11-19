@@ -672,7 +672,7 @@ ui_drive_get_params_2( void )
 static ui_media_drive_info_t opus_ui_drives[ OPUS_NUM_DRIVES ] = {
   {
     /* .name = */ "Opus Disk 1",
-    /* .controller_index = */ UI_MEDIA_CONTROLLER_OPUS,
+    /* .controller_index = */ FUSE_DISK_CONTROLLER_OPUS,
     /* .drive_index = */ OPUS_DRIVE_1,
     /* .menu_item_parent = */ UI_MENU_ITEM_MEDIA_DISK_OPUS,
     /* .menu_item_top = */ UI_MENU_ITEM_MEDIA_DISK_OPUS_1,
@@ -684,7 +684,7 @@ static ui_media_drive_info_t opus_ui_drives[ OPUS_NUM_DRIVES ] = {
   },
   {
     /* .name = */ "Opus Disk 2",
-    /* .controller_index = */ UI_MEDIA_CONTROLLER_OPUS,
+    /* .controller_index = */ FUSE_DISK_CONTROLLER_OPUS,
     /* .drive_index = */ OPUS_DRIVE_2,
     /* .menu_item_parent = */ UI_MENU_ITEM_MEDIA_DISK_OPUS,
     /* .menu_item_top = */ UI_MENU_ITEM_MEDIA_DISK_OPUS_2,

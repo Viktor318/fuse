@@ -93,6 +93,14 @@ static const char * const event_type_string = "divide";
 
 /* Housekeeping functions */
 
+static int attached[2];
+
+int
+divide_backing_attached( libspectrum_ide_unit unit )
+{
+  return ( unit == LIBSPECTRUM_IDE_MASTER || unit == LIBSPECTRUM_IDE_SLAVE ) && attached[unit];
+}
+
 static int
 divide_init( void *context )
 {
@@ -105,8 +113,14 @@ divide_init( void *context )
 		    settings_current.divide_master_file,
 		    UI_MENU_ITEM_MEDIA_IDE_DIVIDE_MASTER_EJECT,
 		    settings_current.divide_slave_file,
-		    UI_MENU_ITEM_MEDIA_IDE_DIVIDE_SLAVE_EJECT );
-  if( error ) return error;
+		    UI_MENU_ITEM_MEDIA_IDE_DIVIDE_SLAVE_EJECT, attached );
+  if( error ) {
+    libspectrum_ide_free( divide_idechn0 );
+    libspectrum_ide_free( divide_idechn1 );
+    divide_idechn0 = divide_idechn1 = NULL;
+    attached[0] = attached[1] = 0;
+    return error;
+  }
 
   module_register( &divide_module_info );
 
@@ -125,6 +139,7 @@ divide_end( void )
   divxxx_free( divide_state );
   libspectrum_ide_free( divide_idechn0 );
   libspectrum_ide_free( divide_idechn1 );
+  attached[0] = attached[1] = 0;
 }
 
 void
@@ -161,7 +176,7 @@ divide_insert( const char *filename, libspectrum_ide_unit unit )
     &settings_current.divide_master_file,
     UI_MENU_ITEM_MEDIA_IDE_DIVIDE_MASTER_EJECT,
     &settings_current.divide_slave_file,
-    UI_MENU_ITEM_MEDIA_IDE_DIVIDE_SLAVE_EJECT );
+    UI_MENU_ITEM_MEDIA_IDE_DIVIDE_SLAVE_EJECT, attached );
 }
 
 int
@@ -182,7 +197,7 @@ divide_eject( libspectrum_ide_unit unit )
     &settings_current.divide_master_file,
     UI_MENU_ITEM_MEDIA_IDE_DIVIDE_MASTER_EJECT,
     &settings_current.divide_slave_file,
-    UI_MENU_ITEM_MEDIA_IDE_DIVIDE_SLAVE_EJECT );
+    UI_MENU_ITEM_MEDIA_IDE_DIVIDE_SLAVE_EJECT, attached );
 }
 
 /* Port read/writes */

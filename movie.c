@@ -23,6 +23,7 @@
 */
 
 #include "config.h"
+#include "compat.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -123,7 +124,7 @@ static int movie_paused = 0;
 
 static int frame_no, slice_no;
 
-static FILE *of = NULL;	/* out file */
+static compat_fd of;	/* out file */
 static int fmf_screen;
 static libspectrum_byte head[8];
 static int freq = 0;
@@ -189,12 +190,18 @@ get_screentype( void )
   return '$';	/* STANDARD screen */
 }
 
+static void
+movie_write( const void *buffer, size_t length, compat_fd file )
+{
+  compat_file_write( file, buffer, length );
+}
+
 #ifdef HAVE_ZLIB_H
 static void
-fwrite_compr( const void *b, size_t n, size_t m, FILE *f )
+fwrite_compr( const void *b, size_t n, size_t m, compat_fd f )
 {
   if( fmf_compr == 0 ) {
-    fwrite( b, n, m, f );
+    movie_write( b, n * m, f );
   } else {
     zstream.avail_in = n * m;
     zstream.next_in = b;
@@ -203,7 +210,7 @@ fwrite_compr( const void *b, size_t n, size_t m, FILE *f )
     do {
       deflate( &zstream, Z_NO_FLUSH );
       while( zstream.avail_out != ZBUF_SIZE ) {
-        fwrite( zbuf_o, ZBUF_SIZE - zstream.avail_out, 1, of );
+        movie_write( zbuf_o, ZBUF_SIZE - zstream.avail_out, of );
 	zstream.avail_out = ZBUF_SIZE;
 	zstream.next_out = zbuf_o;
         deflate( &zstream, Z_NO_FLUSH );
@@ -212,7 +219,7 @@ fwrite_compr( const void *b, size_t n, size_t m, FILE *f )
   }
 }
 #else	/* HAVE_ZLIB_H */
-#define fwrite_compr fwrite
+#define fwrite_compr(b, n, m, f) movie_write( (b), (n) * (m), (f) )
 #endif	/* HAVE_ZLIB_H */
 
 static void
@@ -296,23 +303,23 @@ movie_add_area( int x, int y, int w, int h )
 static void
 movie_start_fmf( const char *name )
 {
-  if( ( of = fopen(name, "wb") ) == NULL ) {  /* trunc old file ? or append ? */
+  if( ( of = compat_file_open( name, COMPAT_FILE_WRITE ) ) == COMPAT_FILE_OPEN_FAILED ) {
     ui_error( UI_ERROR_ERROR, "error opening movie file '%s': %s", name,
               strerror( errno ) );
     return;
   }
 #ifdef WORDS_BIGENDIAN
-  fwrite( "FMF_V1E", 7, 1, of );	/* write magic header Fuse Movie File */
+  movie_write( "FMF_V1E", 7, of );	/* write magic header Fuse Movie File */
 #else	/* WORDS_BIGENDIAN */
-  fwrite( "FMF_V1e", 7, 1, of );	/* write magic header Fuse Movie File */
+  movie_write( "FMF_V1e", 7, of );	/* write magic header Fuse Movie File */
 #endif	/* WORDS_BIGENDIAN */
 #ifdef HAVE_ZLIB_H
   if( option_enumerate_movie_movie_compr() == 0 ) {
     fmf_compr = 0;
-    fwrite( "U", 1, 1, of );		/* not compressed */
+    movie_write( "U", 1, of );		/* not compressed */
   } else {
     fmf_compr = Z_DEFAULT_COMPRESSION;
-    fwrite( "Z", 1, 1, of );		/* compressed */
+    movie_write( "Z", 1, of );		/* compressed */
   }
   if( fmf_compr != 0 ) {
     zstream.zalloc = Z_NULL;
@@ -323,7 +330,7 @@ movie_start_fmf( const char *name )
     deflateInit( &zstream, fmf_compr );
   }
 #else	/* HAVE_ZLIB_H */
-  fwrite( "U", 1, 1, of );		/* cannot be compressed */
+  movie_write( "U", 1, of );		/* cannot be compressed */
 #endif	/* HAVE_ZLIB_H */
   movie_init_sound( settings_current.sound_freq,
                     sound_stereo_ay != SOUND_STEREO_AY_NONE );
@@ -335,7 +342,7 @@ movie_start_fmf( const char *name )
   head[5] = freq >> 8;
   head[6] = stereo;
   head[7] = '\n';	/* padding */
-  fwrite( head, 8, 1, of );		/* write initial params */
+  movie_write( head, 8, of );		/* write initial params */
   movie_add_area( 0, 0, 40, 240 );
 }
 
@@ -389,7 +396,7 @@ movie_stop( void )
         zstream.next_out = zbuf_o;
         deflate( &zstream, Z_SYNC_FLUSH );
         if( zstream.avail_out != ZBUF_SIZE )
-          fwrite( zbuf_o, ZBUF_SIZE - zstream.avail_out, 1, of );
+          movie_write( zbuf_o, ZBUF_SIZE - zstream.avail_out, of );
       } while ( zstream.avail_out != ZBUF_SIZE );
       deflateEnd( &zstream );
       fmf_compr = -1;
@@ -398,7 +405,7 @@ movie_stop( void )
 #endif	/* HAVE_ZLIB_H */
   format = '?';
   if( of ) {
-    fclose( of );
+    compat_file_close( of );
     of = NULL;
   }
 #ifdef MOVIE_DEBUG_PRINT

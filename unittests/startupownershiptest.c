@@ -6,9 +6,10 @@
 #include <string.h>
 
 #include "fuse.h"
-#include "fuse-internal.h"
+#include "fuse-legacy.h"
 #include "infrastructure/startup_files.h"
 #include "settings.h"
+#include "../hacking/memory-filesystem.h"
 #ifdef ENABLE_AUTOMATION
 #include "automation/automation.h"
 #endif
@@ -181,6 +182,26 @@ test_runner( const char *option, int expected )
   run_and_check( argc, args, expected );
 }
 
+static void
+test_ide_unwind( int argc, char **argv )
+{
+  static memory_filesystem filesystem;
+  unsigned char hdf[640] = { 'R','S','-','I','D','E',0x1a,0x11,0,128,0 };
+  libspectrum_fs_handle *handle;
+  size_t opens;
+
+  hdf[24] = hdf[28] = hdf[34] = 1;
+  assert( !memory_filesystem_install( &filesystem ) );
+  assert( !libspectrum_fs.open( "master.hdf", LIBSPECTRUM_FS_WRITE, &handle ) );
+  assert( !libspectrum_fs.write_exact( handle, hdf, sizeof(hdf) ) );
+  assert( !libspectrum_fs.close( handle ) );
+  opens = filesystem.opens;
+  run_and_check( argc, argv, 1 );
+  assert( filesystem.opens > opens );
+  assert( filesystem.opens == filesystem.closes );
+  memory_filesystem_free( &filesystem );
+}
+
 int
 main( int argc, char **argv )
 {
@@ -191,6 +212,7 @@ main( int argc, char **argv )
   else if( !strcmp( argv[1], "save" ) ) test_settings_end( 1 );
   else if( !strcmp( argv[1], "help" ) ) test_runner( "--help", 0 );
   else if( !strcmp( argv[1], "version" ) ) test_runner( "--version", 0 );
+  else if( !strcmp( argv[1], "ide-unwind" ) ) test_ide_unwind( argc - 1, argv + 1 );
 #ifdef ENABLE_AUTOMATION
   else if( !strcmp( argv[1], "settings-failure" ) ) test_runner( "", 1 );
   else if( !strcmp( argv[1], "session" ) ) run_and_check( argc - 1, argv + 1, 0 );

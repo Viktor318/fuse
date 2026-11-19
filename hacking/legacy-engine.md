@@ -1,380 +1,513 @@
 # Internal legacy-engine build
 
-## Boundary
+## Scope and build inputs
 
-The executable links the non-installed Libtool convenience library
-`libfuselegacy.la`. This is the configured application engine, including the
-selected UI, debugger, pacing and audio backend. It is not a toolkit-free core,
-an installed embedding SDK or a stable binary ABI.
+`libfuselegacy.la` is a non-installed Libtool convenience library containing the
+configured application engine: machine emulation, selected UI, debugger, pacing
+and audio backend. It is not a toolkit-free core, installed SDK or stable binary
+ABI. Consumers must use coherent sources, generated files and build configuration.
 
-`fuse-main.c` owns normal/SDL entry and platform bootstrap. Win32's executable
-also includes `ui/win32/win32main.c` and its resources. The private
-`fuse_legacy_main()` compatibility wrapper remains inside the engine. It composes
-private preparation, blocking legacy execution and shutdown, with explicit startup
-outcomes. Guarded shutdown unwinds completed manager registrations on startup
-failure, but the remaining frontend/backend limitations below still prevent
-advertising a supported embedding lifecycle/execution API.
+`fuse-main.c` owns normal/SDL entry and platform bootstrap. Win32 also uses
+`ui/win32/win32main.c` and its executable resources. Platform entry points and
+Emscripten preload/link policy are outside the library; system libraries required
+by engine code remain engine dependencies.
 
-## Current ownership boundary
-
-The private lifecycle accepts only one session attempt per process. Its declarations
-are in `fuse-internal.h`, not an installed SDK header:
-
-- `fuse_legacy_prepare(argc, argv)` returns READY, HELP, VERSION, FAILED, BUSY,
-  CLOSED or INVALID_ARGUMENT. Help/version and failure clean up before returning;
-  only READY retains a session. Invalid vector shape is rejected without consuming
-  the attempt or changing callbacks/settings. Zero arguments with NULL argv is
-  permitted; otherwise argv must have non-NULL entries and a NULL terminator.
-- `fuse_legacy_run_frame()` accepts READY repeatedly and advances to the next
-  completed frame boundary, which may be less than a full frame from the current
-  position. It returns COMPLETED, PAUSED or EXITING; EXITING takes precedence over
-  PAUSED and COMPLETED. A paused entry advances no emulated time. Re-entry during
-  startup, execution or shutdown returns BUSY; other non-READY phases return
-  NOT_READY. It does not finalize application output or shut down the session.
-- `fuse_legacy_run_tstates(budget)` advances by a relative emulated T-state
-  budget, sharing the frame entry's lifecycle and blocking rules. Budgets must
-  be 1..0x7fffffff and the starting clock below 0x7fffffff; invalid requests do
-  not execute. Instructions and due-event/frame dispatch finish before returning.
-  COMPLETED means at least the requested budget; PAUSED, INTERRUPTED and EXITING
-  may return earlier. This is not an exact cutoff or wall-clock deadline.
-  Normal frame/RZX clock rebasing is accounted for. Ordinary reset continues;
-  machine selection, snapshot restoration or debugger clock assignment during
-  a turn instead returns INTERRUPTED, without restarting the budget. Exit wins
-  over interruption, then pause, then completion. The next call uses the new
-  state normally; replacement between calls needs no special handling.
-- `fuse_legacy_execute(&status)` accepts READY once and runs the existing blocking
-  loop. Its return value reports acceptance; the separate output receives the
-  existing application exit code. Rejection leaves that output untouched.
-  It may follow host turns. Automation arms once at the first actual execution
-  entry (frame, budget or legacy), checks limits after dispatch, and writes results only
-  when the legacy runner finishes, before shutdown.
-- `fuse_legacy_shutdown()` disposes a READY or completed session once. It is a
-  no-op in fresh/closed states and during preparation, execution or cleanup
-  callbacks. Internal failure unwind and fatal abort use the separate guarded
-  cleanup path; ordinary shutdown is not a stop request.
-
-The internal states are FRESH -> STARTING -> READY -> RUNNING -> FINISHED ->
-STOPPING -> CLOSED. Host turns instead go READY -> RUNNING -> READY, including
-when they observe exit; the caller may then shut down or use the legacy runner
-for application result finalization. READY can also go straight to shutdown;
-help/version and failure go from STARTING through cleanup to CLOSED. Calls during
-an active attempt return BUSY; another attempt after closure returns CLOSED.
-Help/version and failed initialization also consume the supported lifetime.
-All calls remain serialized on the selected frontend owner thread. This is not
-thread-safe instance creation, restart, cooperative execution or a toolkit-free
-worker API.
-Argument storage remains borrowed and may be modified/reordered by the parser or
-selected toolkit; keep it alive through shutdown.
-
-The compatibility wrapper preserves CLI exit mapping and the existing dispatch
-order. A private `fuse_dispatch_once()` groups the CPU batch and due-event dispatch;
-frame callbacks, including their RZX/interrupt/input/UI companions, are unchanged.
-All execution entries use it, with automation limits checked after dispatch.
-The frame entry clears a completion flag when starting a turn; the full frame
-callback sets it after its work finishes. Ordinary reset leaves the flag alone;
-no cumulative frame counter is needed. It returns after due events drain, not
-halfway through interrupt/RZX/UI processing. Ordinary reset does not cancel the
-turn; machine selection replaces its queued frame event and execution can proceed
-to a boundary.
-
-Budget turns limit CPU batches at the existing instruction boundary rather than
-queueing a timer event. This is important for RZX: its forced dispatch can consume
-future events and move the frame clock, so adding a deadline event can itself
-change playback chronology. The optional CPU limit uses the existing per-opcode
-check machinery; ordinary execution skips it. Per-dispatch accounting records
-only coordinate adjustments made by frame rebasing, RZX normalization and its
-long-frame sentinel. RZX's forced time advance may overshoot a requested budget,
-but complete frame/interrupt dispatch is preserved. No permanent emulation clock
-or generation counter is introduced. Clock-replacement hooks invalidate only the
-active budget and lower its CPU limit so a stale limit cannot strand execution.
-These hooks are internal bookkeeping, not new host scheduling/reset operations.
-
-Existing audio admission, debugger and UI callbacks may block inside execution;
-there is no wall-clock latency bound or cross-thread cancellation. Z80 HALT does
-not stop frame execution or interrupt delivery. Hosts service commands and choose
-when to wait between calls, including while paused; no polling sleep is imposed.
-Legacy frontend modal/nested-loop handling remains intact. The legacy runner owns
-its exit loop and application result finalization. RNG seeding, core-managed
-libspectrum/XML and platform privilege handling
-remain at their existing startup stages. No seeding hook, generic policy framework,
-borrowed-library mode or new frontend responsibility is introduced.
-
-Settings acquire their strings before configuration/argument parsing. Parse
-failure releases those strings, and `settings_end(save)` is repeatable. Automatic
-preference saving requires authorization from `fuse_legacy_main()` after READY,
-as well as the user's autosave setting. Split core preparation/execution/shutdown
-does not grant that permission, even when the autosave setting is enabled; it does
-not change the setting or disable explicit settings-write operations. This keeps
-normal CLI/frontend persistence unchanged without making it a side effect of core
-resource disposal. Help/version and initialization failure do not save. Settings
-retain their manager callback position, with an idempotent fallback if that
-registration never completed. Process-global XML cleanup now follows SVG and automation disposal,
-rather than running inside settings teardown while other XML users may be alive.
-
-The core lifecycle records successful libspectrum acquisition and restores the
-previous libspectrum error callback only after owned teardown finishes, including
-when preparation returns HELP, VERSION or FAILED. Libraries remain managed behind
-the core boundary; callers are not required to initialize them. This is still an
-exclusive legacy-runtime profile, not a host-borrowing library contract.
-
-Temporary startup inputs are owned by `infrastructure/startup_files.[ch]`.
-File metadata/buffers and IDE paths have owned storage independent of settings;
-positional IDE replacements are copied, not borrowed from argv. The recording
-path remains borrowed from settings until startup operations finish. Temporary
-storage and the scaler-selection string are released on each local return path.
-
-### Manager and UI rollback
-
-The shared shutdown path is guarded before calling out, tolerates repeated calls,
-and is a no-op before the first attempt. Completed module callbacks run once in
-reverse completion order; pending registration storage is then freed. A failing
-initializer still owns its own unfinished work. Emergency abort remains fatal
-and can only clean known acquisitions, not guarantee rollback inside an arbitrary
-fatally failed initializer.
-
-| Owner | Implemented cleanup boundary |
-| --- | --- |
-| Display | Records successful `ui_init`; releases that UI once in the legacy tail position and frees border storage/count/capacity. Display-setup failure after UI acquisition rolls back locally. |
-| Sound | Releases acquired low-level output and partial synthesis/buffer/mixer resources independently of `sound_enabled`. Low-level init failure still belongs to the selected backend. Nonfatal no-sound fallback is preserved. |
-| Machine registry | Commits completed model objects, unwinds previously committed models on failure, and clears model/snapshot-ROM metadata on shutdown. The shared +3/+3e controller is freed once. |
-| Keyboard/joystick | End functions are registered as callbacks, not accidentally passed as initializer contexts. |
-| RZX recording | Dependencies keep creator data and settings alive through recording finalization, including rollback after recording starts. |
-| Media/registries | Releases lazy peripheral state, disk image buffers without save/eject decisions, registration lists and Interface 1 descriptors. |
-| Trainers | Deactivates while machine maps/memory are still alive, before manager teardown. |
-| GTK | Uses checked initialization; failed window/menu setup rolls back acquired widgets/resources. Terminal cleanup cancels display callbacks/timeouts and releases the Cairo surface before destroying widgets. |
-| SDL | Releases widget/SDL state on init failure; completed UI shutdown releases independent resources even if display teardown reports an error. |
-
-This is resource disposal, not a transaction that undoes already performed file
-writes or removes legacy modal acknowledgement. Frame/event/RZX dispatch, audio
-admission and normal frontend interaction policies are unchanged.
-
-**Remaining limits:** partial-initialization cleanup inside Xlib, framebuffer
-and Wii adapters, including exit/signal-hook ownership, still needs its own audit
-and platform verification. A source/SDK audit of Win32 found unchecked native
-allocations, incomplete window/resource disposal, missing callback readiness and
-shutdown guards, unsafe WinMM failure cleanup, and unbalanced DirectSound COM
-ownership. These need implementation fixes and native Windows validation; the
-shared unwind tests do not establish Win32 lifecycle safety.
-Inner `uidisplay_init` allocation failures
-and low-level audio failure branches beyond the tested acquisition points likewise
-require backend-specific checks. Recording finalization and external-I/O cleanup
-errors also need targeted failure-path checks beyond successful disposal. GTK
-resource rollback after creating real native widgets needs native runtime validation; a
-checked display-open failure alone does not prove it. Fatal-policy paths reached
-by startup operations, such as failed snapshot-machine fallback, also need
-classification before a supported non-terminating lifecycle API is exposed. No
-public lifecycle capability, host-borrowing profile or restart support is
-advertised.
-
-## Private host execution recipe
-
-This is a source-local, selected-UI-bound worker-compatible profile. Build the
-host and engine from the same configured revision, using `fuse-internal.h` and
-one of the linking styles below. No installed SDK, feature/version negotiation,
-new thread, command queue or toolkit-free initialization is provided. Preparation
-still initializes the selected UI and reads legacy configuration; only automatic
-preference saving is excluded from the split lifecycle.
-
-Keep all calls on one owner thread compatible with that UI's threading rules.
-Retain the host's existing command transport and scheduling. The following is a
-sketch for a session **without CLI automation**; `host_*` names are placeholders,
-not additional Fuse APIs:
-
-```c
-fuse_legacy_init_result init = fuse_legacy_prepare( argc, argv );
-if( init != FUSE_LEGACY_INIT_READY ) {
-  host_handle_startup_result( init );
-  return; /* Do not shut down someone else's session after BUSY. */
-}
-
-for( ;; ) {
-  host_service_commands();             /* On the owner thread, between turns. */
-  if( host_stop_requested() ) break;
-  if( !host_turn_due() ) {
-    host_wait_for_work();              /* Wake for commands or the next turn. */
-    continue;
-  }
-
-  fuse_legacy_run_result result = host_use_frame_turn()
-    ? fuse_legacy_run_frame()
-    : fuse_legacy_run_tstates( host_tstate_budget() );
-
-  switch( result ) {
-  case FUSE_LEGACY_RUN_COMPLETED:
-  case FUSE_LEGACY_RUN_INTERRUPTED:
-    host_reconsider_schedule();
-    break;
-  case FUSE_LEGACY_RUN_PAUSED:
-    host_wait_for_work();              /* Do not busy-retry a paused core. */
-    break;
-  case FUSE_LEGACY_RUN_EXITING:
-    goto finished;
-  default:                            /* BUSY / NOT_READY / INVALID_ARGUMENT */
-    host_report_usage_error( result );
-    goto finished;
-  }
-}
-finished:
-fuse_legacy_shutdown();
-```
-
-- Choose a frame turn when the host needs the next complete frame boundary,
-  independently of audio delivery. A budget turn may end within a frame; its
-  COMPLETED result does not mean a frame completed. Frame and budget turns may
-  be mixed in one prepared session.
-- For elapsed-time scheduling, convert the host's desired interval using the
-  current machine clock/speed and pass a positive budget in the documented
-  range. Retain native timers, audio pacing and fastload wall-time policy in the
-  host; do not turn those policies into emulated scheduler events. Account for
-  instruction/event overshoot rather than treating each call as an exact slice.
-- INTERRUPTED applies to a budget whose clock/state was replaced during the
-  call. Reconsider the next request in the new state; do not assume the original
-  budget completed or silently restart it. An ordinary reset does not interrupt
-  the budget. Reset/replacement between calls starts the next turn normally.
-- For host pause commands, use balanced owner-thread calls to the existing
-  `fuse_emulation_pause()` / `fuse_emulation_unpause()` in `fuse.h`. Release only
-  pauses the host owns; PAUSED is not a request to decrement somebody else's
-  pause count. Do not introduce an independent core pause counter. Legacy menu
-  and debugger nested loops retain their existing interaction behaviour.
-- A host stop handled between calls can go directly to shutdown, even while
-  paused. EXITING instead reports an exit already requested inside the engine.
-  Neither permits recursive execution or shutdown from an active callback.
-  Cross-thread requests must use the host's transport, not concurrent core calls.
-
-The host owns waits between turns and must wake them for commands. An active
-call may still block in audio, UI or debugger services; long prefix chains, tape
-traps and complete event batches also prevent a hard response-time bound. There
-is no cross-thread cancellation API. A queued stop cannot be promised immediate
-service while such work is active. Explicit debugger-stop outcomes and removal
-of synchronous waits belong to later milestones.
-
-### Adopting the entries without replacing the host
-
-Keep `fuse_legacy_main()` for the unchanged application path. To adopt host turns,
-replace the one continuous `fuse_legacy_execute()` call with owner-thread turns
-after READY, leaving initialization, native scheduling, command handling and
-presentation intact. Preserve mutable startup argument storage through shutdown.
-The continuous runner remains available, including after host turns, but once it
-finishes further execution calls are rejected.
-
-For an existing host with custom frame/timer helpers, replace its CPU loop and
-associated frame-end flags/dispatch as one coherent group. Do not compile both
-implementations or keep a deferred frame-end patch alongside the upstream frame
-callback. Retain host-native timing and reconcile its existing pause bridge; no
-Cocoa build, rebase or adoption is required to use these entries in this repo.
-Adopting none remains valid.
-
-For **CLI automation**, the test fixtures demonstrate one session across host and
-legacy calls. After a turn returns EXITING, call `fuse_legacy_execute(&status)`
-before shutdown if application result writing and exit-status mapping are wanted.
-Because exit is already requested, that finalization does not execute another
-CPU batch. Do not call it merely to finish an arbitrary host slice: without an
-exit request it resumes continuous execution. Direct shutdown after host turns
-does not write an automation result. See `check_frame_run()` / `check_budget_run()`
-in `unittests/legacylifecycletest.c` for the concrete in-repo consumers.
-
-## Canonical configured inputs
-
-The included Automake fragments append engine sources to
-`libfuselegacy_la_SOURCES`. There is no separate handwritten source manifest.
-Inspect the selected inputs with:
+Inspect the configured source and link inputs with:
 
 ```sh
 make print-legacy-engine-inputs
 ```
 
-The target lists sources, configured special objects and external link flags.
-The inputs are:
+The relevant build variables are:
 
-- `libfuselegacy_la_SOURCES`: shared engine and selected frontend sources.
-- `SOUND_LIBADD` and `TIMER_LIBADD`: configured Libtool backend objects. Possible
-  backend sources are listed in `EXTRA_libfuselegacy_la_SOURCES`, so distribution
-  and generated build rules account for them without compiling every backend.
-- `LEGACY_SCALER_OBJECTS`: the two Libtool scaler objects. Both compile
-  `ui/scaler/scalers.c`, with `SCALER_DATA_SIZE=2` and `4`, respectively.
-- `LEGACY_ENGINE_OBJECTS`: the combined selected backend/scaler object list.
-- `FUSE_LEGACY_LIBS`: configured external service link flags. Libtool carries
-  these dependencies through the convenience library; the direct-source test
-  consumer uses them explicitly after its objects.
+| Variable | Contents |
+| --- | --- |
+| `libfuselegacy_la_SOURCES` | Engine and selected frontend sources, assembled by the included Automake fragments. |
+| `SOUND_LIBADD`, `TIMER_LIBADD` | Configured Libtool backend objects. |
+| `LEGACY_SCALER_OBJECTS` | Two compilations of `ui/scaler/scalers.c`, with `SCALER_DATA_SIZE=2` and `4`. |
+| `LEGACY_ENGINE_OBJECTS` | Combined backend/scaler object list. |
+| `FUSE_LEGACY_LIBS` | Configured external service link flags. |
 
-Source builds also need the configured headers, generated
-settings/options/keysyms/menus/Z80 files, source/build include roots and the same
-feature definitions and compiler flags. The printed source list alone is not a
-standalone build recipe. Do not compile both selected and alternative UI/audio
-adapters or omit the custom scaler compilation rules.
+Canonical-source consumers also need the configured headers, generated
+settings/options/keysyms/menus/Z80 files, include roots, feature definitions and
+compiler flags. The printed list alone is not a standalone build recipe. Do not
+compile alternative UI/audio adapters together or omit the special scaler rules.
 
-Entry points, platform bootstrap, Windows executable resources and Emscripten
-preload/link policy stay outside the library. System libraries required by engine
-code remain engine link dependencies, even when platform-specific.
+## Lifecycle
 
-## Build checks
+The host API is declared in `fuse-internal.h`; CLI adapter entries are in
+`fuse-legacy.h`, which includes the host header for shared types and operations.
+`fuse-host.c` retains only host ROM-provider callback storage/routing.
+`fuse-config.c` owns the opaque configuration, engine defaults and application.
+`fuse-operations.c` implements routine-backed machine/input/File Open and tape
+insertion/deck/save/eject/recording entries, including admission, eligibility and
+completion. Tape modules retain the existing mechanics; `tape.c` also owns tape
+observation copying/freeing alongside the live tape state. `uimedia.c` keeps disk
+entries that depend on its private registry/save helpers; no extra delegates or
+private interfaces are introduced merely to centralize names. These are engine
+implementations, not caller-side wrappers. `fuse.c` owns preparation,
+lifecycle state and execution. `fuse-engine.h` declares private implementation
+hooks without exposing lifecycle state; it is not a second operation API.
+`fuse.h` contains other engine globals/service hooks, not the host interface.
+The implementation header is not a host-consumer dependency.
 
-With the null UI:
+There is one session attempt per process, with no restart, multiple-instance or
+concurrent-entry support. All mutable engine calls belong to one owner thread compatible with the
+selected frontend. Callbacks must not recursively enter the host API.
+
+Choose one preparation entry:
+
+- `fuse_host_prepare(config, resources)` uses explicit configuration and a ROM
+  provider. It does not parse CLI options or read/write preferences.
+- `fuse_legacy_prepare(argc, argv)` uses application configuration, CLI parsing
+  and startup files. Its mutable argument vector and strings remain borrowed
+  through shutdown. Zero arguments with NULL argv is permitted; otherwise argv
+  must contain non-NULL entries followed by a NULL terminator.
+
+Both return `fuse_init_result` (`FUSE_INIT_*`). READY retains a runnable session.
+Help/version and initialization failure clean up before returning and consume the
+attempt. Invalid arguments do not consume it. Active/reentrant preparation returns
+BUSY; preparation after closure returns CLOSED.
+
+After READY, use shared worker turns, typed operations or the continuous legacy
+runner. `fuse_shutdown()` disposes a prepared, completed or failed-operation
+session. It tolerates repeated calls and does nothing before preparation, after
+shutdown or during active preparation/execution/cleanup callbacks. It is not a
+cross-thread stop request.
+
+`fuse_legacy_execute(&status)` runs the blocking application loop once after READY,
+including after host turns. Its return value reports acceptance; `status` receives
+the application exit code. Once that loop finishes, further execution is rejected.
+`fuse_legacy_main()` combines legacy preparation, continuous execution and shutdown.
+
+Automatic preference saving belongs only to `fuse_legacy_main()` after successful
+preparation and also requires the user's autosave setting. Separate preparation,
+execution and shutdown do not grant permission to save. Explicit settings-write
+operations remain available to the application adapter.
+
+The engine manages libspectrum/XML and restores the previous libspectrum error
+callback after owned teardown. Completed startup registrations unwind in reverse
+completion order; an initializer owns cleanup of its unfinished acquisition.
+Disposal does not undo file writes or resolve media save/discard decisions.
+Platform/backend partial-initialization cleanup and fatal paths are not uniformly
+recoverable, particularly for Win32, Xlib, framebuffer, Wii and device backends.
+Recoverable startup results are not a universal non-terminating lifecycle promise.
+
+## Host configuration and ROMs
+
+Allocate `fuse_host_config` with `fuse_host_config_alloc()` and use its machine,
+sound, autoload preference, joystick-slot output and mouse-swap setters. The configuration owns copied
+strings and may be freed after preparation returns, including failure. Other
+settings use internal generated defaults; generated settings layouts are not host
+configuration inputs. An unknown nonempty machine ID fails during preparation
+and consumes the attempt. Joystick interface selection uses the engine's
+`joystick_type_t` from `fuse-joystick.h`, also imported by emulation. There is no
+parallel host output enum or translation table; existing numeric settings/name
+ordering is preserved. Logical input slots remain separate from interface choice.
+
+`fuse_host_resources` supplies a synchronous ROM acquisition callback. The engine
+copies the descriptor; its context remains borrowed until preparation failure
+cleanup or successful-session shutdown finishes. Each callback receives a logical
+ROM name and returns zero with bytes, length and explicit `custom` provenance
+(0 or 1), or nonzero on failure.
+
+ROM bytes are copied before release. A supplied response release callback runs
+exactly once, including after acquisition or size-validation failure. Names and
+response bytes are borrowed only for the request/release interval. Embedded
+snapshot ROMs take precedence over provider requests.
+
+The host path does not silently retry filesystem search or a default ROM: fallback
+is provider policy. A reported ROM failure fails host preparation/reset/selection
+even when an optional-peripheral callback would otherwise disable itself and
+return success. The legacy adapter can disable those peripherals and continue.
+
+Host preparation still initializes the selected UI/output adapters and retains
+internal defaults, RNG seeding and process-global library/error handling. It does
+not process application startup files/debugger commands, print the application
+banner or drop process privileges. Preparation and resource access may block.
+Only ROM acquisition uses this provider: media persistence, IDE, serial/network,
+snapshot loading and synchronous decisions retain their existing internal paths.
+In particular, legacy snapshot machine fallback can abort. There is no general
+host-services or deterministic-checkpoint contract.
+
+## Effective filesystem
+
+Libspectrum owns the effective regular-file filesystem. Platforms select their
+backend once with `libspectrum_fs_install`, before any filesystem operation;
+otherwise the first operation selects native IO permanently. Keep the backend
+state valid for all subsequent calls, including shutdown. Fuse's compatibility
+calls use the library's canonical handles and checked operations. There is no
+Fuse backend registry or fallback to native IO on a custom-backend failure.
+
+Common media IO and related POK lookup, WAV tape input, IDE/MMC backing, binary
+floppy images and text logs, PNG, XML/plain preferences, PSG, FMF, printer, SVG
+and profile output use this filesystem. Directory and environment providers are
+separate platform services. The development runner's `result.json` is a native
+host artifact. ROM provenance retains its existing separate policy.
+
+## Execution turns
+
+`fuse_run_frame()` advances to the next completed frame boundary, not necessarily
+a whole frame from the current position. `fuse_run_tstates(budget)` advances by a
+relative emulated T-state budget. Both return `fuse_run_result` (`FUSE_RUN_*`) and
+are repeatable after READY. Ordinary returns leave the session available for
+commands or another turn; they do not finalize application output or shut down.
+
+| Result | Meaning |
+| --- | --- |
+| COMPLETED | Requested frame boundary or budget reached. Budget completion does not imply a completed frame. |
+| PAUSED | No execution on paused entry, or execution paused during dispatch. |
+| INTERRUPTED | An active budget's machine/clock state was replaced; reconsider the next request in the new state. |
+| EXITING | Exit requested inside the engine. |
+| BUSY | Reentrant call during preparation, execution, another operation or cleanup. |
+| NOT_READY | No runnable session. |
+| INVALID_ARGUMENT | Invalid budget or unsupported starting-clock range; no execution. |
+
+Budgets must be 1..0x7fffffff, with a starting clock below 0x7fffffff. Execution
+finishes instructions and due-event/frame dispatch, so it can overshoot a budget.
+Budget accounting compensates for frame rebasing and RZX clock normalization;
+RZX forced dispatch can also overshoot. Ordinary reset does not interrupt a turn.
+Machine selection, snapshot restoration or debugger clock assignment during an
+active budget returns INTERRUPTED at a safe boundary. Replacement between calls
+is ordinary; do not silently restart an interrupted request.
+
+Exit takes precedence over interruption, then pause, then completion. Z80 HALT is
+not a host pause: frame events and interrupt delivery continue. Turns preserve
+complete frame/RZX/interrupt/input/UI dispatch rather than returning from inside
+a partially processed frame callback.
+
+The host owns command delivery and waits between turns. It may hold execution by
+not requesting another turn, or stop by calling shutdown, including while paused.
+Cross-thread requests must use host-owned transport. Legacy frontend pause bridges
+use balanced `fuse_emulation_pause()` / `fuse_emulation_unpause()` calls in `fuse.h`;
+release only pauses the caller owns. PAUSED does not authorize decrementing another
+owner's count. The host API does not expose pause-count controls.
+
+Audio, UI, debugger, traps, prefix chains and event work may block inside a turn.
+There is no wall-clock latency bound, cross-thread cancellation or cooperative
+execution guarantee. Keep native timers, audio pacing and fastload wall-time
+policy in the host rather than converting them to emulated scheduler events.
+
+For CLI automation, result writing and exit-status mapping belong to the legacy
+runner. After a host turn reports EXITING, `fuse_legacy_execute(&status)` can
+finalize them without another CPU batch. Without an exit request, that call
+resumes continuous execution. Direct shutdown does not write an automation result.
+
+## Machine and input operations
+
+The `fuse_host_*` operations run between execution turns on the owner thread,
+including while paused. They do not advance CPU time. Calls during active work
+return BUSY; pending exit returns EXITING. Invalid arguments return
+INVALID_ARGUMENT without core mutation. Before preparation, after shutdown or
+legacy execution finalization, and after FAILED machine selection/reset, they
+return NOT_READY.
+
+Machine selection borrows an ID for the call and validates it before mutation.
+Selection/reset reuse the machine mechanics, UI notifications and ROM services,
+without adding an input release. They preserve nested pause ownership. ID
+selection does not use the legacy snapshot/enum fallback-to-48K path. FAILED may
+leave partially modified state: further execution/operations are rejected and
+shutdown is required. There is no rollback/retry promise. NMI queues the normal
+NMI event; it is not delivered inline.
+
+- Normal keyboard input uses portable `input_key` values with Fuse's composite
+  keys, shifted arrows, recreated keyboard and configured keyboard-joystick
+  translation. It does not invoke widgets, menus or mouse grabbing, even for
+  Escape/function keys. Toolkit-keycode conversion belongs to the host.
+- `fuse_host_spectrum_key_event` is explicit low-level Spectrum matrix injection
+  for uses such as tests or an on-screen Spectrum keyboard.
+- Joystick input identifies logical slots (1, 2 or keyboard), not emulated
+  interfaces. Fuse applies the configured mapping. Injection does not enable
+  disabled/unavailable hardware.
+- Relative mouse motion uses positive y down and wraps hardware counters.
+  Logical left/right buttons respect configured swapping; native pointer capture
+  and middle-button grab remain host/UI policy.
+- Release-all clears physical keyboard and joystick/mouse button state without
+  moving the mouse or cancelling synthetic phantom/disciple typing. Hosts must
+  aggregate overlapping physical sources and avoid competing native writers;
+  these are set/clear operations, not reference-counted holds.
+
+Existing reset/module semantics apply. No input-sampling policy or owned state
+query is provided; do not read live globals concurrently from a UI thread.
+
+## File → Open
+
+`fuse_host_open_file(path)` invokes the existing general Open dispatcher with
+`tape_can_autoload()`, then refreshes the display as the legacy menu does. The
+current `auto_load` preference and ROM eligibility remain emulator policy;
+`fuse_host_config_set_auto_load` supplies that existing value during preparation.
+Configuration setters do not update a running session.
+
+File identification, RZX stop-before-identification, tape/snapshot/cartridge/disk
+loading, machine fallback, companion-POK discovery and selected-UI decisions stay
+in the existing implementation. The host supplies a filename and command intent,
+not decoded bytes or a copy of the dispatch rules. There is no media-type gate.
+Native filename selection and command delivery/pause ownership stay with the host.
+
+OK means the legacy dispatcher returned zero, which can include cancelled/no-op
+insertion; it does not prove replacement or program-loading completion. MEDIA_ERROR
+maps nonzero, not a uniform unchanged-state or safe-to-continue outcome. File Open
+can partially mutate state and retains legacy fatal paths. No rollback, extra
+cleanup, strict-ID failure rule or new fallback policy is imposed. The example
+shuts down on failure; this is not a universal error-safe loading API.
+
+## Snapshot file save
+
+`fuse_host_save_snapshot_file(path)` is chosen-target Save Snapshot, separate from
+File Open and not a checkpoint/buffer interface. The borrowed path must be
+nonempty. `snapshot_write` owns filename format inference, fallback to SZX for
+unknown/non-snapshot names, conversion-loss warnings, export and encoding.
+Warnings do not turn a successful legacy save into an error.
+
+The engine entry uses the menu's nested pause/write/unpause sequence. First pause
+can finalize competition-mode RZX recording even if the snapshot write fails;
+non-competition RZX recording remains active. Existing pause/unpause return
+conventions are retained, and the operation maps the writer's nonzero result to
+MEDIA_ERROR, not machine FAILED. Reentrant caller operations remain BUSY.
+
+No chooser or extra overwrite confirmation is added: target approval belongs to
+the selected UI/host before this chosen-target call, and existing files can be
+truncated/replaced. A codec failure before output may leave a target untouched;
+a write/close failure may leave partial or even complete bytes. No cleanup retry,
+output rollback, durability or full deterministic-state guarantee is imposed.
+Actual snapshot restore still uses existing File Open semantics and limitations.
+
+## Tape operations
+
+`fuse_host_insert_tape_file(path)` exposes the existing **Media → Tape → Open**
+intent: `tape_open(path, 0)`. That menu action does not consult `auto_load`; it
+inserts without initiating autoload. Manual Play and later loader-detected tape
+activity retain their existing mechanics. The path is borrowed through return;
+decoded tape data is engine-owned.
+
+This is not **File → Open**, exposed separately by `fuse_host_open_file`. Hosts
+must not reimplement its rules or treat tape insertion as a policy replacement.
+
+Replacement and recording finalization follow the existing tape workflow,
+including selected-UI save/discard/cancel handling. Occupied or modified media do
+not make this command BUSY. These synchronous services may block; host-facing
+resumable decisions are not implemented yet.
+
+MEDIA_ERROR maps the legacy nonzero result, which can also mean cancellation.
+The session remains runnable, but there is no tape rollback guarantee: read
+failure can leave old media untouched, cancellation retains the existing tape,
+and a decode failure can leave the old tape removed and partial new blocks.
+The entry neither retries close nor adds cleanup after a failed operation.
+This uses the effective filesystem reader, not the ROM provider. Names can be
+virtual; no per-operation media resource callbacks are exposed. Success reports insertion, not playback/loading completion.
+
+`fuse_host_toggle_tape_play()` uses manual `tape_toggle_play(0)`, not ensure-playing
+or autoload. `fuse_host_stop_tape()` affects playback only, not recording.
+`fuse_host_rewind_tape()` succeeds on an empty deck. Selection uses zero-based
+`fuse_host_select_tape_block(int)`: negative is invalid, missing block is
+MEDIA_ERROR. Neither rewind nor selection implicitly stops playback; queued-edge
+and partial-interval behaviour remain the existing mechanics (including partial
+interval reset before a failed selection).
+
+`fuse_host_save_tape_file(path)` borrows the target and keeps format inference,
+TZX fallback, recording finalization and encoding in the engine. It need not stop
+playback; failure can follow recording finalization and is not a rollback.
+`fuse_host_eject_tape()` finalizes recording then uses Save/Discard/Cancel, retaining
+media on cancellation or failed Save. These entries own admission/completion;
+selected-UI decisions may block.
+
+With tape traps enabled, ROM SAVE automatically appends decoded blocks; no manual
+recording command is needed. `fuse_host_config_set_tape_traps` supplies the existing
+boolean during preparation, retaining its default. Explicit pulse recording
+requires traps disabled: `fuse_host_start_tape_recording()` returns MEDIA_ERROR
+otherwise, without changing the setting or recorder. It records into the engine
+tape, including an empty deck. With traps disabled, already recording is success
+(checked before RZX); otherwise missing tape object or RZX refusal is MEDIA_ERROR.
+The RZX diagnostic remains. The core start routine returns its outcome directly;
+legacy UI callers can still ignore it. `fuse_host_stop_tape_recording()` finalizes elapsed
+intervals without implicitly stopping playback; idle Stop succeeds. On append
+failure, recording ends and buffers are released, but previously appended blocks
+remain; MEDIA_ERROR is not rollback and retry cannot recover the discarded tail.
+Neither operation changes pause nesting. Stop remains available if traps become
+enabled during an existing recording. Save/eject still finalize implicitly.
+
+## Owned tape browser/transport observations
+
+`fuse_host_copy_tape_info(&info)` returns an allocated `fuse_tape_info` defined in
+`fuse-tape.h`. It copies presence, playing, recording, modified, zero-based current
+block (-1 when none) and ordered browser rows. Each row owns its description and
+detail strings using the existing GTK/widget/Win32 browser formatting: description
+is an ASCII type label, details are UTF-8 and may be empty or long. This is display
+text, not raw block metadata, a parallel type enum or the Cocoa archive-info panel.
+
+There are no live tape/libspectrum pointers or generation/decision tokens. Copies
+remain usable after cursor changes, replacement, eject and shutdown; release the
+whole value with `fuse_tape_info_free`, which accepts NULL and accesses no engine
+state. Later commands resolve then-current state, not the copied rows.
+
+Copy uses normal owner-thread/lifecycle guards, clears output on failure and does
+not pause, select/rewind, advance time or finalize recording. In particular polling
+must not stop competition RZX recording. Recording on an empty deck reports
+recording=true with no blocks until finalization appends intervals. A formatter
+failure returns MEDIA_ERROR with no partial copy; availability is not inferred
+from dirty/playing/recording flags. It is not a complete emulator status API.
+
+## Shared floppy save implementation
+
+`ui_media_drive_save` retains the selected-UI filename chooser. The private engine
+save adapter takes a chosen path, borrowed through return; NULL uses the retained
+target and fails if unnamed. It does not invoke a chooser. Both paths share static
+format/overwrite/write/filename mechanics and post-pause result/dirty handling.
+The chooser keeps its own filename lifetime and pause interval, without adding a
+nested pause at write. There is no separate descriptor-taking chosen-target entry.
+
+These remain selected-UI-bound implementation mechanics, not host-facing mutable
+drive descriptors. Overwrite questions can block, and existing cancellation/type
+mutation and non-atomic file-write behaviour remain.
+
+`fuse_host_insert_disk_file(controller,slot,path)` supplies the existing explicit
+Media insert intent, without autoload or machine selection.
+`fuse_host_save_disk_file(controller,slot,path)` calls the chosen-target save seam;
+NULL saves to the retained filename. Controllers are emulated identities and slots
+are zero-based, not menu IDs. Unavailable/disabled controllers and empty-to-save
+drives return MEDIA_ERROR; invalid controller/slot/arguments are rejected before
+I/O. Occupied/modified insertion still uses existing replacement decisions, not
+BUSY. `fuse-disk.h` defines the single engine-owned `fuse_disk_controller` type
+used by host operations, registration, lookup and File Open dispatch. There is
+no host/UI controller enum translation. Packed menu action numbers, including
+the separate Microdrive group, are decoded only in `menu.c`.
+
+Disk operation entries in the media implementation own admission through
+completion, including drive lookup, FDD preconditions and result translation.
+There is no duplicate host/engine disk delegate API. Drive descriptors remain private.
+
+`fuse_host_new_disk` uses configured geometry, controller insertion hooks (including
++3 preformat) and the same replacement questions; zero can mean cancellation. `fuse_host_eject_disk`
+uses existing Save/Discard/Cancel and succeeds for an already empty available
+drive. `fuse_host_set_disk_flipped` and `fuse_host_set_disk_write_protected` take
+0/1 flags and require loaded media. Floppy WP is an emulated write gate, not
+filesystem access, and changing it does not itself mark the image modified.
+
+`fuse_host_copy_disk_drive_info(controller,slot,&info)` copies the engine-defined
+`fuse_disk_drive_info` on the owner thread. It succeeds for registered inactive
+or disabled drives too: controller availability and hardware enablement are
+separate fields. Identity, display name, retained target, loaded and flip/WP
+flags cover the existing drive UI reads, without menu IDs or FDD pointers.
+Loaded is authoritative for media presence; drive latches may remain set while
+empty. The value and strings survive replacement, eject and shutdown; release
+with `fuse_disk_drive_info_free`, which needs no live engine. Copies are observations,
+not command tokens: operations still resolve current controller/slot state.
+
+## IDE and MMC operations
+
+The owner-thread host calls insert, commit, eject and copy drive information
+using a `periph_type` and `libspectrum_ide_unit`. SimpleIDE, ZXATASP and DivIDE
+accept master and slave. ZXCF, DivMMC and ZXMMC accept master only. Explicit
+operations require an active controller and do not change general File Open's
+controller selection. `fuse_host_config_set_divmmc` enables DivMMC at preparation.
+
+Insert and eject retain the existing synchronous dirty-media decision. If eject
+is refused, replacement does not open the new backing; the host receives
+`MEDIA_ERROR` rather than legacy insert's no-op success. A failed insert after
+successful eject can leave the drive empty. Commit retains legacy reporting
+and does not guarantee that cached writes reached storage.
+
+`fuse_host_copy_mass_storage_info` returns an independent value; release it with
+`fuse_mass_storage_info_free`. A NULL backing name means no backing is attached,
+even if a failed insert left a filename in settings. Controller activity and
+attachment are separate. The copy survives replacement, eject and shutdown.
+
+The null host exercises ZXCF in `--filesystem TAPE_FILE` and DivMMC separately
+in `--divmmc CARD_FILE`, using the same RAM filesystem for both workflows.
+
+## Direct null-backed example
+
+[null-host.c](null-host.c) has its own `main` and uses `fuse-internal.h` directly.
+It configures a 48K machine, supplies a directory ROM provider, runs frame/budget
+turns, delivers input, handles focus loss, resets, selects 128 and shuts down.
+The directory needs `48.rom`, `128-0.rom` and `128-1.rom`.
+
+An optional tape filename selects a separate scenario: insert on 48K with the
+deck stopped, run five frame turns and shut down. This mode needs only `48.rom`;
+it does not perform the input/reset/128K sequence or wait for tape completion.
+`--open FILE` instead demonstrates general File → Open followed by five turns.
+With default standard 48K ROMs, tape autoload requests the ROM again during reset;
+other files can select machines and require additional ROMs. The log reports the
+legacy return, not that the file replaced media or that loading finished.
+`--save-disk INPUT OUTPUT` prepares a +3, explicitly inserts into slot 0 and saves
+through the host controller/slot API, without running the CPU. The core reads and
+encodes the image; the host does not handle disk bytes. This requires the four
+`plus3-*.rom` files. Existing-output decisions remain selected-UI policy (the null
+adapter declines overwrite); use a fresh output path for a successful example.
+`--disk-lifecycle OUTPUT` demonstrates New, flip/unflip, WP on/off, Save and eject
+on +3 slot 0 without running the CPU. Geometry and encoding stay in the engine;
+it is a bounded API example, not a new replacement/overwrite policy. It prints
+owned drive copies at New, control changes and eject, then reads a retained saved
+copy after shutdown. The driver never accesses drive/FDD internals.
+`--tape-lifecycle INPUT OUTPUT` explicitly inserts without autoload, rewinds/selects
+block 0, toggles playback, runs two frames, stops, rewinds, saves and ejects.
+The codec owns conversion; this does not prove program-loading completion.
+It prints owned playing/saved/ejected tape views, including browser rows, and
+retains a saved view for reading/freeing after shutdown.
+`--record-tape OUTPUT` explicitly disables tape traps in its preparation config,
+records two frames on a fresh 48K machine, then stops recording, saves and ejects
+through engine entries. No input image or host-side
+pulse encoding is needed; the engine handles timestamps, signal and codec.
+It also reads an empty-but-recording view and retains the finalized saved view.
+Detail strings preserve existing browser formatting (including the current
+millisecond label for pulse holds); they are not a new precise timing interface.
+`--save-snapshot OUTPUT` runs two frames, saves through the engine, hard-resets,
+reopens through general File Open, then runs one frame. Format/bytes stay in the
+engine; the example is not evidence of complete checkpoint determinism.
+`--filesystem TAPE_FILE` imports an encoded input into an example RAM filesystem,
+installs that backend before prepare, then uses the unchanged File Open/tape save/
+snapshot save/reset/Open operations against its names. It configures autoload0
+for this IO demonstration, exercises successful short transfers, checks balanced
+handles through shutdown, then exits. The host adapter handles storage,
+not codecs. ROM provenance/provider handling remains its existing separate policy.
+
+In a configured null-UI build:
 
 ```sh
-make check-legacy-engine-link
+make unittests/nullhostlink unittests/nullhostsource
+./unittests/nullhostlink /path/to/fuse/roms
+./unittests/nullhostsource /path/to/fuse/roms
+./unittests/nullhostlink /path/to/fuse/roms /path/to/demo.tap
+./unittests/nullhostlink /path/to/fuse/roms --open /path/to/demo.tap
+./unittests/nullhostlink /path/to/fuse/roms --save-disk /path/to/input.dsk /path/to/copy.udi
+./unittests/nullhostlink /path/to/fuse/roms --disk-lifecycle /path/to/new.udi
+./unittests/nullhostlink /path/to/fuse/roms --tape-lifecycle /path/to/input.tap /path/to/copy.tzx
+./unittests/nullhostlink /path/to/fuse/roms --record-tape /path/to/recording.pzx
+./unittests/nullhostlink /path/to/fuse/roms --save-snapshot /path/to/state.szx
+./unittests/nullhostlink /path/to/fuse/roms --filesystem /path/to/input.tap
+make check-null-host
 ```
 
-This builds the same generic consumer in two forms:
+The first consumer links the engine archive; the second compiles canonical engine
+sources. The main thread is the owner thread. Holding execution means not calling
+another turn, not manipulating the nested core pause count. Reported frame counts
+are completed host calls, not monotonic machine frame IDs across reset/selection.
+This is a selected-null-adapter example, not a replacement CLI or toolkit-free core.
 
-- `unittests/legacyenginelinktest` links the convenience library.
-- `unittests/legacyenginesourcetest` compiles the canonical engine sources and
-  links the same configured special objects and service dependencies, without
-  linking an engine archive.
+## Checks
 
-The check invokes help/version through both consumers and is included in
-`make check` for null-UI builds. `make check-startup-ownership` additionally
-checks temporary storage, settings save permission, early runner cleanup and
-callback restoration in isolated child-process preference directories. These
-are internal build fixtures, not examples of a supported public API. The consumers also accept the existing runner's CLI,
-so automation-enabled builds can use them for bounded differential captures.
-`make check-legacy-lifecycle` uses those same two consumers to exercise the private
-split interface: vector validation without consuming the attempt, zero-argument
-startup, distinct help/version/failure outcomes, active/closed rejection,
-preparation without execution (including no false automation result), one-shot
-execution with success/nonzero application exit status, and repeated shutdown.
-Frame-contract tests also cover repeatable turns, direct shutdown after a turn,
-nested pause and paused commands, reset during/between turns, machine selection
-replacing the queue, HALT/interrupt delivery, debugger exit, and recursive entry.
-Budget-contract tests add subframe execution, instruction overshoot, multi-frame
-rebasing, reset preservation, clock/queue replacement interruption, invalid input
-and repeat entry after interruption. A breakpoint command that edits the clock
-and continues without opening a UI must interrupt before another opcode executes.
-These frame/budget contract tests run with or without automation. Automation
-builds additionally generate an RZX covering its long-frame sentinel and
-mid-recording snapshot restore, compare legacy/frame/budget/mixed result JSON,
-and exercise deadline exits.
-Each accepted attempt uses a fresh process and isolated preference directory.
-Instrumented unwind tests additionally attempt reentrant prepare/frame/budget/
-execute/shutdown from STARTING, RUNNING and STOPPING, without disposing active operations. Preference
-checks use both consumers in empty and pre-existing configuration directories:
-core shutdown neither creates nor rewrites preferences despite autosave being
-enabled, while the real compatibility wrapper still saves after startup and
-honors the user's no-autosave choice. A changed in-memory value makes unwanted
-rewrites observable; an existing exit request bounds these wrapper tests without
-changing production execution.
+Null-UI builds include these checks in `make check`:
 
-The legacy ROM search uses the executable's location; these fixtures live under
-`unittests/`, not beside the source root's `roms/`. Supply explicit ROM paths for
-uninstalled capture runs, for example `--rom-48 /path/to/roms/48.rom`, and the
-corresponding options for other machines. Packaging does not introduce a new
-resource-search policy. Preserve a meaningful program path in argv[0] when
-reusing startup parsing. For tape-autoload checks, prefer standard ROM filenames
-resolved from the usual search directories: a different `--rom-*` filename marks
-that ROM custom and suppresses autoload, even when its bytes match the default.
+| Target | Coverage |
+| --- | --- |
+| `check-legacy-engine-link` | Archive/source linkage and legacy help/version entry. |
+| `check-startup-ownership` | Startup storage, preference-save permission and callback restoration. |
+| `check-legacy-lifecycle` | One-attempt lifecycle, reentry, pause, frame/budget boundaries and clock replacement; automation builds also cover bounded RZX/finalization cases. |
+| `check-host-prepare` | Configuration, all eight joystick interfaces on three slots, invalid inputs, ROM ownership/provenance and preference isolation. |
+| `check-host-operations` | Typed machine/input behaviour, tape and +3/Beta disk lifecycle, File Open eligibility/restore/RZX stop, admission and errors. |
+| `check-snapshot-file` | Host/legacy chosen-target saves: formats/fallback/overwrite, codec/write/close failures and allocation cleanup, nested pauses/reentry and RZX pause side effects. |
+| `check-tape-save-ui` | UI Save and host eject retain modified/playing tape on failed/cancelled Save, nested pause ownership and re-entry rejection. |
+| `check-tape-recording` | Recorder append failures before/after partial progress, cleanup/retention, subsequent work and selected-menu re-entry under nested pause. |
+| `check-floppy-save-ui` | Host/legacy lifecycle, decisions/failure retention, flags and owned observation lifetime across changes/shutdown, nested/unpaused. |
+| `check-null-host` | Direct input/Open/tape/disk lifecycle flows, ROM/media failures, saved image/legacy comparison and preference isolation in both linking forms. |
+| `check-startup-unwind` | Instrumented startup failures and reverse cleanup; requires null UI with automation. |
 
-With null UI and automation, `make check-startup-unwind` builds a separate source
-consumer with `FUSE_STARTUP_TEST`. It injects failures before/after configured
-manager modules, during model/display/audio setup and after machine/startup-file
-acquisition. It checks reverse cleanup, no preference save, cleared ownership,
-disposal of partially populated drive image storage, recording finalization on
-rollback and repeated shutdown, plus real invalid-ROM/scaler/snapshot error paths. Optional
-unconfigured module points report explicit skips. These hooks compile out of the
-production engine: there is no environment variable, CLI option or installed test
-API. The instrumented fixture uses the configured backend/scaler objects, not
-instrumented copies of every backend or external library.
+Startup-unwind hooks compile out of the production engine. Tests run accepted
+session attempts in fresh processes with isolated preferences. These checks do
+not establish native frontend/device failure safety or a supported public SDK.
 
-The audio interval-equivalence executables reuse engine Libtool objects, replacing
-only `sound.lo` with their compile-time interval variants. Scaler unit tests use
-the same two special scaler objects as the engine. Nothing installs the engine
-library or its private headers; external source builds remain configuration-bound.
+For uninstalled legacy CLI captures, resource search depends on argv[0] and the
+usual directories. Supply explicit ROM paths when needed. For tape-autoload
+checks, use standard ROM filenames resolved through those directories: a different
+`--rom-*` filename marks the ROM custom and suppresses autoload even if its bytes
+match the default. The direct host provider has its own resource policy instead.

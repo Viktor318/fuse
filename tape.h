@@ -57,7 +57,10 @@ int tape_stop( void );
 int tape_is_playing( void );
 int tape_present( void );
 
-void tape_record_start( void );
+/* Zero when recording is active (including an already-active recorder),
+   nonzero if no tape object or RZX prevents starting. Existing UI callers may
+   ignore the result; RZX refusal retains its diagnostic. */
+int tape_record_start( void );
 int tape_record_stop( void );
 
 /* Call a user-supplied function for every block in the current tape */

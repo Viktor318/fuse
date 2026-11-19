@@ -23,6 +23,7 @@
 
 #include "config.h"
 
+#include <stdarg.h>
 #include <string.h>
 #ifdef HAVE_STRINGS_STRCASECMP
 #include <strings.h>
@@ -34,6 +35,7 @@
 #include "libspectrum.h"
 
 #include "bitmap.h"
+#include "compat.h"
 #include "crc.h"
 #include "disk.h"
 #include "settings.h"
@@ -230,17 +232,24 @@ id_seek( disk_t *d, int sector )
 }
 
 /* seclen 00 -> 128, 01 -> 256 ... byte */
+static size_t
+disk_file_write( const void *data, size_t size, size_t count, compat_fd file )
+{
+  if( !size || !count || size > SIZE_MAX / count ) return 0;
+  return compat_file_write( file, data, size * count ) ? 0 : count;
+}
+
 static int
-data_write_file( disk_t *d, FILE *file, int seclen )
+data_write_file( disk_t *d, compat_fd file, int seclen )
 {
   int len = 0x80 << seclen;
-  if( fwrite( &d->track[ d->i ], len, 1, file ) != 1 )
+  if( disk_file_write( &d->track[ d->i ], len, 1, file ) != 1 )
     return 1;
   return 0;
 }
 
 static int
-savetrack( disk_t *d, FILE *file, int head, int track, 
+savetrack( disk_t *d, compat_fd file, int head, int track,
 	    int sector_base, int sectors, int seclen )
 {
   int s;
@@ -262,7 +271,7 @@ savetrack( disk_t *d, FILE *file, int head, int track,
 }
 
 static int
-saverawtrack( disk_t *d, FILE *file, int head, int track  )
+saverawtrack( disk_t *d, compat_fd file, int head, int track  )
 {
   int h, t, s, seclen;
   int del;
@@ -1031,6 +1040,9 @@ open_udi( buffer_t *buffer, disk_t *d )
   int i, bpt, ttyp, tlen, error;
   size_t eof;
   libspectrum_dword crc;
+
+  /* Fixed 16-byte header plus trailing CRC, before reading any fields. */
+  if( buffer->file.length < 20 ) return d->status = DISK_OPEN;
 
   crc = ~(libspectrum_dword) 0;
 
@@ -2454,14 +2466,7 @@ disk_open_buffer( disk_t *d, const utils_file *file, int preindex )
   const char *filename = file->filename;
   libspectrum_id_t type;
 
-#ifdef GEKKO		/* Wii doesn't have access() */
-  d->wrprot = 0;
-#else			/* #ifdef GEKKO */
-  if( access( filename, W_OK ) == -1 )		/* file read only */
-    d->wrprot = 1;
-  else
-    d->wrprot = 0;
-#endif			/* #ifdef GEKKO */
+  d->wrprot = !compat_file_writable( filename );
 
   buffer.file = *file;              /* borrowed: never close this buffer */
   buffer.index = 0;
@@ -2718,7 +2723,7 @@ disk_open_internal( disk_t *d, const char *filename, int preindex,
 /*--------------------- start of write section ----------------*/
 
 static int
-write_udi( FILE *file, disk_t *d )
+write_udi( compat_fd file, disk_t *d )
 {
   int i, j, error;
   size_t len;
@@ -2751,7 +2756,7 @@ write_udi( FILE *file, disk_t *d )
   head[9] = d->cylinders - 1;
   head[10] = d->sides - 1;
   head[11] = head[12] = head[13] = head[14] = head[15] = 0;
-  if( fwrite( head, 16, 1, file ) != 1 )
+  if( disk_file_write( head, 16, 1, file ) != 1 )
     return d->status = DISK_WRPART;
   for( j = 0; j < 16; j++ )
     crc = crc_udi( crc, head[j] );
@@ -2760,7 +2765,7 @@ write_udi( FILE *file, disk_t *d )
     head[0] = d->track[-1];		/* track type */
     head[1] = d->track[-3];		/* track len  */
     head[2] = d->track[-2];		/* track len2 */
-    if( fwrite( head, 3, 1, file ) != 1 )
+    if( disk_file_write( head, 3, 1, file ) != 1 )
       return d->status = DISK_WRPART;
 
     for( j = 0; j < 3; j++ )
@@ -2770,7 +2775,7 @@ write_udi( FILE *file, disk_t *d )
       len = 4 + d->track[-3] + 256 * d->track[-2];
     else
       len = UDI_TLEN( d->track[-1], d->track[-3] + 256 * d->track[-2] );
-    if( fwrite( d->track, len, 1, file ) != 1 )
+    if( disk_file_write( d->track, len, 1, file ) != 1 )
       return d->status = DISK_WRPART;
 
     for( j = len; j > 0; j-- ) {
@@ -2782,8 +2787,8 @@ write_udi( FILE *file, disk_t *d )
   head[1] = ( crc >> 8 ) & 0xff;
   head[2] = ( crc >> 16 ) & 0xff;
   head[3] = ( crc >> 24 ) & 0xff;
-  if( fwrite( head, 4, 1, file ) != 1 )		/* CRC */
-    fclose( file );
+  if( disk_file_write( head, 4, 1, file ) != 1 )	/* CRC */
+    return d->status = DISK_WRPART; /* disk_write owns the single close. */
 
 #ifdef LIBSPECTRUM_SUPPORTS_ZLIB_COMPRESSION
   /* Keep tracks uncompressed in memory */
@@ -2796,7 +2801,7 @@ write_udi( FILE *file, disk_t *d )
 }
 
 static int
-write_img_mgt_opd( FILE *file, disk_t *d )
+write_img_mgt_opd( compat_fd file, disk_t *d )
 {
   int i, j, sbase, sectors, seclen, mfm, cyl;
 
@@ -2829,7 +2834,7 @@ write_img_mgt_opd( FILE *file, disk_t *d )
 }
 
 static int
-write_d40_d80( FILE *file, disk_t *d )
+write_d40_d80( compat_fd file, disk_t *d )
 {
   int i, j, sbase, sectors, seclen, mfm, cyl;
 
@@ -2853,7 +2858,7 @@ write_d40_d80( FILE *file, disk_t *d )
 }
 
 static int
-write_trd( FILE *file, disk_t *d )
+write_trd( compat_fd file, disk_t *d )
 {
   int i, j, sbase, sectors, seclen, mfm, cyl;
 
@@ -2872,7 +2877,7 @@ write_trd( FILE *file, disk_t *d )
 }
 
 static int
-write_sad( FILE *file, disk_t *d )
+write_sad( compat_fd file, disk_t *d )
 {
   int i, j, sbase, sectors, seclen, mfm, cyl;
 
@@ -2885,7 +2890,7 @@ write_sad( FILE *file, disk_t *d )
   head[19] = cyl;
   head[20] = sectors;
   head[21] = seclen * 4;
-  if( fwrite( head, 22, 1, file ) != 1 )	/* SAD head */
+  if( disk_file_write( head, 22, 1, file ) != 1 )	/* SAD head */
     return d->status = DISK_WRPART;
 
   for( j = 0; j < d->sides; j++ ) {	/* OUT-OUT */
@@ -2898,7 +2903,7 @@ write_sad( FILE *file, disk_t *d )
 }
 
 static int
-write_fdi( FILE *file, disk_t *d )
+write_fdi( compat_fd file, disk_t *d )
 {
   int i, j, k, sbase, sectors, seclen, mfm, del;
   int h, t, s, b;
@@ -2923,7 +2928,7 @@ write_fdi( FILE *file, disk_t *d )
   head[0x09] = ( h + 0x0e ) >> 8; /* "http://fuse-emulator.sourceforge.net" */
   head[0x0a] = ( h + 0x33 ) & 0xff;	/* data offset */
   head[0x0b] = ( h + 0x33 ) >> 8;
-  if( fwrite( head, 14, 1, file ) != 1 )	/* FDI head */
+  if( disk_file_write( head, 14, 1, file ) != 1 )	/* FDI head */
     return d->status = DISK_WRPART;
 
   /* write track headers */
@@ -2940,7 +2945,7 @@ write_fdi( FILE *file, disk_t *d )
       head[0x05] = 0;
       guess_track_geom( d, j, i, &sbase, &sectors, &seclen, &mfm );
       head[0x06] = sectors;
-      if( fwrite( head, 7, 1, file ) != 1 )	/* track header */
+      if( disk_file_write( head, 7, 1, file ) != 1 )	/* track header */
 	return d->status = DISK_WRPART;
 
       DISK_SET_TRACK( d, j, i );
@@ -2963,7 +2968,7 @@ write_fdi( FILE *file, disk_t *d )
 	  }
 	  k++;
 	}			/* Sector header */
-	if( fwrite( head, 7 * k, 1, file ) != 1 )
+	if( disk_file_write( head, 7 * k, 1, file ) != 1 )
 	  return d->status = DISK_WRPART;
 
 	sectors -= k;
@@ -2972,7 +2977,7 @@ write_fdi( FILE *file, disk_t *d )
       toff += soff;
     }
   }
-  if( fwrite( "http://fuse-emulator.sourceforge.net", 37, 1, file ) != 1 )
+  if( disk_file_write( "http://fuse-emulator.sourceforge.net", 37, 1, file ) != 1 )
     return d->status = DISK_WRPART;
 
   /* write data */
@@ -2986,7 +2991,7 @@ write_fdi( FILE *file, disk_t *d )
 }
 
 static int
-write_cpc( FILE *file, disk_t *d )
+write_cpc( compat_fd file, disk_t *d )
 {
   int i, j, k, sbase, sectors, seclen, mfm, cyl;
   int h, t, s, b;
@@ -3014,7 +3019,7 @@ write_cpc( FILE *file, disk_t *d )
   len = sectors * ( 0x80 << seclen ) + 256;
   head[0x32] = len & 0xff;
   head[0x33] = len >> 8;
-  if( fwrite( head, 256, 1, file ) != 1 )	/* CPC head */
+  if( disk_file_write( head, 256, 1, file ) != 1 )	/* CPC head */
     return d->status = DISK_WRPART;
 
   memset( head, 0, 256 );
@@ -3041,7 +3046,7 @@ write_cpc( FILE *file, disk_t *d )
 	}
 	k++;
       }
-      if( fwrite( head, 256, 1, file ) != 1 )	/* Track head */
+      if( disk_file_write( head, 256, 1, file ) != 1 )	/* Track head */
 	return d->status = DISK_WRPART;
 
       if( saverawtrack( d, file, j, i ) )
@@ -3052,7 +3057,7 @@ write_cpc( FILE *file, disk_t *d )
 }
 
 static int
-write_scl( FILE *file, disk_t *d )
+write_scl( compat_fd file, disk_t *d )
 {
   int i, j, k, l, t, s, sbase, sectors, seclen, mfm, del, cyl;
   int entries;
@@ -3078,7 +3083,7 @@ write_scl( FILE *file, disk_t *d )
 
   memcpy( head, "SINCLAIR", 8 );
   sum += entries;
-  if( fwrite( head, 9, 1, file ) != 1 )
+  if( disk_file_write( head, 9, 1, file ) != 1 )
     return d->status = DISK_WRPART;
 
   /* save SCL entries */
@@ -3092,7 +3097,7 @@ write_scl( FILE *file, disk_t *d )
     if( k == 0 && ( !id_seek( d, j ) || !datamark_read( d, &del ) ) )
       return d->status = DISK_GEOM;
 
-    if( fwrite( d->track + d->i + k, 14, 1, file ) != 1 )
+    if( disk_file_write( d->track + d->i + k, 14, 1, file ) != 1 )
       return d->status = DISK_WRPART;
     sectors += d->track[ d->i + k + 13 ];	/* file length in sectors */
     for( s = 0; s < 14; s++ ) {
@@ -3158,63 +3163,78 @@ write_scl( FILE *file, disk_t *d )
   head[2] = ( sum >> 16 ) & 0xff;
   head[3] = ( sum >> 24 ) & 0xff;
 
-  if( fwrite( head, 4, 1, file ) != 1 )
+  if( disk_file_write( head, 4, 1, file ) != 1 )
     return d->status = DISK_WRPART;
 
   return d->status = DISK_OK;
 }
 
 static int
-write_log( FILE *file, disk_t *d )
+disk_log_printf( compat_fd file, const char *format, ... )
+{
+  unsigned char line[128];
+  va_list args;
+  int length;
+
+  va_start( args, format );
+  length = vsnprintf( (char *)line, sizeof( line ), format, args );
+  va_end( args );
+  if( length < 0 || (size_t)length >= sizeof( line ) ) return 1;
+  return compat_file_write( file, line, (size_t)length );
+}
+
+static int
+write_log( compat_fd file, disk_t *d )
 {
   int i, j, k, del, rev;
   int h, t, s, b;
   char str[17];
 
   str[16] = '\0';
-  fprintf( file, "DISK tracks log!\n" );
-  fprintf( file, "Sides: %d, cylinders: %d\n", d->sides, d->cylinders );
+  if( disk_log_printf( file, "DISK tracks log!\n" ) ||
+      disk_log_printf( file, "Sides: %d, cylinders: %d\n", d->sides, d->cylinders ) )
+    goto write_failed;
   for( j = 0; j < d->cylinders; j++ ) {	/* ALT :) */
     for( i = 0; i < d->sides; i++ ) {
       DISK_SET_TRACK( d, i, j );
       d->i = 0;
-      fprintf( file, "\n*********\nSide: %d, cylinder: %d type: 0x%02x tlen: %5u\n",
-			i, j, d->track[-1], d->track[-3] + 256 * d->track[-2] );
+      if( disk_log_printf( file, "\n*********\nSide: %d, cylinder: %d type: 0x%02x tlen: %5u\n",
+                           i, j, d->track[-1], d->track[-3] + 256 * d->track[-2] ) )
+        goto write_failed;
       while( id_read( d, &h, &t, &s, &b ) ) {
-	fprintf( file, "  h:%d t:%d s:%d l:%d(%d)", h, t, s, b, 0x80 << b );
-	if( datamark_read( d, &del ) )
-	  fprintf( file, " %s\n", del ? "deleted" : "normal" );
-	else
-	  fprintf( file, " noDAM\n" );
+        if( disk_log_printf( file, "  h:%d t:%d s:%d l:%d(%d)", h, t, s, b, 0x80 << b ) ||
+            disk_log_printf( file, " %s\n", datamark_read( d, &del ) ?
+                             ( del ? "deleted" : "normal" ) : "noDAM" ) )
+          goto write_failed;
       }
     }
   }
-  fprintf( file, "\n***************************\nSector Data Dump:\n" );
+  if( disk_log_printf( file, "\n***************************\nSector Data Dump:\n" ) )
+    goto write_failed;
   for( j = 0; j < d->cylinders; j++ ) {	/* ALT :) */
     for( i = 0; i < d->sides; i++ ) {
       DISK_SET_TRACK( d, i, j );
       d->i = 0;
-      fprintf( file, "\n*********\nSide: %d, cylinder: %d type: 0x%02x tlen: %5u\n",
-			i, j, d->track[-1], d->track[-3] + 256 * d->track[-2] );
+      if( disk_log_printf( file, "\n*********\nSide: %d, cylinder: %d type: 0x%02x tlen: %5u\n",
+                           i, j, d->track[-1], d->track[-3] + 256 * d->track[-2] ) )
+        goto write_failed;
       rev = k = 0;
       while( id_read( d, &h, &t, &s, &b ) ) {
 	b = 0x80 << b;
-	if( datamark_read( d, &del ) )
-	  fprintf( file, "  h:%d t:%d s:%d l:%d (%s)\n", h, t, s, b,
-		   del ? "deleted" : "normal" );
-	else
-	  fprintf( file, "  h:%d t:%d s:%d l:%d (missing data)\n", h,
-		   t, s, b );
+        if( disk_log_printf( file, "  h:%d t:%d s:%d l:%d (%s)\n", h, t, s, b,
+                             datamark_read( d, &del ) ?
+                             ( del ? "deleted" : "normal" ) : "missing data" ) )
+          goto write_failed;
 	k = 0;
 	while( k < b ) {
-	  if( !( k % 16 ) )
-	    fprintf( file, "0x%08x:", k );
-	  fprintf( file, " 0x%02x", d->track[ d->i ] );
+          if( ( !( k % 16 ) && disk_log_printf( file, "0x%08x:", k ) ) ||
+              disk_log_printf( file, " 0x%02x", d->track[ d->i ] ) )
+            goto write_failed;
 	  str[ k & 0x0f ] = d->track[ d->i ] >= 32 &&
 			    d->track[ d->i ] < 127 ? d->track[ d->i ] : '.';
 	  k++;
-	  if( !( k % 16 ) )
-	    fprintf( file, " | %s\n", str );
+          if( !( k % 16 ) && disk_log_printf( file, " | %s\n", str ) )
+            goto write_failed;
 	  d->i++;
 	  if( d->i >= d->c_bpt ) {
 	    d->i = 0;
@@ -3226,40 +3246,44 @@ write_log( FILE *file, disk_t *d )
       }
     }
   }
-  fprintf( file, "\n***************************\n**Full Dump:\n" );
+  if( disk_log_printf( file, "\n***************************\n**Full Dump:\n" ) )
+    goto write_failed;
   for( j = 0; j < d->cylinders; j++ ) {	/* ALT :) */
     for( i = 0; i < d->sides; i++ ) {
       DISK_SET_TRACK( d, i, j );
       d->i = 0;
-      fprintf( file, "\n*********\nSide: %d, cylinder: %d type: 0x%02x tlen: %5u\n",
-			i, j, d->track[-1], d->track[-3] + 256 * d->track[-2] );
+      if( disk_log_printf( file, "\n*********\nSide: %d, cylinder: %d type: 0x%02x tlen: %5u\n",
+                           i, j, d->track[-1], d->track[-3] + 256 * d->track[-2] ) )
+        goto write_failed;
       k = 0;
       while( d->i < d->c_bpt ) {
-	if( !( k % 8 ) )
-	  fprintf( file, "0x%08x:", d->i );
-	fprintf( file, " 0x%04x", d->track[ d->i ] |
-		 ( bitmap_test( d->clocks, d->i ) ? 0x0c00 : 0x0000 ) |
-		 ( bitmap_test( d->fm, d->i ) ? 0x1000 : 0x0000 ) |
-		 ( bitmap_test( d->weak, d->i ) ? 0x8000 : 0x0000 ) );
-	k++;
-	if( !( k % 8 ) )
-	  fprintf( file, "\n" );
+        if( ( !( k % 8 ) && disk_log_printf( file, "0x%08x:", d->i ) ) ||
+            disk_log_printf( file, " 0x%04x", d->track[ d->i ] |
+                 ( bitmap_test( d->clocks, d->i ) ? 0x0c00 : 0x0000 ) |
+                 ( bitmap_test( d->fm, d->i ) ? 0x1000 : 0x0000 ) |
+                 ( bitmap_test( d->weak, d->i ) ? 0x8000 : 0x0000 ) ) )
+          goto write_failed;
+        k++;
+        if( !( k % 8 ) && disk_log_printf( file, "\n" ) ) goto write_failed;
 	d->i++;
       }
     }
   }
   return d->status = DISK_OK;
+
+write_failed:
+  return d->status = DISK_WRPART;
 }
 
 int
 disk_write( disk_t *d, const char *filename )
 {
-  FILE *file;
+  compat_fd file;
   const char *ext;
   size_t namelen;
   disk_position_context_t context;
 
-  if( ( file = fopen( filename, "wb" ) ) == NULL )
+  if( ( file = compat_file_open( filename, COMPAT_FILE_WRITE ) ) == NULL )
     return d->status = DISK_WRFILE;
 
   namelen = strlen( filename );
@@ -3342,11 +3366,11 @@ disk_write( disk_t *d, const char *filename )
   position_context_restore( d, &context );
 
   if( d->status != DISK_OK ) {
-    fclose( file );
+    compat_file_close( file );
     return d->status;
   }
 
-  if( fclose( file ) == -1 )
+  if( compat_file_close( file ) )
     return d->status = DISK_WRFILE;
 
   return d->status = DISK_OK;

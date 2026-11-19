@@ -638,7 +638,7 @@ int
 automation_write_result( void )
 {
   char *path;
-  compat_fd file;
+  FILE *file;
   automation_json json;
 
   int artifact_error = automation_artifacts_write( scenario.output_directory,
@@ -649,10 +649,11 @@ automation_write_result( void )
   path = libspectrum_new( char, strlen( scenario.output_directory ) + 13 );
   sprintf( path, "%s" FUSE_DIR_SEP_STR "result.json",
            scenario.output_directory );
-  file = compat_file_open( path, 1 );
+  /* The automation result is a host-side runner artifact. */
+  file = fopen( path, "wb" );
   libspectrum_free( path );
 
-  if( file == COMPAT_FILE_OPEN_FAILED )
+  if( !file )
     return 1;
 
   automation_json_init( &json, file );
@@ -672,7 +673,7 @@ automation_write_result( void )
   fputc( '\n', file );
   int error = automation_json_error( &json );
 
-  if( compat_file_close( file ) )
+  if( fclose( file ) )
     error = 1;
 
   return error || artifact_error;

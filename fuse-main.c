@@ -35,7 +35,7 @@
 #endif
 
 #include "fuse.h"
-#include "fuse-internal.h"
+#include "fuse-legacy.h"
 
 #ifdef UI_WIN32
 int fuse_main( int argc, char **argv )

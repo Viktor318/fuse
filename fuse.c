@@ -47,6 +47,8 @@
 #include "fork_version.h"
 #include "fuse.h"
 #include "fuse-internal.h"
+#include "fuse-engine.h"
+#include "fuse-legacy.h"
 #include "ayplayer.h"
 #include "ayplaylist.h"
 #include "recent_files.h"
@@ -136,7 +138,7 @@ static display_startup_context display_context;
 
 typedef enum legacy_phase {
   LEGACY_FRESH, LEGACY_STARTING, LEGACY_READY, LEGACY_RUNNING,
-  LEGACY_FINISHED, LEGACY_STOPPING, LEGACY_CLOSED
+  LEGACY_FINISHED, LEGACY_OPERATING, LEGACY_FAILED, LEGACY_STOPPING, LEGACY_CLOSED
 } legacy_phase;
 
 /* Configured legacy-engine ownership, not independent emulation contexts. */
@@ -151,6 +153,7 @@ static struct {
   int xml_owned;
   int libspectrum_owned;
   int callback_owned;
+  int resource_failed;
   libspectrum_error_function_t previous_error_function;
 } legacy_ownership;
 
@@ -162,14 +165,14 @@ static struct {
 } legacy_budget;
 
 void
-fuse_legacy_budget_rebase( unsigned long before, unsigned long after )
+fuse_budget_rebase( unsigned long before, unsigned long after )
 {
   if( legacy_budget.active )
     legacy_budget.rebased += (int64_t)before - (int64_t)after;
 }
 
 void
-fuse_legacy_budget_interrupt( void )
+fuse_budget_interrupt( void )
 {
   if( !legacy_budget.active ) return;
   legacy_budget.interrupted = 1;
@@ -177,7 +180,7 @@ fuse_legacy_budget_interrupt( void )
 }
 
 static void fuse_settings_end( void );
-static int fuse_init(int argc, char **argv);
+static int fuse_init( int argc, char **argv, const fuse_host_config *config );
 
 static void creator_register_startup( void );
 
@@ -196,19 +199,19 @@ static void fuse_app_session_end( void );
 
 static int fuse_end(void);
 
-fuse_legacy_init_result
+fuse_init_result
 fuse_legacy_prepare( int argc, char **argv )
 {
   int i;
-  fuse_legacy_init_result result;
+  fuse_init_result result;
 
-  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_LEGACY_INIT_CLOSED;
-  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_LEGACY_INIT_BUSY;
-  if( argc < 0 || ( argc && !argv ) ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
+  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_INIT_CLOSED;
+  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_INIT_BUSY;
+  if( argc < 0 || ( argc && !argv ) ) return FUSE_INIT_INVALID_ARGUMENT;
   if( argv ) {
     for( i = 0; i < argc; i++ )
-      if( !argv[i] ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
-    if( argv[argc] ) return FUSE_LEGACY_INIT_INVALID_ARGUMENT;
+      if( !argv[i] ) return FUSE_INIT_INVALID_ARGUMENT;
+    if( argv[argc] ) return FUSE_INIT_INVALID_ARGUMENT;
   }
 
   /* Guard before any library/frontend callback. Preserve the existing RNG,
@@ -217,28 +220,94 @@ fuse_legacy_prepare( int argc, char **argv )
   legacy_ownership.previous_error_function = libspectrum_error_function;
   legacy_ownership.callback_owned = 1;
 
-  if(fuse_init(argc,argv)) {
+  if(fuse_init(argc,argv,NULL)) {
     fprintf(stderr,"%s: error initialising -- giving up!\n", fuse_progname);
     fuse_end();
-    return FUSE_LEGACY_INIT_FAILED;
+    return FUSE_INIT_FAILED;
   }
 
   if( settings_current.show_help || settings_current.show_version ) {
-    result = settings_current.show_version ? FUSE_LEGACY_INIT_VERSION :
-                                            FUSE_LEGACY_INIT_HELP;
+    result = settings_current.show_version ? FUSE_INIT_VERSION :
+                                            FUSE_INIT_HELP;
     fuse_end();
     return result;
   }
 
   legacy_ownership.phase = LEGACY_READY;
-  return FUSE_LEGACY_INIT_READY;
+  return FUSE_INIT_READY;
+}
+
+fuse_init_result
+fuse_host_prepare( const fuse_host_config *config,
+                   const fuse_host_resources *resources )
+{
+  if( legacy_ownership.phase == LEGACY_CLOSED ) return FUSE_INIT_CLOSED;
+  if( legacy_ownership.phase != LEGACY_FRESH ) return FUSE_INIT_BUSY;
+  if( !config || !resources || !resources->acquire_rom )
+    return FUSE_INIT_INVALID_ARGUMENT;
+
+  legacy_ownership.phase = LEGACY_STARTING;
+  legacy_ownership.previous_error_function = libspectrum_error_function;
+  legacy_ownership.callback_owned = 1;
+  fuse_host_begin_resources( resources );
+
+  if( fuse_init( 0, NULL, config ) || legacy_ownership.resource_failed ) {
+    fuse_end();
+    return FUSE_INIT_FAILED;
+  }
+  legacy_ownership.phase = LEGACY_READY;
+  return FUSE_INIT_READY;
 }
 
 void
-fuse_legacy_shutdown( void )
+fuse_shutdown( void )
 {
   if( legacy_ownership.phase == LEGACY_READY ||
-      legacy_ownership.phase == LEGACY_FINISHED ) fuse_end();
+      legacy_ownership.phase == LEGACY_FINISHED ||
+      legacy_ownership.phase == LEGACY_FAILED ) fuse_end();
+}
+
+fuse_host_operation_result
+fuse_engine_check_operation( void )
+{
+  if( legacy_ownership.phase == LEGACY_STARTING ||
+      legacy_ownership.phase == LEGACY_RUNNING ||
+      legacy_ownership.phase == LEGACY_OPERATING ||
+      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_HOST_OPERATION_BUSY;
+  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_HOST_OPERATION_NOT_READY;
+  if( fuse_exiting ) return FUSE_HOST_OPERATION_EXITING;
+  return FUSE_HOST_OPERATION_OK;
+}
+
+/* Some legacy peripheral reset callbacks disable themselves on ROM failure.
+   Keep their behaviour, but do not publish false success to a host mutation. */
+void
+fuse_host_resource_error( void )
+{
+  if( legacy_ownership.phase == LEGACY_OPERATING ||
+      ( legacy_ownership.phase == LEGACY_STARTING && fuse_host_resources_active() ) )
+    legacy_ownership.resource_failed = 1;
+}
+
+void
+fuse_engine_begin_operation( void )
+{
+  legacy_ownership.resource_failed = 0;
+  legacy_ownership.phase = LEGACY_OPERATING;
+}
+
+fuse_host_operation_result
+fuse_engine_end_machine_operation( int error )
+{
+  if( legacy_ownership.resource_failed ) error = 1;
+  legacy_ownership.phase = error ? LEGACY_FAILED : LEGACY_READY;
+  return error ? FUSE_HOST_OPERATION_FAILED : FUSE_HOST_OPERATION_OK;
+}
+
+void
+fuse_engine_end_operation( void )
+{
+  legacy_ownership.phase = LEGACY_READY;
 }
 
 int
@@ -251,27 +320,27 @@ fuse_legacy_main( int argc, char **argv )
   if( legacy_ownership.phase == LEGACY_FRESH ) legacy_ownership.app_session = 1;
 
   switch( fuse_legacy_prepare( argc, argv ) ) {
-  case FUSE_LEGACY_INIT_READY:
+  case FUSE_INIT_READY:
     /* Automatic preference persistence belongs to the application wrapper,
        not to core preparation or ordinary resource disposal. */
     legacy_ownership.save_settings = 1;
     if( fuse_legacy_execute( &r ) ) r = 1;
     /* After the automation result, before shutdown and settings saving */
     fuse_app_session_end();
-    fuse_legacy_shutdown();
+    fuse_shutdown();
     return r;
-  case FUSE_LEGACY_INIT_HELP:
-  case FUSE_LEGACY_INIT_VERSION:
+  case FUSE_INIT_HELP:
+  case FUSE_INIT_VERSION:
     return 0;
-  case FUSE_LEGACY_INIT_BUSY:
-  case FUSE_LEGACY_INIT_CLOSED:
+  case FUSE_INIT_BUSY:
+  case FUSE_INIT_CLOSED:
     fprintf( stderr, "Fuse legacy runner supports only one session attempt\n" );
     return 1;
-  case FUSE_LEGACY_INIT_INVALID_ARGUMENT:
+  case FUSE_INIT_INVALID_ARGUMENT:
     legacy_ownership.app_session = 0;   /* The attempt was not consumed */
     fprintf( stderr, "Invalid Fuse legacy startup arguments\n" );
     return 1;
-  case FUSE_LEGACY_INIT_FAILED:
+  case FUSE_INIT_FAILED:
     return 1;
   }
   return 1;
@@ -306,17 +375,18 @@ fuse_execution_start( void )
 #endif
 }
 
-fuse_legacy_run_result
-fuse_legacy_run_frame( void )
+fuse_run_result
+fuse_run_frame( void )
 {
-  fuse_legacy_run_result result;
+  fuse_run_result result;
 
   if( legacy_ownership.phase == LEGACY_STARTING ||
+      legacy_ownership.phase == LEGACY_OPERATING ||
       legacy_ownership.phase == LEGACY_RUNNING ||
-      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_LEGACY_RUN_BUSY;
-  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_LEGACY_RUN_NOT_READY;
-  if( fuse_exiting ) return FUSE_LEGACY_RUN_EXITING;
-  if( fuse_emulation_paused ) return FUSE_LEGACY_RUN_PAUSED;
+      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_RUN_BUSY;
+  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_RUN_NOT_READY;
+  if( fuse_exiting ) return FUSE_RUN_EXITING;
+  if( fuse_emulation_paused ) return FUSE_RUN_PAUSED;
 
   legacy_ownership.phase = LEGACY_RUNNING;
   fuse_execution_start();
@@ -326,27 +396,28 @@ fuse_legacy_run_frame( void )
   } while( !fuse_exiting && !fuse_emulation_paused &&
            !spectrum_frame_dispatch_complete );
 
-  result = fuse_exiting ? FUSE_LEGACY_RUN_EXITING :
-           fuse_emulation_paused ? FUSE_LEGACY_RUN_PAUSED :
-                                   FUSE_LEGACY_RUN_COMPLETED;
+  result = fuse_exiting ? FUSE_RUN_EXITING :
+           fuse_emulation_paused ? FUSE_RUN_PAUSED :
+                                   FUSE_RUN_COMPLETED;
   legacy_ownership.phase = LEGACY_READY;
   return result;
 }
 
-fuse_legacy_run_result
-fuse_legacy_run_tstates( unsigned long budget )
+fuse_run_result
+fuse_run_tstates( unsigned long budget )
 {
   unsigned long remaining = budget;
-  fuse_legacy_run_result result;
+  fuse_run_result result;
 
-  if( legacy_ownership.phase == LEGACY_STARTING ||
+  if( legacy_ownership.phase == LEGACY_OPERATING ||
+      legacy_ownership.phase == LEGACY_STARTING ||
       legacy_ownership.phase == LEGACY_RUNNING ||
-      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_LEGACY_RUN_BUSY;
-  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_LEGACY_RUN_NOT_READY;
+      legacy_ownership.phase == LEGACY_STOPPING ) return FUSE_RUN_BUSY;
+  if( legacy_ownership.phase != LEGACY_READY ) return FUSE_RUN_NOT_READY;
   if( !budget || budget > 0x7fffffffUL || tstates >= 0x7fffffffUL )
-    return FUSE_LEGACY_RUN_INVALID_ARGUMENT;
-  if( fuse_exiting ) return FUSE_LEGACY_RUN_EXITING;
-  if( fuse_emulation_paused ) return FUSE_LEGACY_RUN_PAUSED;
+    return FUSE_RUN_INVALID_ARGUMENT;
+  if( fuse_exiting ) return FUSE_RUN_EXITING;
+  if( fuse_emulation_paused ) return FUSE_RUN_PAUSED;
 
   legacy_ownership.phase = LEGACY_RUNNING;
   fuse_execution_start();
@@ -380,10 +451,10 @@ fuse_legacy_run_tstates( unsigned long budget )
     }
   } while( remaining && !fuse_exiting && !fuse_emulation_paused );
 
-  result = fuse_exiting ? FUSE_LEGACY_RUN_EXITING :
-           legacy_budget.interrupted ? FUSE_LEGACY_RUN_INTERRUPTED :
-           fuse_emulation_paused ? FUSE_LEGACY_RUN_PAUSED :
-                                   FUSE_LEGACY_RUN_COMPLETED;
+  result = fuse_exiting ? FUSE_RUN_EXITING :
+           legacy_budget.interrupted ? FUSE_RUN_INTERRUPTED :
+           fuse_emulation_paused ? FUSE_RUN_PAUSED :
+                                   FUSE_RUN_COMPLETED;
   legacy_budget.active = 0;
   legacy_ownership.phase = LEGACY_READY;
   return result;
@@ -461,6 +532,7 @@ fuse_settings_end( void )
 static int
 libxml2_init( void *context )
 {
+  legacy_ownership.xml_owned = 1;
 #ifdef HAVE_LIB_XML2
   LIBXML_TEST_VERSION
 #endif
@@ -482,6 +554,9 @@ setuid_init( void *context )
 {
 #ifdef HAVE_GETEUID
   int error;
+
+  /* Privilege policy belongs to the application, never an embedding host. */
+  if( fuse_host_resources_active() ) return 0;
 
   /* Drop root privs if we have them */
   if( !geteuid() ) {
@@ -577,9 +652,12 @@ run_startup_manager( int *argc, char ***argv )
   return startup_manager_run();
 }
 
-static int fuse_init(int argc, char **argv)
+static int
+fuse_init( int argc, char **argv, const fuse_host_config *config )
 {
-  int error, first_arg;
+  int error, first_arg = 0;
+  static char adapter_program[] = "fuse";
+  static char *adapter_argv[] = { adapter_program, NULL };
   char *start_scaler;
   fuse_start_files start_files = { 0 };
 
@@ -595,6 +673,12 @@ static int fuse_init(int argc, char **argv)
   
   libspectrum_error_function = ui_libspectrum_error;
 
+  /* Selected adapters may require argv even without application CLI policy. */
+  if( config ) {
+    argc = 1;
+    argv = adapter_argv;
+  }
+
 #ifdef GEKKO
   /* On the Wii, init the display first so we have a way of outputting
      messages */
@@ -602,8 +686,13 @@ static int fuse_init(int argc, char **argv)
 #endif
 
   /* Config parsing can initialize XML before its manager registration runs. */
-  legacy_ownership.xml_owned = 1;
-  if( settings_init( &first_arg, argc, argv ) ) return 1;
+  if( config ) {
+    settings_init_defaults();
+    fuse_engine_apply_config( config );
+  } else {
+    legacy_ownership.xml_owned = 1;
+    if( settings_init( &first_arg, argc, argv ) ) return 1;
+  }
 #ifndef UI_NULL
   if( settings_current.unittests ) {
     fprintf( stderr, "--unittests is available only with the null UI\n" );
@@ -624,7 +713,7 @@ static int fuse_init(int argc, char **argv)
 
   start_scaler = utils_safe_strdup( settings_current.start_scaler_mode );
 
-  fuse_show_copyright();
+  if( !config ) fuse_show_copyright();
 
   error = run_startup_manager( &argc, &argv );
   if( error ) goto cleanup;
@@ -640,7 +729,7 @@ static int fuse_init(int argc, char **argv)
   if( error ) goto cleanup;
 
   fuse_start_files_init( &start_files );
-  error = parse_nonoption_args( argc, argv, first_arg, &start_files );
+  error = config ? 0 : parse_nonoption_args( argc, argv, first_arg, &start_files );
   if( !error ) error = do_start_files( &start_files );
   if( !error ) fuse_app_session_start( &start_files );
   fuse_start_files_end( &start_files );
@@ -651,7 +740,7 @@ static int fuse_init(int argc, char **argv)
   }
 
   /* Must do this after all subsytems are initialised */
-  debugger_command_evaluate( settings_current.debugger_command );
+  if( !config ) debugger_command_evaluate( settings_current.debugger_command );
 
   if( ui_mouse_present ) ui_mouse_grabbed = ui_mouse_grab( 1 );
 
@@ -1344,6 +1433,7 @@ static int fuse_end(void)
     libspectrum_error_function = legacy_ownership.previous_error_function;
     legacy_ownership.previous_error_function = NULL;
   }
+  fuse_host_end_resources();
   legacy_ownership.phase = LEGACY_CLOSED;
 
   return 0;

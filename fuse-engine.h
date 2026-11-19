@@ -1,0 +1,41 @@
+/* fuse-engine.h: private implementation boundary between engine and host layer
+   Copyright (c) 2026 Fredrick Meunier
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
+#ifndef FUSE_ENGINE_H
+#define FUSE_ENGINE_H
+
+#include "fuse-internal.h"
+
+/* Engine-owned lifecycle/admission. No lifecycle state is shared with callers.
+   Machine failures can invalidate the session; ordinary tape-open failure does
+   not. These are synchronous implementation hooks, not additional host API. */
+fuse_host_operation_result fuse_engine_check_operation( void );
+void fuse_engine_begin_operation( void );
+fuse_host_operation_result fuse_engine_end_machine_operation( int error );
+void fuse_engine_end_operation( void );
+
+/* Apply the opaque engine configuration at initialization. */
+void fuse_engine_apply_config( const fuse_host_config *config );
+
+/* Borrowed host resource callback storage, active through teardown. */
+void fuse_host_begin_resources( const fuse_host_resources *resources );
+void fuse_host_end_resources( void );
+int fuse_host_resources_active( void );
+int fuse_host_acquire_rom( const char *name, fuse_host_rom *rom );
+
+#endif

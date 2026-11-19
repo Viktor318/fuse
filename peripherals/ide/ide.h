@@ -30,28 +30,28 @@
 int
 ide_init( libspectrum_ide_channel *channel,
 	  char *master_setting, ui_menu_item master_menu_item,
-	  char *slave_setting, ui_menu_item slave_menu_item );
+	  char *slave_setting, ui_menu_item slave_menu_item, int attached[2] );
 
 int
 ide_master_slave_insert(
   libspectrum_ide_channel *channel, libspectrum_ide_unit unit,
   const char *filename,
   char **master_setting, ui_menu_item master_menu_item,
-  char **slave_setting, ui_menu_item slave_menu_item );
+  char **slave_setting, ui_menu_item slave_menu_item, int attached[2] );
 
 int
 ide_insert( const char *filename, libspectrum_ide_channel *chn,
-	    libspectrum_ide_unit unit, char **setting, ui_menu_item item );
+	    libspectrum_ide_unit unit, char **setting, ui_menu_item item, int *attached );
 
 int
 ide_master_slave_eject(
   libspectrum_ide_channel *channel, libspectrum_ide_unit unit,
   char **master_setting, ui_menu_item master_menu_item,
-  char **slave_setting, ui_menu_item slave_menu_item );
+  char **slave_setting, ui_menu_item slave_menu_item, int attached[2] );
 
 int
 ide_eject( libspectrum_ide_channel *chn, libspectrum_ide_unit unit,
-	   char **setting, ui_menu_item item );
+	   char **setting, ui_menu_item item, int *attached );
 
 int
 ide_eject_mass_storage(

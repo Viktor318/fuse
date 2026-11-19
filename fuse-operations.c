@@ -1,0 +1,512 @@
+/* fuse-operations.c: complete engine operations for host callers
+   Copyright (c) 1999-2026 Philip Kendall and others
+   Copyright (c) 2026 Fredrick Meunier
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
+#include "config.h"
+
+#include <string.h>
+
+#include "display.h"
+#include "event.h"
+#include "fuse.h"
+#include "fuse-engine.h"
+#include "input.h"
+#include "keyboard.h"
+#include "machine.h"
+#include "peripherals/ide/divmmc.h"
+#include "peripherals/ide/simpleide.h"
+#include "peripherals/ide/zxatasp.h"
+#include "peripherals/ide/divide.h"
+#include "peripherals/ide/zxmmc.h"
+#include "peripherals/ide/zxcf.h"
+#include "peripherals/joystick.h"
+#include "peripherals/kempmouse.h"
+#include "settings.h"
+#include "snapshot.h"
+#include "tape.h"
+#include "utils.h"
+#include "z80/z80.h"
+
+static void
+release_physical_input( void )
+{
+  int button;
+  input_cancel_physical();
+  for( button = 0; button < 8; button++ )
+    kempmouse_update( 0, 0, button, 0 );
+}
+
+fuse_host_operation_result
+fuse_host_select_machine( const char *id )
+{
+  int i, error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !id ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  for( i = 0; i < machine_count; i++ )
+    if( !strcmp( id, machine_types[i]->id ) ) break;
+  if( i == machine_count ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  /* ID selection avoids the legacy enum/snapshot fallback and abort policy. */
+  error = machine_select_id( machine_types[i]->id );
+  return fuse_engine_end_machine_operation( error );
+}
+
+fuse_host_operation_result
+fuse_host_reset( fuse_host_reset_kind kind )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( kind != FUSE_HOST_RESET_SOFT && kind != FUSE_HOST_RESET_HARD )
+    return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = machine_reset( kind == FUSE_HOST_RESET_HARD );
+  return fuse_engine_end_machine_operation( error );
+}
+
+fuse_host_operation_result
+fuse_host_open_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = utils_open_file( filename, tape_can_autoload(), NULL );
+  display_refresh_all(); /* Same post-operation refresh as menu_file_open. */
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+static int
+mass_storage_target( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: case PERIPH_TYPE_ZXATASP: case PERIPH_TYPE_DIVIDE:
+    return unit == LIBSPECTRUM_IDE_MASTER || unit == LIBSPECTRUM_IDE_SLAVE;
+  case PERIPH_TYPE_ZXCF: case PERIPH_TYPE_DIVMMC: case PERIPH_TYPE_ZXMMC:
+    return unit == LIBSPECTRUM_IDE_MASTER;
+  default: return 0;
+  }
+}
+
+static const char *
+mass_storage_name( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return unit ==
+           LIBSPECTRUM_IDE_MASTER ? settings_current.simpleide_master_file :
+           settings_current.simpleide_slave_file;
+  case PERIPH_TYPE_ZXATASP: return unit ==
+           LIBSPECTRUM_IDE_MASTER ? settings_current.zxatasp_master_file :
+           settings_current.zxatasp_slave_file;
+  case PERIPH_TYPE_DIVIDE: return unit ==
+           LIBSPECTRUM_IDE_MASTER ? settings_current.divide_master_file :
+           settings_current.divide_slave_file;
+  case PERIPH_TYPE_ZXCF: return settings_current.zxcf_pri_file;
+  case PERIPH_TYPE_DIVMMC: return settings_current.divmmc_file;
+  case PERIPH_TYPE_ZXMMC: return settings_current.zxmmc_file;
+  default: return NULL;
+  }
+}
+
+static int
+mass_storage_attached( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return simpleide_backing_attached( unit );
+  case PERIPH_TYPE_ZXATASP: return zxatasp_backing_attached( unit );
+  case PERIPH_TYPE_DIVIDE: return divide_backing_attached( unit );
+  case PERIPH_TYPE_ZXCF: return zxcf_backing_attached();
+  case PERIPH_TYPE_DIVMMC: return divmmc_backing_attached();
+  case PERIPH_TYPE_ZXMMC: return zxmmc_backing_attached();
+  default: return 0;
+  }
+}
+
+static int
+mass_storage_eject( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return simpleide_eject( unit );
+  case PERIPH_TYPE_ZXATASP: return zxatasp_eject( unit );
+  case PERIPH_TYPE_DIVIDE: return divide_eject( unit );
+  case PERIPH_TYPE_ZXCF: return zxcf_eject();
+  case PERIPH_TYPE_DIVMMC: return divmmc_eject();
+  case PERIPH_TYPE_ZXMMC: return zxmmc_eject();
+  default: return 1;
+  }
+}
+
+static int
+mass_storage_insert( periph_type controller, libspectrum_ide_unit unit,
+                     const char *filename )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return simpleide_insert( filename, unit );
+  case PERIPH_TYPE_ZXATASP: return zxatasp_insert( filename, unit );
+  case PERIPH_TYPE_DIVIDE: return divide_insert( filename, unit );
+  case PERIPH_TYPE_ZXCF: return zxcf_insert( filename );
+  case PERIPH_TYPE_DIVMMC: return divmmc_insert( filename );
+  case PERIPH_TYPE_ZXMMC: return zxmmc_insert( filename );
+  default: return 1;
+  }
+}
+
+static int
+mass_storage_commit( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return simpleide_commit( unit );
+  case PERIPH_TYPE_ZXATASP: return zxatasp_commit( unit );
+  case PERIPH_TYPE_DIVIDE: return divide_commit( unit );
+  case PERIPH_TYPE_ZXCF: return zxcf_commit();
+  case PERIPH_TYPE_DIVMMC: divmmc_commit(); return 0;
+  case PERIPH_TYPE_ZXMMC: zxmmc_commit(); return 0;
+  default: return 1;
+  }
+}
+
+fuse_host_operation_result
+fuse_host_copy_mass_storage_info( periph_type controller,
+                                  libspectrum_ide_unit unit,
+                                  fuse_mass_storage_info **info )
+{
+  fuse_mass_storage_info *copy;
+  const char *name;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( info ) *info = NULL;
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !info || !mass_storage_target( controller, unit ) )
+    return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  name = mass_storage_attached( controller,
+                                unit ) ? mass_storage_name( controller,
+                                                            unit ) : NULL;
+  copy = libspectrum_new( fuse_mass_storage_info, 1 );
+  copy->controller = controller;
+  copy->unit = unit;
+  copy->active = periph_is_active( controller );
+  copy->backing_name = name ? utils_safe_strdup( name ) : NULL;
+  *info = copy;
+  return FUSE_HOST_OPERATION_OK;
+}
+
+void
+fuse_mass_storage_info_free( fuse_mass_storage_info *info )
+{
+  if( !info ) return;
+  libspectrum_free( info->backing_name );
+  libspectrum_free( info );
+}
+
+static fuse_host_operation_result
+change_mass_storage( periph_type controller, libspectrum_ide_unit unit,
+                     const char *filename )
+{
+  int error = 0;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !mass_storage_target( controller, unit ) || ( filename && !*filename ) )
+    return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( !periph_is_active( controller ) ) return FUSE_HOST_OPERATION_MEDIA_ERROR;
+
+  fuse_engine_begin_operation();
+  fuse_emulation_pause();
+  /* Check eject separately: legacy insert masks a refused eject as success. */
+  if( !filename || mass_storage_name( controller, unit ) )
+    error = mass_storage_eject( controller, unit );
+  if( !error && filename ) error = mass_storage_insert( controller, unit,
+                                                        filename );
+  fuse_emulation_unpause();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_eject_mass_storage( periph_type controller,
+                              libspectrum_ide_unit unit )
+{
+  return change_mass_storage( controller, unit, NULL );
+}
+
+fuse_host_operation_result
+fuse_host_insert_mass_storage( periph_type controller,
+                               libspectrum_ide_unit unit, const char *filename )
+{
+  if( !filename ) {
+    fuse_host_operation_result result = fuse_engine_check_operation();
+    return result ==
+           FUSE_HOST_OPERATION_OK ? FUSE_HOST_OPERATION_INVALID_ARGUMENT :
+           result;
+  }
+  return change_mass_storage( controller, unit, filename );
+}
+
+fuse_host_operation_result
+fuse_host_commit_mass_storage( periph_type controller,
+                               libspectrum_ide_unit unit )
+{
+  int error = 0;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !mass_storage_target( controller,
+                            unit ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( !periph_is_active( controller ) ||
+      !mass_storage_attached( controller, unit ) )
+    return FUSE_HOST_OPERATION_MEDIA_ERROR;
+  fuse_engine_begin_operation();
+  fuse_emulation_pause();
+  error = mass_storage_commit( controller, unit );
+  fuse_emulation_unpause();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_save_snapshot_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  /* Chosen-target portion of menu_file_savesnapshot; no second chooser or
+     overwrite decision. Preserve its pause/unpause side effects and ordering. */
+  fuse_emulation_pause();
+  error = snapshot_write( filename );
+  fuse_emulation_unpause();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_insert_tape_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = tape_open( filename, 0 ); /* Same intent as menu_media_tape_open. */
+  /* tape_open owns replacement and selected-UI save/discard/cancel handling.
+     Do not retry close on failure: it may represent a cancelled replacement. */
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_toggle_tape_play( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_toggle_play( 0 );
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_stop_tape( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_stop();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_rewind_tape( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_rewind();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_select_tape_block( int block )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( block < 0 ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = tape_select_block( block );
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_save_tape_file( const char *filename )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !filename || !*filename ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  fuse_engine_begin_operation();
+  error = tape_write( filename );
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_eject_tape( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_close();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_start_tape_recording( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  /* Explicit pulse capture is the traps-disabled workflow. With traps on,
+     ROM SAVE appends decoded blocks automatically, without this command. */
+  if( settings_current.tape_traps ) return FUSE_HOST_OPERATION_MEDIA_ERROR;
+  fuse_engine_begin_operation();
+  error = tape_record_start();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_stop_tape_recording( void )
+{
+  int error;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  error = tape_record_stop();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_nmi( void )
+{
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  event_add( 0, z80_nmi_event );
+  return FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_keyboard_event( input_key key, int pressed )
+{
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( ( pressed != 0 && pressed != 1 ) ||
+      !( key == INPUT_KEY_Tab || key == INPUT_KEY_Return ||
+         key == INPUT_KEY_Escape ||
+         ( key >= INPUT_KEY_space && key <= INPUT_KEY_BackSpace ) ||
+         key == INPUT_KEY_KP_Enter ||
+         ( key >= INPUT_KEY_Up && key <= INPUT_KEY_F12 ) ||
+         ( key >= INPUT_KEY_Shift_L && key <= INPUT_KEY_Mode_switch ) ) )
+    return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( pressed ) input_keypress_emulation( key );
+  else input_keyrelease_emulation( key );
+  return FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_spectrum_key_event( fuse_host_key key, int pressed )
+{
+  keyboard_key_name target;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( pressed != 0 &&
+      pressed != 1 ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( key == FUSE_HOST_KEY_ENTER ) target = KEYBOARD_Enter;
+  else if( key == FUSE_HOST_KEY_CAPS ) target = KEYBOARD_Caps;
+  else if( key == FUSE_HOST_KEY_SYMBOL ) target = KEYBOARD_Symbol;
+  else if( key == FUSE_HOST_KEY_SPACE ||
+           ( key >= FUSE_HOST_KEY_0 && key <= FUSE_HOST_KEY_9 ) ||
+           ( key >= FUSE_HOST_KEY_A && key <= FUSE_HOST_KEY_Z ) )
+    target = (keyboard_key_name)key;
+  else return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( pressed ) keyboard_press( target ); else keyboard_release( target );
+  return FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_joystick_event( fuse_host_joystick joystick,
+                          fuse_host_joystick_button button, int pressed )
+{
+  static const joystick_button buttons[] = {
+    JOYSTICK_BUTTON_LEFT, JOYSTICK_BUTTON_RIGHT, JOYSTICK_BUTTON_UP,
+    JOYSTICK_BUTTON_DOWN, JOYSTICK_BUTTON_FIRE
+  };
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( joystick < FUSE_HOST_JOYSTICK_1 ||
+      joystick > FUSE_HOST_JOYSTICK_KEYBOARD ||
+      button < FUSE_HOST_JOYSTICK_LEFT || button > FUSE_HOST_JOYSTICK_FIRE ||
+      ( pressed != 0 &&
+        pressed != 1 ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  joystick_press( joystick == FUSE_HOST_JOYSTICK_KEYBOARD ? JOYSTICK_KEYBOARD :
+                  joystick == FUSE_HOST_JOYSTICK_1 ? 0 : 1, buttons[button],
+                  pressed );
+  return FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_mouse_motion( int dx, int dy )
+{
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  /* Reduce before arithmetic: even INT_MIN/MAX cannot overflow the addition. */
+  kempmouse_update( dx % 256, dy % 256, -1, 0 );
+  return FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_mouse_event( fuse_host_mouse_button button, int pressed )
+{
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( ( button != FUSE_HOST_MOUSE_LEFT && button != FUSE_HOST_MOUSE_RIGHT ) ||
+      ( pressed != 0 &&
+        pressed != 1 ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  input_mouse_button_event( button == FUSE_HOST_MOUSE_LEFT ? INPUT_MOUSE_LEFT :
+                            INPUT_MOUSE_RIGHT, pressed );
+  return FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_release_all( void )
+{
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  release_physical_input();
+  return FUSE_HOST_OPERATION_OK;
+}

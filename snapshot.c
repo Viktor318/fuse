@@ -419,7 +419,11 @@ int snapshot_write( const char *filename )
   buffer = NULL;
   error = libspectrum_snap_write( &buffer, &length, &flags, snap, type,
 				  fuse_creator, 0 );
-  if( error ) { libspectrum_snap_free( snap ); return error; }
+  if( error ) {
+    libspectrum_free( buffer );
+    libspectrum_snap_free( snap );
+    return error;
+  }
 
   error = utils_write_file( filename, buffer, length );
   libspectrum_free( buffer );

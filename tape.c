@@ -1,7 +1,7 @@
 /* tape.c: tape handling routines
    Copyright (c) 1999-2017 Philip Kendall, Darren Salt, Witold Filipczyk
    Copyright (c) 2015-2018 UB880D
-   Copyright (c) 2016-2021 Fredrick Meunier
+   Copyright (c) 2016-2021, 2026 Fredrick Meunier
    Copyright (c) 2026 Alberto Garcia
 
    This program is free software; you can redistribute it and/or modify
@@ -35,6 +35,7 @@
 #include "debugger/debugger.h"
 #include "event.h"
 #include "fuse.h"
+#include "fuse-engine.h"
 #include "infrastructure/startup_manager.h"
 #include "loader.h"
 #include "machine.h"
@@ -177,15 +178,12 @@ tape_open( const char *filename, int autoload )
   int error;
 
   error = utils_read_file( filename, &file );
-  if( error ) return error;
-
-  error = tape_read_buffer( file.buffer, file.length, LIBSPECTRUM_ID_UNKNOWN,
-			    filename, autoload );
-  if( error ) { utils_close_file( &file ); return error; }
-
+  if( !error )
+    error = tape_read_buffer( file.buffer, file.length, LIBSPECTRUM_ID_UNKNOWN,
+                              filename, autoload );
   utils_close_file( &file );
 
-  return 0;
+  return error;
 }
 
 /* Use an already open tape file as the current tape */
@@ -622,4 +620,57 @@ tape_foreach( void (*function)( libspectrum_tape_block *block,
     function( block, user_data );
 
   return 0;
+}
+
+void
+fuse_tape_info_free( fuse_tape_info *info )
+{
+  size_t i;
+  if( !info ) return;
+  for( i = 0; i < info->block_count; i++ ) {
+    libspectrum_free( info->blocks[i].description );
+    libspectrum_free( info->blocks[i].details );
+  }
+  libspectrum_free( info->blocks );
+  libspectrum_free( info );
+}
+
+fuse_host_operation_result
+fuse_host_copy_tape_info( fuse_tape_info **info )
+{
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  fuse_tape_info *copy;
+  libspectrum_tape_iterator iterator;
+  libspectrum_tape_block *block;
+  size_t i;
+  if( !info )
+    return result == FUSE_HOST_OPERATION_OK ? FUSE_HOST_OPERATION_INVALID_ARGUMENT : result;
+  *info = NULL;
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  fuse_engine_begin_operation();
+  copy = libspectrum_new0( fuse_tape_info, 1 );
+  /* Local iterators only: never select or reset the active playback cursor. */
+  for( block = libspectrum_tape_iterator_init( &iterator, tape ); block;
+       block = libspectrum_tape_iterator_next( &iterator ) ) copy->block_count++;
+  if( copy->block_count )
+    copy->blocks = libspectrum_new0( fuse_tape_block_info, copy->block_count );
+  for( block = libspectrum_tape_iterator_init( &iterator, tape ), i = 0; block;
+       block = libspectrum_tape_iterator_next( &iterator ), i++ ) {
+    char description[80]; /* Existing GTK/widget/Win32 browser label bound. */
+    if( libspectrum_tape_block_description( description, sizeof(description), block ) ||
+        tape_block_details( &copy->blocks[i].details, block ) ) {
+      fuse_tape_info_free( copy );
+      fuse_engine_end_operation();
+      return FUSE_HOST_OPERATION_MEDIA_ERROR;
+    }
+    copy->blocks[i].description = utils_safe_strdup( description );
+  }
+  copy->present = !!tape_present();
+  copy->playing = !!tape_is_playing();
+  copy->recording = !!tape_recording;
+  copy->modified = !!tape_modified;
+  copy->current_block = tape_get_current_block();
+  fuse_engine_end_operation();
+  *info = copy;
+  return FUSE_HOST_OPERATION_OK;
 }

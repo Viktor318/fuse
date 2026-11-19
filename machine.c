@@ -28,6 +28,7 @@
 
 #include "event.h"
 #include "fuse.h"
+#include "fuse-engine.h"
 #include "fuse-internal.h"
 #include "infrastructure/startup_manager.h"
 #include "machine.h"
@@ -220,7 +221,7 @@ machine_select_machine( fuse_machine_info *machine, libspectrum_snap *snap )
   
   /* Replacing the frame clock/event queue invalidates pending audio cuts. */
   sound_suspend_subframe();
-  fuse_legacy_budget_interrupt();
+  fuse_budget_interrupt();
   tstates = 0;
 
   /* Reset the event stack */
@@ -263,7 +264,7 @@ machine_select_machine( fuse_machine_info *machine, libspectrum_snap *snap )
 
 int
 machine_load_rom_bank_from_buffer( memory_page* bank_map, int page_num,
-  unsigned char *buffer, size_t length, int custom )
+  const unsigned char *buffer, size_t length, int custom )
 {
   size_t offset;
   libspectrum_byte *data = memory_pool_allocate( length );
@@ -402,7 +403,10 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
   int custom;
 
   if( loaded_length ) *loaded_length = 0;
-  if( !sizes->allowed_lengths || !sizes->allowed_length_count ) return 1;
+  if( !sizes->allowed_lengths || !sizes->allowed_length_count ) {
+    fuse_host_resource_error();
+    return 1;
+  }
 
   /* Machine ROMs are requested during the machine reset, before modules can
      restore their snapshot state. Resolve their snapshot banks on demand. */
@@ -414,8 +418,10 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
       !snapshot_rom_bank_find( bank_map, page_num ) ) {
     if( machine_load_rom_bank_from_snapshot( bank_map, page_num,
           libspectrum_snap_roms( loading_snapshot, page_num ),
-          libspectrum_snap_rom_length( loading_snapshot, page_num ), 1 ) )
+          libspectrum_snap_rom_length( loading_snapshot, page_num ), 1 ) ) {
+      fuse_host_resource_error();
       return 1;
+    }
   }
 
   snapshot_bank = snapshot_rom_bank_find( bank_map, page_num );
@@ -424,12 +430,28 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
       ui_error( UI_ERROR_ERROR,
                 "snapshot ROM is %ld bytes long; unsupported size",
                 (unsigned long)snapshot_bank->bank.length );
+      fuse_host_resource_error();
       return 1;
     }
 
     memory_rom_bank_map( &snapshot_bank->bank, bank_map, page_num );
     if( loaded_length ) *loaded_length = snapshot_bank->bank.length;
     return 0;
+  }
+
+  if( fuse_host_resources_active() ) {
+    fuse_host_rom rom;
+    int error = fuse_host_acquire_rom( filename, &rom );
+    if( !error && ( !rom.data || !rom_length_allowed( rom.length, sizes ) ||
+                   ( rom.custom != 0 && rom.custom != 1 ) ) ) error = 1;
+    if( !error ) {
+      error = machine_load_rom_bank_from_buffer( bank_map, page_num, rom.data,
+                                                 rom.length, rom.custom );
+      if( !error && loaded_length ) *loaded_length = rom.length;
+    }
+    if( rom.release ) rom.release( rom.context );
+    if( error ) fuse_host_resource_error();
+    return error;
   }
 
   custom = fallback && strcmp( filename, fallback );
@@ -461,6 +483,7 @@ machine_load_rom_bank_internal( memory_page *bank_map, int page_num,
                 (unsigned long)actual_length );
   }
 
+  fuse_host_resource_error();
   return 1;
 }
 

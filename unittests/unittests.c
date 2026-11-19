@@ -3103,28 +3103,29 @@ scaler_for_size_test( void )
   return r;
 }
 
-static compat_file_vtable_t utils_file_previous_vtable;
+static compat_file_test_hooks utils_file_previous_vtable;
 static const char *utils_file_test_path;
 static int utils_file_open_count;
 static int utils_file_read_count;
 static int utils_file_total_open_count;
 static int utils_file_total_read_count;
+static int utils_file_test_current;
 
 static compat_fd
 utils_file_test_open( const char *path, int write )
 {
   utils_file_total_open_count++;
-  if( !strcmp( path, utils_file_test_path ) ) utils_file_open_count++;
+  utils_file_test_current = !strcmp( path, utils_file_test_path );
+  if( utils_file_test_current ) utils_file_open_count++;
   return utils_file_previous_vtable.open( path, write );
 }
 
 static int
-utils_file_test_read( compat_fd fd, utils_file *file )
+utils_file_test_read( compat_fd fd, unsigned char *buffer, size_t length, size_t *got )
 {
   utils_file_total_read_count++;
-  if( file->filename && !strcmp( file->filename, utils_file_test_path ) )
-    utils_file_read_count++;
-  return utils_file_previous_vtable.read( fd, file );
+  if( utils_file_test_current ) utils_file_read_count++;
+  return utils_file_previous_vtable.read( fd, buffer, length, got );
 }
 
 static compat_fd
@@ -3136,18 +3137,18 @@ utils_file_test_open_failure( const char *path GCC_UNUSED, int write GCC_UNUSED 
 static int
 utils_file_read_failure_test( void )
 {
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   int r = 0;
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open_failure;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
   utils_file_init( &file, "missing" );
   if( !utils_file_read( &file ) || file.buffer || file.length ) r++;
   utils_file_free( &file );
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   if( r ) printf( "utils_file_read_failure_test failed\n" );
   return r;
 }
@@ -3266,7 +3267,7 @@ static int
 utils_file_lifecycle_test( void )
 {
   char filename[] = "/tmp/fuse-utils-file-XXXXXX";
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   unsigned char data[] = { 0x01, 0x00, 0x00 };
   int fd, r = 0;
@@ -3280,14 +3281,14 @@ utils_file_lifecycle_test( void )
   }
   close( fd );
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open;
   vtable.read = utils_file_test_read;
   utils_file_test_path = filename;
   utils_file_open_count = utils_file_read_count = 0;
   utils_file_total_open_count = utils_file_total_read_count = 0;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
 
   utils_file_init( &file, filename );
   if( utils_file_identify( &file ) || utils_file_identify( &file ) ||
@@ -3298,7 +3299,7 @@ utils_file_lifecycle_test( void )
       file.type != LIBSPECTRUM_ID_UNKNOWN ||
       file.file_class != LIBSPECTRUM_CLASS_UNKNOWN ) r++;
 
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   unlink( filename );
   if( r ) printf( "utils_file_lifecycle_test failed\n" );
   return r;
@@ -3309,7 +3310,7 @@ utils_file_harddisk_identify_test( void )
 {
   char temporary_path[] = "/tmp/fuse-utils-hdf-XXXXXX";
   char filename[ PATH_MAX ];
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   unsigned char header[ 128 ] = "RS-IDE\x1a";
   int fd, r = 0;
@@ -3325,13 +3326,13 @@ utils_file_harddisk_identify_test( void )
     return 1;
   }
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open;
   vtable.read = utils_file_test_read;
   utils_file_test_path = filename;
   utils_file_open_count = utils_file_read_count = 0;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
 
   utils_file_init( &file, filename );
   if( utils_file_identify( &file ) ||
@@ -3339,7 +3340,7 @@ utils_file_harddisk_identify_test( void )
       utils_file_open_count != 1 || utils_file_read_count != 1 ) r++;
 
   utils_file_free( &file );
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   unlink( filename );
   if( r ) printf( "utils_file_harddisk_identify_test failed\n" );
   return r;
@@ -3348,19 +3349,19 @@ utils_file_harddisk_identify_test( void )
 static int
 utils_open_loaded_file_test( void )
 {
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   static const unsigned char tap[] = { 0x01, 0x00, 0x00 };
   const char *filename = "already-loaded.tap";
   int r = 0;
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open;
   vtable.read = utils_file_test_read;
   utils_file_test_path = filename;
   utils_file_open_count = utils_file_read_count = 0;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
 
   utils_file_init( &file, filename );
   file.buffer = libspectrum_new( unsigned char, sizeof( tap ) );
@@ -3374,7 +3375,7 @@ utils_open_loaded_file_test( void )
 
   utils_file_free( &file );
   tape_close();
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   if( r ) printf( "utils_open_loaded_file_test failed\n" );
   return r;
 }
@@ -3382,20 +3383,20 @@ utils_open_loaded_file_test( void )
 static int
 utils_open_loaded_if2_test( void )
 {
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   libspectrum_machine old_machine = machine_current->machine;
   int old_interface2 = settings_current.interface2;
   const char *filename = "already-loaded.rom";
   int r = 0;
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open;
   vtable.read = utils_file_test_read;
   utils_file_test_path = filename;
   utils_file_open_count = utils_file_read_count = 0;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
 
   utils_file_init( &file, filename );
   file.length = 0x4000;
@@ -3410,7 +3411,7 @@ utils_open_loaded_if2_test( void )
   settings_current.interface2 = old_interface2;
   if( machine_select( old_machine ) ) r++;
   periph_update();
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   utils_file_free( &file );
   if( r ) printf( "utils_open_loaded_if2_test failed\n" );
   return r;
@@ -3419,19 +3420,19 @@ utils_open_loaded_if2_test( void )
 static int
 utils_open_loaded_dck_test( void )
 {
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   libspectrum_machine old_machine = machine_current->machine;
   const char *filename = "already-loaded.dck";
   int r = 0;
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open;
   vtable.read = utils_file_test_read;
   utils_file_test_path = filename;
   utils_file_open_count = utils_file_read_count = 0;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
 
   utils_file_init( &file, filename );
   file.length = 9; /* A valid DCK block: Dock bank with eight empty pages. */
@@ -3443,7 +3444,7 @@ utils_open_loaded_dck_test( void )
 
   dck_eject();
   if( machine_select( old_machine ) ) r++;
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   utils_file_free( &file );
   if( r ) printf( "utils_open_loaded_dck_test failed\n" );
   return r;
@@ -4016,7 +4017,7 @@ dck_home_rom_ram_slots_test( void )
 static int
 utils_open_loaded_microdrive_test( void )
 {
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   const char *srcdir;
   char *filename;
@@ -4035,19 +4036,19 @@ utils_open_loaded_microdrive_test( void )
     return 1;
   }
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open;
   vtable.read = utils_file_test_read;
   utils_file_test_path = filename;
   utils_file_open_count = utils_file_read_count = 0;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
 
   if( if1_mdr_insert_loaded( -1, &file ) ||
       utils_file_open_count || utils_file_read_count ) r++;
 
   if1_mdr_eject( 0 );
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   utils_file_free( &file );
   libspectrum_free( filename );
   if( r ) printf( "utils_open_loaded_microdrive_test failed\n" );
@@ -4222,19 +4223,19 @@ cleanup:
 static int
 utils_open_loaded_disk_test( void )
 {
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   disk_t disk;
   const char *filename = "already-loaded.img";
   int r = 0;
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open;
   vtable.read = utils_file_test_read;
   utils_file_test_path = filename;
   utils_file_open_count = utils_file_read_count = 0;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
 
   memset( &disk, 0, sizeof( disk ) );
   utils_file_init( &file, filename );
@@ -4247,7 +4248,7 @@ utils_open_loaded_disk_test( void )
 
   disk_close( &disk );
   utils_file_free( &file );
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   if( r ) printf( "utils_open_loaded_disk_test failed\n" );
   return r;
 }
@@ -4300,7 +4301,7 @@ utils_open_loaded_disk_merge_test( void )
 {
   char temporary_path[] = "/tmp/fuse-disk-merge-XXXXXX";
   char filename_a[ PATH_MAX ], filename_b[ PATH_MAX ];
-  compat_file_vtable_t vtable;
+  compat_file_test_hooks vtable;
   utils_file file;
   disk_t disk;
   unsigned char *data;
@@ -4324,14 +4325,14 @@ utils_open_loaded_disk_merge_test( void )
   }
   close( fd );
 
-  compat_file_get_vtable( &utils_file_previous_vtable );
+  compat_file_test_get_hooks( &utils_file_previous_vtable );
   vtable = utils_file_previous_vtable;
   vtable.open = utils_file_test_open;
   vtable.read = utils_file_test_read;
   utils_file_test_path = filename_a;
   utils_file_open_count = utils_file_read_count = 0;
   utils_file_total_open_count = utils_file_total_read_count = 0;
-  compat_file_set_vtable( &vtable );
+  compat_file_test_set_hooks( &vtable );
 
   memset( &disk, 0, sizeof( disk ) );
   utils_file_init( &file, filename_a );
@@ -4348,7 +4349,7 @@ utils_open_loaded_disk_merge_test( void )
 
   disk_close( &disk );
   utils_file_free( &file );
-  compat_file_set_vtable( &utils_file_previous_vtable );
+  compat_file_test_set_hooks( &utils_file_previous_vtable );
   unlink( filename_b );
   if( r ) printf( "utils_open_loaded_disk_merge_test failed\n" );
   return r;
@@ -5038,58 +5039,7 @@ upd_raw_size_code_test( void )
   return r;
 }
 
-static FILE compat_file_test_file;
-static int compat_file_test_calls[ 7 ];
 
-static compat_fd compat_file_test_open( const char *path GCC_UNUSED,
-                                        int write GCC_UNUSED )
-{ compat_file_test_calls[ 0 ]++; return &compat_file_test_file; }
-static off_t compat_file_test_get_length( compat_fd fd GCC_UNUSED )
-{ compat_file_test_calls[ 1 ]++; return 42; }
-static int compat_file_test_read( compat_fd fd GCC_UNUSED,
-                                  utils_file *file GCC_UNUSED )
-{ compat_file_test_calls[ 2 ]++; return 0; }
-static int compat_file_test_write( compat_fd fd GCC_UNUSED,
-                                   const unsigned char *buffer GCC_UNUSED,
-                                   size_t length GCC_UNUSED )
-{ compat_file_test_calls[ 3 ]++; return 0; }
-static int compat_file_test_close( compat_fd fd GCC_UNUSED )
-{ compat_file_test_calls[ 4 ]++; return 0; }
-static int compat_file_test_exists( const char *path GCC_UNUSED )
-{ compat_file_test_calls[ 5 ]++; return 1; }
-static int compat_file_test_unlink( const char *path GCC_UNUSED )
-{ compat_file_test_calls[ 6 ]++; return 0; }
-
-static int
-compat_file_vtable_test( void )
-{
-  compat_file_vtable_t vtable = {
-    compat_file_test_open, compat_file_test_get_length, compat_file_test_read,
-    compat_file_test_write, compat_file_test_close, compat_file_test_exists,
-    compat_file_test_unlink
-  };
-  compat_file_vtable_t previous_vtable;
-  utils_file file;
-  unsigned char buffer = 0;
-  compat_fd fd;
-  int i, r = 0;
-
-  memset( compat_file_test_calls, 0, sizeof( compat_file_test_calls ) );
-  compat_file_get_vtable( &previous_vtable );
-  compat_file_set_vtable( &vtable );
-  vtable.open = NULL; /* The setter copies operations, like libspectrum's. */
-
-  fd = compat_file_open( "test", 0 );
-  if( fd != &compat_file_test_file || compat_file_get_length( fd ) != 42 ||
-      compat_file_read( fd, &file ) ||
-      compat_file_write( fd, &buffer, 1 ) || compat_file_close( fd ) ||
-      !compat_file_exists( "test" ) || compat_file_unlink( "test" ) ) r++;
-
-  compat_file_set_vtable( &previous_vtable );
-  for( i = 0; i < 7; i++ ) if( compat_file_test_calls[ i ] != 1 ) r++;
-  if( r ) printf( "compat_file_vtable_test failed\n" );
-  return r;
-}
 
 #ifdef ENABLE_AUTOMATION
 
@@ -5826,7 +5776,6 @@ unittests_run( void )
   r += rectangle_test();
   r += rectangle_realloc_test();
   r += scaler_for_size_test();
-  r += compat_file_vtable_test();
   r += machine_load_rom_bank_with_sizes_test();
   r += utils_file_lifecycle_test();
   r += utils_file_read_failure_test();

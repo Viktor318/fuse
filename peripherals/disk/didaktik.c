@@ -528,7 +528,7 @@ ui_drive_get_params_b( void )
 static ui_media_drive_info_t didaktik_ui_drives[ DIDAKTIK80_NUM_DRIVES ] = {
   {
     /* .name = */ "Didaktik Disk A",
-    /* .controller_index = */ UI_MEDIA_CONTROLLER_DIDAKTIK,
+    /* .controller_index = */ FUSE_DISK_CONTROLLER_DIDAKTIK,
     /* .drive_index = */ DIDAKTIK80_DRIVE_A,
     /* .menu_item_parent = */ UI_MENU_ITEM_MEDIA_DISK_DIDAKTIK,
     /* .menu_item_top = */ UI_MENU_ITEM_MEDIA_DISK_DIDAKTIK_A,
@@ -540,7 +540,7 @@ static ui_media_drive_info_t didaktik_ui_drives[ DIDAKTIK80_NUM_DRIVES ] = {
   },
   {
     /* .name = */ "Didaktik Disk B",
-    /* .controller_index = */ UI_MEDIA_CONTROLLER_DIDAKTIK,
+    /* .controller_index = */ FUSE_DISK_CONTROLLER_DIDAKTIK,
     /* .drive_index = */ DIDAKTIK80_DRIVE_B,
     /* .menu_item_parent = */ UI_MENU_ITEM_MEDIA_DISK_DIDAKTIK,
     /* .menu_item_top = */ UI_MENU_ITEM_MEDIA_DISK_DIDAKTIK_B,

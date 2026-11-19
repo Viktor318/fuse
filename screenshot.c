@@ -75,6 +75,20 @@ static libspectrum_byte *rgb_data = NULL;
 static libspectrum_byte *scaled_data;
 static libspectrum_byte *png_data = NULL;
 
+static void
+screenshot_png_write( png_structp png, png_bytep data, png_size_t length )
+{
+  if( compat_file_write( png_get_io_ptr( png ), data, length ) )
+    png_error( png, "filesystem write failed" );
+}
+
+static void
+screenshot_png_flush( png_structp png )
+{
+  if( compat_file_flush( png_get_io_ptr( png ) ) )
+    png_error( png, "filesystem flush failed" );
+}
+
 int
 screenshot_write( const char *filename, scaler_type scaler )
 {
@@ -176,7 +190,7 @@ screenshot_write( const char *filename, scaler_type scaler )
     return 1;
   }
 
-  png_init_io( png_ptr, f );
+  png_set_write_fn( png_ptr, f, screenshot_png_write, screenshot_png_flush );
 
   /* Make files as small as possible */
   png_set_compression_level( png_ptr, Z_BEST_COMPRESSION );

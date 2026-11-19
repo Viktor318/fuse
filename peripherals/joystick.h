@@ -27,6 +27,7 @@
 #define FUSE_JOYSTICK_H
 
 #include "libspectrum.h"
+#include "fuse-joystick.h"
 
 /* Number of joysticks known about & initialised */
 extern int joysticks_supported;
@@ -35,22 +36,6 @@ void joystick_register_startup( void );
 
 /* A constant to identify the joystick emulated via the keyboard */
 #define JOYSTICK_KEYBOARD 2
-
-typedef enum joystick_type_t {
-
-  JOYSTICK_TYPE_NONE = 0,
-  
-  JOYSTICK_TYPE_CURSOR,
-  JOYSTICK_TYPE_KEMPSTON,
-  JOYSTICK_TYPE_SINCLAIR_1,
-  JOYSTICK_TYPE_SINCLAIR_2,
-  JOYSTICK_TYPE_TIMEX_1,
-  JOYSTICK_TYPE_TIMEX_2,
-  JOYSTICK_TYPE_FULLER,
-
-} joystick_type_t;
-
-#define JOYSTICK_TYPE_COUNT 8
 
 extern const char *joystick_name[];
 extern const char *joystick_connection[];

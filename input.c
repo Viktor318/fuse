@@ -29,6 +29,7 @@
 #include "keyboard.h"
 #include "peripherals/keypad128.h"
 #include "peripherals/joystick.h"
+#include "peripherals/kempmouse.h"
 #include "settings.h"
 #include "snapshot.h"
 #include "tape.h"
@@ -368,11 +369,30 @@ recreated_keypress( input_key k )
   }
 }
 
+/* Joystick emulation via keyboard keys: 1 if a pressed key was taken */
+static int
+keyboard_joystick( input_key key, int pressed )
+{
+  /* A key with no positional mapping (e.g. an accented letter) can only be
+     handled as a character */
+  if( key == INPUT_KEY_NONE ) return 0;
+
+  if( key == settings_current.joystick_keyboard_up )
+    return joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_UP, pressed );
+  if( key == settings_current.joystick_keyboard_down )
+    return joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_DOWN, pressed );
+  if( key == settings_current.joystick_keyboard_left )
+    return joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_LEFT, pressed );
+  if( key == settings_current.joystick_keyboard_right )
+    return joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_RIGHT, pressed );
+  if( key == settings_current.joystick_keyboard_fire )
+    return joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_FIRE, pressed );
+  return 0;
+}
+
 static int
 keypress( const input_event_key_t *event, input_dispatch_context context )
 {
-  int swallow;
-
   /* Editing keys as the keys of the Spectrum 128 keypad */
   if( ui_widget_level < 0 && keypad128_host_key( event->native_key, 1 ) )
     return 0;
@@ -396,41 +416,30 @@ keypress( const input_event_key_t *event, input_dispatch_context context )
     if( !ui_mouse_grabbed ) return 0;
   }
 
-  swallow = 0;
   /* Joystick emulation via keyboard keys */
-  if( event->spectrum_key == INPUT_KEY_NONE ) {
-    /* A key with no positional mapping (e.g. an accented letter) can only
-       be handled as a character */
-  }
-  else if ( event->spectrum_key == settings_current.joystick_keyboard_up ) {
-    swallow = joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_UP   , 1 );
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_down ) {
-    swallow = joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_DOWN , 1 );
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_left ) {
-    swallow = joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_LEFT , 1 );
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_right ) {
-    swallow = joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_RIGHT, 1 );
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_fire ) {
-    swallow = joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_FIRE , 1 );
-  }
-
-  if( swallow ) return 0;
+  if( keyboard_joystick( event->spectrum_key, 1 ) ) return 0;
 
   /* Character based typing (Hungarian keyboard) */
-  if( hungarian_keyboard_keypress( event ) )
-    return popup_menu( event->native_key, context );
-
-  if( settings_current.recreated_spectrum ) {
-    recreated_keypress( event->spectrum_key );
-  } else {
-    send_keyboard_press( event->spectrum_key );
+  if( !hungarian_keyboard_keypress( event ) ) {
+    if( settings_current.recreated_spectrum ) {
+      recreated_keypress( event->spectrum_key );
+    } else {
+      send_keyboard_press( event->spectrum_key );
+    }
   }
 
   return popup_menu( event->native_key, context );
+}
+
+/* A key press for the emulated machine alone, without the UI parts (menus,
+   mouse grab, character based typing): the host operations use it */
+int
+input_keypress_emulation( input_key key )
+{
+  if( keyboard_joystick( key, 1 ) ) return 1;
+  if( settings_current.recreated_spectrum ) recreated_keypress( key );
+  else send_keyboard_press( key );
+  return 0;
 }
 
 static int
@@ -442,31 +451,22 @@ keyrelease( const input_event_key_t *event )
 
   if( hungarian_keyboard_keyrelease( event ) ) return 0;
 
-  if( !settings_current.recreated_spectrum ) {
-    send_keyboard_release( event->spectrum_key );
-  }
-
-  /* Joystick emulation via keyboard keys */
-  if( event->spectrum_key == INPUT_KEY_NONE ) {
-    /* Not a positional key: nothing to release */
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_up ) {
-    joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_UP   , 0 );
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_down ) {
-    joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_DOWN , 0 );
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_left ) {
-    joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_LEFT , 0 );
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_right ) {
-    joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_RIGHT, 0 );
-  }
-  else if( event->spectrum_key == settings_current.joystick_keyboard_fire ) {
-    joystick_press( JOYSTICK_KEYBOARD, JOYSTICK_BUTTON_FIRE , 0 );
-  }
-
+  input_keyrelease_emulation( event->spectrum_key );
   return 0;
+}
+
+void
+input_keyrelease_emulation( input_key key )
+{
+  if( !settings_current.recreated_spectrum ) send_keyboard_release( key );
+  keyboard_joystick( key, 0 );
+}
+
+void
+input_mouse_button_event( input_mouse_button_t button, int pressed )
+{
+  int left = !settings_current.mouse_swap_buttons;
+  kempmouse_update( 0, 0, button == INPUT_MOUSE_LEFT ? left : !left, pressed );
 }
 
 static keyboard_key_name

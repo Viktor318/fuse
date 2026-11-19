@@ -21,6 +21,20 @@ v1.10.0-hu.1-ig: 1.10.0). Magának a Fuse-nak a változásai a
 - A menük gyorsbillentyűi nem ütköznek: Leállí**t**ás (az L a Lejátszásé),
   Felvétel leállítá**s**a.
 
+### Upstream Fuse
+
+- Az upstream `master`-ből: ha a kazetta fájlba írása nem sikerül (akkor
+  is, amikor a Fuse megkérdezi, mentse-e a módosított kazettát), a
+  kazetta megmarad, és nem számít mentettnek; a ROM-betöltési hibát és a
+  sikertelen pillanatkép-mentést hibaként jelzi; ha a kazetta automatikus
+  betöltésekor nem sikerül a gép újraindítása, a betöltés leáll; a
+  DivIDE, a DivMMC, a ZXCF és társaik sikertelen indításakor felszabadul,
+  amit lefoglaltak; a csonka UDI lemezképeket visszautasítja.
+- Az upstream `master`-ből: a Fuse minden fájlt a legújabb libspectrum
+  közös fájlrétegén át olvas és ír (a fordítószkript letölti), és belső
+  felületet kapott az emulátor vezérléséhez, sok új teszttel. Más a
+  felhasználók számára nem változik.
+
 ## v1.10.1-hu.4 – 2026-11-17
 
 ### Hangbeállítások

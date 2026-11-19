@@ -30,5 +30,6 @@ void zxmmc_register_startup( void );
 int zxmmc_insert( const char *filename );
 void zxmmc_commit( void );
 int zxmmc_eject( void );
+int zxmmc_backing_attached( void );
 
 #endif			/* #ifndef FUSE_ZXMMC_H */

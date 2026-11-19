@@ -50,13 +50,14 @@ tape_record_init( libspectrum_tape *current_tape )
   tape_record_set_tape( current_tape );
 }
 
-void
+int
 tape_record_start( void )
 {
-  if( tape_recording || !recording_tape ) return;
+  if( tape_recording ) return 0;
+  if( !recording_tape ) return 1;
   if( rzx_playback || rzx_recording ) {
     ui_error( UI_ERROR_ERROR, "Tape recording is unavailable during RZX" );
-    return;
+    return 1;
   }
   frame_base = remainder = 0;
   last_time = tstates;
@@ -67,6 +68,7 @@ tape_record_start( void )
   durations = libspectrum_new( libspectrum_qword, capacity );
   tape_recording = 1;
   ui_menu_activate( UI_MENU_ITEM_TAPE_RECORDING, 1 );
+  return 0;
 }
 
 /* Called with the actual amount removed from the CPU/event timestamps.

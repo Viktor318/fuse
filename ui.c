@@ -36,6 +36,7 @@
 #endif
 #include "fuse.h"
 #include "i18n.h"
+#include "input.h"
 #include "peripherals/if1.h"
 #include "peripherals/kempmouse.h"
 #include "settings.h"
@@ -230,17 +231,15 @@ static int mouse_grab_suspended = 0;
 void
 ui_mouse_button( int button, int down )
 {
-  int kempston_button = !settings_current.mouse_swap_buttons;
-
   if( !ui_mouse_grabbed && !mouse_grab_suspended ) button = 2;
 
   /* Possibly we'll end up handling _more_ than one mouse interface... */
   switch( button ) {
   case 1:
-    if( ui_mouse_grabbed ) kempmouse_update( 0, 0, kempston_button, down );
+    if( ui_mouse_grabbed ) input_mouse_button_event( INPUT_MOUSE_LEFT, down );
     break;
   case 3:
-    if( ui_mouse_grabbed ) kempmouse_update( 0, 0, !kempston_button, down );
+    if( ui_mouse_grabbed ) input_mouse_button_event( INPUT_MOUSE_RIGHT, down );
     break;
   case 2:
     if( ui_mouse_present && settings_current.kempston_mouse
@@ -809,19 +808,20 @@ int
 ui_tape_write( void )
 {
   char *filename;
+  int error;
 
   fuse_emulation_pause();
 
   filename = ui_get_save_filename( "Fuse - Write Tape" );
   if( !filename ) { fuse_emulation_unpause(); return 1; }
 
-  tape_write( filename );
+  error = tape_write( filename );
 
   libspectrum_free( filename );
 
   fuse_emulation_unpause();
 
-  return 0;
+  return error;
 }
 
 int

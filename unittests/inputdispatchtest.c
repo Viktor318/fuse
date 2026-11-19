@@ -12,6 +12,7 @@
 #include "input.h"
 #include "keyboard.h"
 #include "peripherals/joystick.h"
+#include "peripherals/kempmouse.h"
 #include "settings.h"
 #include "ui/ui.h"
 
@@ -20,6 +21,7 @@ int ui_widget_level = -1, ui_mouse_grabbed, fuse_emulation_paused;
 static int physical[0x200], joystick_down[3][5];
 static int presses, releases, popups, widgets, mouse_calls, errors;
 static int last_popup, mouse_result, recursive_popup;
+static int emulated_mouse_button, emulated_mouse_pressed;
 static char order[1024];
 static int order_count;
 
@@ -104,6 +106,13 @@ int joystick_press( int which, joystick_button button, int press )
   joystick_down[which][button] = press;
   log_effect( press ? 'J' : 'j' );
   return 1;
+}
+
+void kempmouse_update( int dx, int dy, int button, int pressed )
+{
+  assert( dx == 0 && dy == 0 );
+  emulated_mouse_button = button;
+  emulated_mouse_pressed = pressed;
 }
 
 void joystick_clear_interfaces( void )
@@ -390,8 +399,31 @@ static void test_popup_classifier( void )
   input_dispatch_set_popup_filter( NULL );
 }
 
+static void test_emulation_only( void )
+{
+  int swap;
+  reset();
+  ui_widget_level = 0;
+  ui_mouse_grabbed = 1;
+  input_keypress_emulation( INPUT_KEY_Escape );
+  assert( physical[KEYBOARD_1] && physical[KEYBOARD_Caps] );
+  input_keyrelease_emulation( INPUT_KEY_Escape );
+  input_keypress_emulation( INPUT_KEY_F1 );
+  assert( !popups && !widgets && !mouse_calls && !input_dispatch_pending() );
+  for( swap = 0; swap < 2; swap++ ) {
+    settings_current.mouse_swap_buttons = swap;
+    input_mouse_button_event( INPUT_MOUSE_LEFT, 1 );
+    assert( emulated_mouse_button == !swap && emulated_mouse_pressed == 1 );
+    input_mouse_button_event( INPUT_MOUSE_RIGHT, 0 );
+    assert( emulated_mouse_button == swap && emulated_mouse_pressed == 0 );
+  }
+  assert( !popups && !widgets && !mouse_calls );
+  ui_widget_level = -1;
+}
+
 int main( void )
 {
+  test_emulation_only();
   test_effects_and_ordering();
   test_mapping_equivalence();
   test_joystick_mapping();

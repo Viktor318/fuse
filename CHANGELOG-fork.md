@@ -20,6 +20,19 @@ The changes of Fuse itself are in [ChangeLog](ChangeLog).
 - The menu letters don't clash: Leállí**t**ás (L is taken by Lejátszás),
   Felvétel leállítá**s**a.
 
+### Upstream Fuse
+
+- From upstream `master`: if writing the tape to a file fails (also when
+  Fuse asks whether to save a changed tape), the tape is kept and not
+  treated as saved; ROM load errors and failed snapshot saves are reported
+  as errors; a failed machine reset during tape autoload stops the
+  loading; a failed start of DivIDE, DivMMC, ZXCF and the like releases
+  what it took; truncated UDI disk images are refused.
+- From upstream `master`: Fuse reads and writes every file through the
+  shared file layer of the newest libspectrum (the build script fetches
+  it), and has an internal interface for driving the emulator, with many
+  new tests. Nothing else changes for users.
+
 ## v1.10.1-hu.4 – 2026-11-17
 
 ### Sound settings

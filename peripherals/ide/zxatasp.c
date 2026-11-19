@@ -167,6 +167,14 @@ static module_info_t zxatasp_module_info = {
 
 /* Housekeeping functions */
 
+static int attached[2];
+
+int
+zxatasp_backing_attached( libspectrum_ide_unit unit )
+{
+  return ( unit == LIBSPECTRUM_IDE_MASTER || unit == LIBSPECTRUM_IDE_SLAVE ) && attached[unit];
+}
+
 static int
 zxatasp_init( void *context )
 {
@@ -179,8 +187,14 @@ zxatasp_init( void *context )
                     settings_current.zxatasp_master_file,
                     UI_MENU_ITEM_MEDIA_IDE_ZXATASP_MASTER_EJECT,
                     settings_current.zxatasp_slave_file,
-                    UI_MENU_ITEM_MEDIA_IDE_ZXATASP_SLAVE_EJECT );
-  if( error ) return error;
+                    UI_MENU_ITEM_MEDIA_IDE_ZXATASP_SLAVE_EJECT, attached );
+  if( error ) {
+    libspectrum_ide_free( zxatasp_idechn0 );
+    libspectrum_ide_free( zxatasp_idechn1 );
+    zxatasp_idechn0 = zxatasp_idechn1 = NULL;
+    attached[0] = attached[1] = 0;
+    return error;
+  }
 
   module_register( &zxatasp_module_info );
 
@@ -200,6 +214,7 @@ zxatasp_end( void )
 {
   libspectrum_ide_free( zxatasp_idechn0 );
   libspectrum_ide_free( zxatasp_idechn1 );
+  attached[0] = attached[1] = 0;
 }
 
 void
@@ -242,7 +257,7 @@ zxatasp_insert( const char *filename, libspectrum_ide_unit unit )
     &settings_current.zxatasp_master_file,
     UI_MENU_ITEM_MEDIA_IDE_ZXATASP_MASTER_EJECT,
     &settings_current.zxatasp_slave_file,
-    UI_MENU_ITEM_MEDIA_IDE_ZXATASP_SLAVE_EJECT );
+    UI_MENU_ITEM_MEDIA_IDE_ZXATASP_SLAVE_EJECT, attached );
 }
 
 int
@@ -263,7 +278,7 @@ zxatasp_eject( libspectrum_ide_unit unit )
     &settings_current.zxatasp_master_file,
     UI_MENU_ITEM_MEDIA_IDE_ZXATASP_MASTER_EJECT,
     &settings_current.zxatasp_slave_file,
-    UI_MENU_ITEM_MEDIA_IDE_ZXATASP_SLAVE_EJECT );
+    UI_MENU_ITEM_MEDIA_IDE_ZXATASP_SLAVE_EJECT, attached );
 }
 
 /* Port read/writes */

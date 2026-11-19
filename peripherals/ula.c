@@ -29,7 +29,7 @@
 
 #include "compat.h"
 #include "debugger/debugger.h"
-#include "fuse-internal.h"
+#include "fuse.h"
 #include "keyboard.h"
 #include "infrastructure/startup_manager.h"
 #include "loader.h"
@@ -121,7 +121,7 @@ set_tstates( libspectrum_dword value )
   /* Debugger clock assignment may jump behind audio already consumed. */
   sound_suspend_subframe();
   specplus3_bus_invalidate();
-  fuse_legacy_budget_interrupt();
+  fuse_budget_interrupt();
   tstates = value;
   specplus3_bus_rebase();
 }
@@ -252,7 +252,7 @@ static void
 ula_from_snapshot( libspectrum_snap *snap )
 {
   ula_write( 0x00fe, libspectrum_snap_out_ula( snap ) );
-  fuse_legacy_budget_interrupt();
+  fuse_budget_interrupt();
   tstates = libspectrum_snap_tstates( snap );
   settings_current.issue2 = libspectrum_snap_issue2( snap );
 }

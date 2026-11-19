@@ -1,4 +1,4 @@
-/* fuse-internal.h: private application/engine boundary
+/* fuse-internal.h: private host/engine API
    Copyright (c) 2026 Fredrick Meunier
 
    This program is free software; you can redistribute it and/or modify
@@ -19,37 +19,262 @@
 #ifndef FUSE_INTERNAL_H
 #define FUSE_INTERNAL_H
 
-/* Private, UI-bound, exclusive legacy-runtime lifecycle. Not a supported
-   embedding API: selected toolkit/fatal-error policy still applies. Calls must
-   be serialized on the frontend owner thread; there is no restart promise.
-   An accepted prepare (including help/version or failure) consumes one attempt.
-   Invalid arguments do not consume it. argv and its mutable strings are borrowed
-   through shutdown; argc == 0 with argv == NULL is permitted. */
-typedef enum fuse_legacy_init_result {
-  FUSE_LEGACY_INIT_READY,
-  FUSE_LEGACY_INIT_HELP,
-  FUSE_LEGACY_INIT_VERSION,
-  FUSE_LEGACY_INIT_FAILED,
-  FUSE_LEGACY_INIT_BUSY,
-  FUSE_LEGACY_INIT_CLOSED,
-  FUSE_LEGACY_INIT_INVALID_ARGUMENT
-} fuse_legacy_init_result;
+#include <stddef.h>
+#include "input.h"
+#include "fuse-disk.h"
+#include "periph.h"
+#include "fuse-tape.h"
+#include "fuse-filesystem.h"
+#include "fuse-joystick.h"
 
-/* Help/version and failure return after cleanup, without a runnable session.
-   Core preparation/shutdown never authorize automatic preference saving, even
-   when the autosave setting is enabled. Explicit settings operations remain
-   available; RNG, platform startup and library management are unchanged. */
-fuse_legacy_init_result fuse_legacy_prepare( int argc, char **argv );
+/* Private, selected-UI-bound engine lifecycle. Not an installed embedding API:
+   toolkit/fatal-error policy still applies. Calls must be serialized on the
+   owner thread; no recursion or restart. An accepted prepare, including failure,
+   consumes one attempt. Invalid arguments do not consume it.
+   HELP/VERSION are shared outcomes used only by the application adapter. */
+typedef enum fuse_init_result {
+  FUSE_INIT_READY,
+  FUSE_INIT_HELP,
+  FUSE_INIT_VERSION,
+  FUSE_INIT_FAILED,
+  FUSE_INIT_BUSY,
+  FUSE_INIT_CLOSED,
+  FUSE_INIT_INVALID_ARGUMENT
+} fuse_init_result;
 
-typedef enum fuse_legacy_run_result {
-  FUSE_LEGACY_RUN_COMPLETED,
-  FUSE_LEGACY_RUN_PAUSED,
-  FUSE_LEGACY_RUN_EXITING,
-  FUSE_LEGACY_RUN_BUSY,
-  FUSE_LEGACY_RUN_NOT_READY,
-  FUSE_LEGACY_RUN_INVALID_ARGUMENT,
-  FUSE_LEGACY_RUN_INTERRUPTED
-} fuse_legacy_run_result;
+/* Host preparation uses the selected UI/output adapters. Configuration
+   owns its strings and may be freed after prepare returns. Only one preparation
+   attempt is supported, shared with the legacy entry. No CLI or preference I/O.
+   This subset configures machine ID, sound, autoload and input mappings; other
+   values retain generated defaults internally. Use shared run/shutdown after READY.
+   Owner-thread only, no recursion; selected UI, device waits, RNG and process-
+   global library/error policy remain. Not toolkit-free or a public SDK. */
+typedef struct fuse_host_config fuse_host_config;
+fuse_host_config *fuse_host_config_alloc( void );
+void fuse_host_config_free( fuse_host_config *config );
+int fuse_host_config_set_machine( fuse_host_config *config, const char *id );
+int fuse_host_config_set_sound( fuse_host_config *config, int enabled );
+int fuse_host_config_set_auto_load( fuse_host_config *config, int enabled );
+/* Existing ROM tape-trap setting (default retained). Disable for explicit
+   pulse recording; enabled SAVE traps append decoded blocks automatically. */
+int fuse_host_config_set_tape_traps( fuse_host_config *config, int enabled );
+/* Set DivMMC enablement at preparation; not a runtime toggle. */
+int fuse_host_config_set_divmmc( fuse_host_config *config, int enabled );
+
+/* A synchronous ROM result, not a filesystem path. Provider context remains
+   borrowed through shutdown, including failed-startup cleanup. On every acquire,
+   even failure, release is called once when non-NULL. Bytes are borrowed only
+   until release and copied by the engine. No recursive core entry is permitted.
+   logical_name is borrowed only for the callback; return 0 for success, nonzero
+   for failure. custom must be 0 or 1 and is explicit provenance (affects
+   autoload), not a filename comparison.
+   A failed request never triggers implicit filesystem search/default fallback. */
+typedef struct fuse_host_rom {
+  const unsigned char *data;
+  size_t length;
+  int custom;
+  void *context;
+  void (*release)( void *context );
+} fuse_host_rom;
+typedef struct fuse_host_resources {
+  void *context;
+  int (*acquire_rom)( void *context, const char *logical_name,
+                      fuse_host_rom *rom );
+} fuse_host_resources;
+fuse_init_result fuse_host_prepare( const fuse_host_config *config,
+                                    const fuse_host_resources *resources );
+
+/* Synchronous value operations, serialized between execution turns (also while
+   paused). They do not advance emulated time; NMI is queued for normal dispatch.
+   No recursive entry or source aggregation: the host merges physical sources.
+   FAILED machine/reset operations may have partially mutated state: only shutdown
+   is permitted afterwards. INVALID_ARGUMENT never mutates state. These entries
+   retain selected-UI synchronous notifications, not async/transactional promises. */
+typedef enum fuse_host_operation_result {
+  FUSE_HOST_OPERATION_OK,
+  FUSE_HOST_OPERATION_INVALID_ARGUMENT,
+  FUSE_HOST_OPERATION_BUSY,
+  FUSE_HOST_OPERATION_NOT_READY,
+  FUSE_HOST_OPERATION_EXITING,
+  FUSE_HOST_OPERATION_FAILED,
+  FUSE_HOST_OPERATION_MEDIA_ERROR
+} fuse_host_operation_result;
+
+typedef enum fuse_host_reset_kind {
+  FUSE_HOST_RESET_SOFT, FUSE_HOST_RESET_HARD
+} fuse_host_reset_kind;
+
+/* Spectrum keys, not native keysyms, shortcuts or joystick/menu mappings. */
+typedef enum fuse_host_key {
+  FUSE_HOST_KEY_SPACE = 0x20,
+  FUSE_HOST_KEY_0 = 0x30, FUSE_HOST_KEY_1, FUSE_HOST_KEY_2, FUSE_HOST_KEY_3,
+  FUSE_HOST_KEY_4, FUSE_HOST_KEY_5, FUSE_HOST_KEY_6, FUSE_HOST_KEY_7,
+  FUSE_HOST_KEY_8, FUSE_HOST_KEY_9,
+  FUSE_HOST_KEY_A = 0x61, FUSE_HOST_KEY_B, FUSE_HOST_KEY_C, FUSE_HOST_KEY_D,
+  FUSE_HOST_KEY_E, FUSE_HOST_KEY_F, FUSE_HOST_KEY_G, FUSE_HOST_KEY_H,
+  FUSE_HOST_KEY_I, FUSE_HOST_KEY_J, FUSE_HOST_KEY_K, FUSE_HOST_KEY_L,
+  FUSE_HOST_KEY_M, FUSE_HOST_KEY_N, FUSE_HOST_KEY_O, FUSE_HOST_KEY_P,
+  FUSE_HOST_KEY_Q, FUSE_HOST_KEY_R, FUSE_HOST_KEY_S, FUSE_HOST_KEY_T,
+  FUSE_HOST_KEY_U, FUSE_HOST_KEY_V, FUSE_HOST_KEY_W, FUSE_HOST_KEY_X,
+  FUSE_HOST_KEY_Y, FUSE_HOST_KEY_Z,
+  FUSE_HOST_KEY_ENTER = 0x100, FUSE_HOST_KEY_CAPS, FUSE_HOST_KEY_SYMBOL
+} fuse_host_key;
+
+/* Logical input slots. Fuse owns their configured emulated-interface mapping. */
+typedef enum fuse_host_joystick {
+  FUSE_HOST_JOYSTICK_1, FUSE_HOST_JOYSTICK_2, FUSE_HOST_JOYSTICK_KEYBOARD
+} fuse_host_joystick;
+/* Engine interface selection, deliberately separate from input delivery. */
+int fuse_host_config_set_joystick( fuse_host_config *config,
+  fuse_host_joystick slot, joystick_type_t output );
+int fuse_host_config_set_mouse_swap_buttons( fuse_host_config *config, int swap );
+typedef enum fuse_host_joystick_button {
+  FUSE_HOST_JOYSTICK_LEFT, FUSE_HOST_JOYSTICK_RIGHT, FUSE_HOST_JOYSTICK_UP,
+  FUSE_HOST_JOYSTICK_DOWN, FUSE_HOST_JOYSTICK_FIRE
+} fuse_host_joystick_button;
+typedef enum fuse_host_mouse_button {
+  FUSE_HOST_MOUSE_LEFT, FUSE_HOST_MOUSE_RIGHT
+} fuse_host_mouse_button;
+
+fuse_host_operation_result fuse_host_select_machine( const char *id );
+fuse_host_operation_result fuse_host_reset( fuse_host_reset_kind kind );
+fuse_host_operation_result fuse_host_nmi( void );
+/* File > Open: existing identification/dispatch, current auto_load/ROM
+   eligibility, machine fallback and selected-UI services, followed by refresh.
+   Path borrowed through return. OK means legacy zero, which can include a
+   cancelled/no-op insertion; MEDIA_ERROR means legacy nonzero. No rollback,
+   unchanged-state or safe-continuation promise on error; legacy fatal paths
+   remain. This is not strict ID selection or the tape-only insertion intent. */
+fuse_host_operation_result fuse_host_open_file( const char *filename );
+
+/* Single-drive controllers use MASTER. The backing name is an owned copy,
+   NULL when no backing is attached. */
+typedef struct fuse_mass_storage_info {
+  periph_type controller;
+  libspectrum_ide_unit unit;
+  int active;
+  char *backing_name;
+} fuse_mass_storage_info;
+
+fuse_host_operation_result fuse_host_copy_mass_storage_info(
+  periph_type controller, libspectrum_ide_unit unit, fuse_mass_storage_info **info );
+void fuse_mass_storage_info_free( fuse_mass_storage_info *info );
+fuse_host_operation_result fuse_host_eject_mass_storage( periph_type controller, libspectrum_ide_unit unit );
+/* Commit uses the controller's existing reporting; success is not durability. */
+fuse_host_operation_result fuse_host_commit_mass_storage( periph_type controller, libspectrum_ide_unit unit );
+fuse_host_operation_result fuse_host_insert_mass_storage(
+  periph_type controller, libspectrum_ide_unit unit, const char *filename );
+
+/* Chosen-target Save Snapshot, not File Open or an owned checkpoint/buffer API.
+   Borrows a nonempty path through return; engine infers format from the filename
+   and retains the existing SZX fallback and conversion-loss warnings. No chooser
+   or new overwrite confirmation: an existing target can be truncated/replaced.
+   Uses the menu's nested pause/write/unpause sequence (including competition
+   RZX finalization on first pause). Nonzero writer result maps MEDIA_ERROR;
+   no rollback, durability or complete-state preservation guarantee. */
+fuse_host_operation_result fuse_host_save_snapshot_file( const char *filename );
+/* Media > Tape > Open intent: the existing tape_open(path, 0) workflow, not
+   File > Open (which uses tape_can_autoload()). The auto_load preference is not
+   consulted for this intent, exactly as in the legacy menu. Path is borrowed
+   through return. Replacement, recording finalization and save/discard/cancel
+   use the existing selected-UI services, which may block. MEDIA_ERROR maps the
+   legacy nonzero return, including cancellation; the session remains usable,
+   but tape state follows the legacy operation (no rollback guarantee). There
+   is no extra close/cleanup after a failed or cancelled open. Non-path access
+   is not exposed here. */
+fuse_host_operation_result fuse_host_insert_tape_file( const char *filename );
+/* Explicit deck controls: toggle is the existing manual Play/Stop intent, not
+   File Open/autoload. Stop affects playback, not recording. Rewind succeeds on
+   an empty deck; block selection is zero-based and does not implicitly stop.
+   A missing block returns MEDIA_ERROR and can reset partial-interval state.
+   Named Save borrows its path, keeps encoding in the engine and finalizes any
+   recording before serialization; format/IO failure is not a rollback. Eject
+   finalizes recording then uses existing Save/Discard/Cancel. Ordinary legacy
+   nonzero (including cancellation) maps to MEDIA_ERROR, with no cleanup retry. */
+fuse_host_operation_result fuse_host_toggle_tape_play( void );
+fuse_host_operation_result fuse_host_stop_tape( void );
+fuse_host_operation_result fuse_host_rewind_tape( void );
+fuse_host_operation_result fuse_host_select_tape_block( int block );
+fuse_host_operation_result fuse_host_save_tape_file( const char *filename );
+fuse_host_operation_result fuse_host_eject_tape( void );
+
+/* Record into the engine's tape, including an empty deck; no file sink here.
+   Start requires tape traps disabled; enabled traps, missing tape object or
+   RZX refusal is MEDIA_ERROR (the existing RZX diagnostic remains). With traps
+   disabled, an already-active recorder is success. Stop remains available if
+   the setting changes during recording. It is idle-safe and finalizes intervals
+   into blocks, independently of playback. A stop
+   failure is MEDIA_ERROR but recording has ended, buffers are freed and any
+   blocks already appended remain; retry does not recover the discarded tail.
+   Save/eject retain their existing implicit recording finalization. */
+fuse_host_operation_result fuse_host_start_tape_recording( void );
+fuse_host_operation_result fuse_host_stop_tape_recording( void );
+
+/* Owned copy of current browser rows and transport state. Same owner-thread /
+   lifecycle guards as operations; failure sets *info=NULL. No pause, selection,
+   playback change or implicit recording finalization. Strings/values survive
+   replacement/eject/shutdown. A copy describes then-current state, not a handle
+   or authorization for later commands. Recording can be active on an empty deck.
+   Archive-info panels/raw block metadata are not represented by these rows. */
+fuse_host_operation_result fuse_host_copy_tape_info( fuse_tape_info **info );
+/* Zero-based slots. Explicit Media insert, without File Open's autoload/machine
+   selection. Existing replacement questions remain; OK can mean cancelled
+   replacement. Save takes a borrowed chosen target, or NULL for the retained
+   target, and never chooses
+   a filename. Existing overwrite questions may block. Unavailable/disabled or
+   empty-to-save drives return MEDIA_ERROR; unknown controller/slot is invalid.
+   No rollback/atomic-write guarantee; failure does not add an eject or retry. */
+fuse_host_operation_result fuse_host_insert_disk_file( fuse_disk_controller controller,
+                                                      int slot, const char *filename );
+fuse_host_operation_result fuse_host_save_disk_file( fuse_disk_controller controller,
+                                                    int slot, const char *filename );
+/* New uses configured geometry and controller insertion hooks (including +3
+   preformat), with existing replacement decisions: OK can mean cancellation.
+   Eject uses Save/Discard/Cancel and succeeds on an already empty available drive. Flip/WP require
+   loaded media and accept flags 0 or 1. WP is emulated write protection, not
+   filesystem permissions; changing it does not itself dirty a floppy image. */
+fuse_host_operation_result fuse_host_new_disk( fuse_disk_controller controller, int slot );
+fuse_host_operation_result fuse_host_eject_disk( fuse_disk_controller controller, int slot );
+fuse_host_operation_result fuse_host_set_disk_flipped( fuse_disk_controller controller,
+                                                      int slot, int flipped );
+fuse_host_operation_result fuse_host_set_disk_write_protected( fuse_disk_controller controller,
+                                                              int slot, int write_protected );
+/* Copy on the owner thread between execution turns, including registered but
+   inactive/disabled drives. Unknown controller/slot is INVALID_ARGUMENT. *info
+   is set to NULL on failure; pass a fresh result pointer (free any prior copy
+   before reuse). Success transfers the value/strings to the caller, independent
+   of later operations or shutdown. Free with fuse_disk_drive_info_free(). This
+   observation is not a command token; mutations still resolve current state. */
+fuse_host_operation_result fuse_host_copy_disk_drive_info(
+  fuse_disk_controller controller, int slot, fuse_disk_drive_info **info );
+/* Normalized keyboard values use shared Fuse translation and keyboard-joystick
+   mapping, but never trigger menus/widgets/grab actions (even for F-keys/Escape).
+   These are not toolkit keycodes. Direct matrix injection is a separate option. */
+fuse_host_operation_result fuse_host_keyboard_event( input_key key, int pressed );
+fuse_host_operation_result fuse_host_spectrum_key_event( fuse_host_key key,
+                                                        int pressed );
+fuse_host_operation_result fuse_host_joystick_event( fuse_host_joystick joystick,
+  fuse_host_joystick_button button, int pressed );
+/* Relative motion in host-style coordinates (positive y down), wrapping the
+   hardware's 8-bit counters. Logical buttons respect Fuse's swap configuration;
+   pointer capture and other native UI actions remain host policy. */
+fuse_host_operation_result fuse_host_mouse_motion( int dx, int dy );
+fuse_host_operation_result fuse_host_mouse_event( fuse_host_mouse_button button,
+                                                 int pressed );
+/* Clears physical keyboard/joystick/mouse buttons, retaining mouse position and
+   synthetic typing. Select/reset do not add an implicit release: the host sends
+   release-all explicitly for focus loss, retaining existing reset semantics. */
+fuse_host_operation_result fuse_host_release_all( void );
+
+typedef enum fuse_run_result {
+  FUSE_RUN_COMPLETED,
+  FUSE_RUN_PAUSED,
+  FUSE_RUN_EXITING,
+  FUSE_RUN_BUSY,
+  FUSE_RUN_NOT_READY,
+  FUSE_RUN_INVALID_ARGUMENT,
+  FUSE_RUN_INTERRUPTED
+} fuse_run_result;
 
 /* Advance to the next completed frame boundary (not necessarily a whole frame
    from the current position). Repeatable after READY, on the owner thread only.
@@ -58,9 +283,9 @@ typedef enum fuse_legacy_run_result {
    EXITING takes precedence over PAUSED, then COMPLETED. A paused call advances
    no emulated time; the host owns command handling and waiting between calls.
    Ordinary reset may occur during dispatch and does not cancel the turn.
-   Recursive calls are BUSY; before prepare/after legacy execute or shutdown,
+   Recursive calls are BUSY; before preparation/after finalization or shutdown,
    calls are NOT_READY. No automatic shutdown or application result writing. */
-fuse_legacy_run_result fuse_legacy_run_frame( void );
+fuse_run_result fuse_run_frame( void );
 
 /* Advance by a relative emulated T-state budget (1..0x7fffffff), completing
    instructions and due-event/frame dispatch even if they overshoot the budget.
@@ -72,27 +297,11 @@ fuse_legacy_run_result fuse_legacy_run_frame( void );
    advances nothing. Invalid budgets (or a clock >=0x7fffffff) are rejected without
    execution. Phase rejection precedes argument validation; other lifecycle and
    blocking rules are the same as run_frame. */
-fuse_legacy_run_result fuse_legacy_run_tstates( unsigned long budget );
+fuse_run_result fuse_run_tstates( unsigned long budget );
 
-/* Internal budget-accounting hooks, not host operations. Coordinate changes
-   preserve elapsed time; clock replacement invalidates only an active budget.
-   These do nothing during legacy/frame execution or between calls. */
-void fuse_legacy_budget_rebase( unsigned long before, unsigned long after );
-void fuse_legacy_budget_interrupt( void );
-
-/* Run the blocking legacy loop once after READY, optionally after host turns.
-   Zero means accepted; the application exit status is written separately.
-   Rejection leaves it alone. This finalizes application automation output once;
-   subsequent frame/legacy execution is rejected. Not cooperative execution. */
-int fuse_legacy_execute( int *exit_status );
-
-/* End a prepared/completed session. No-op before preparation or after shutdown,
-   and during preparation, execution or cleanup callbacks. Request exit through
-   existing frontend mechanisms rather than tearing down an active operation. */
-void fuse_legacy_shutdown( void );
-
-/* Compatible application runner, without a platform entry point. Authorizes
-   the existing autosave preference behavior only after successful preparation. */
-int fuse_legacy_main( int argc, char **argv );
+/* End a prepared, completed or failed-operation session. No-op before preparation,
+   after shutdown or during active preparation/execution/cleanup callbacks.
+   Does not cancel active work; the host must wait for its return before disposal. */
+void fuse_shutdown( void );
 
 #endif

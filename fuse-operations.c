@@ -110,11 +110,14 @@ static const char *
 mass_storage_name( periph_type controller, libspectrum_ide_unit unit )
 {
   switch( controller ) {
-  case PERIPH_TYPE_SIMPLEIDE: return unit == LIBSPECTRUM_IDE_MASTER ? settings_current.simpleide_master_file :
+  case PERIPH_TYPE_SIMPLEIDE: return unit ==
+           LIBSPECTRUM_IDE_MASTER ? settings_current.simpleide_master_file :
            settings_current.simpleide_slave_file;
-  case PERIPH_TYPE_ZXATASP: return unit == LIBSPECTRUM_IDE_MASTER ? settings_current.zxatasp_master_file :
+  case PERIPH_TYPE_ZXATASP: return unit ==
+           LIBSPECTRUM_IDE_MASTER ? settings_current.zxatasp_master_file :
            settings_current.zxatasp_slave_file;
-  case PERIPH_TYPE_DIVIDE: return unit == LIBSPECTRUM_IDE_MASTER ? settings_current.divide_master_file :
+  case PERIPH_TYPE_DIVIDE: return unit ==
+           LIBSPECTRUM_IDE_MASTER ? settings_current.divide_master_file :
            settings_current.divide_slave_file;
   case PERIPH_TYPE_ZXCF: return settings_current.zxcf_pri_file;
   case PERIPH_TYPE_DIVMMC: return settings_current.divmmc_file;
@@ -152,7 +155,8 @@ mass_storage_eject( periph_type controller, libspectrum_ide_unit unit )
 }
 
 static int
-mass_storage_insert( periph_type controller, libspectrum_ide_unit unit, const char *filename )
+mass_storage_insert( periph_type controller, libspectrum_ide_unit unit,
+                     const char *filename )
 {
   switch( controller ) {
   case PERIPH_TYPE_SIMPLEIDE: return simpleide_insert( filename, unit );
@@ -180,7 +184,9 @@ mass_storage_commit( periph_type controller, libspectrum_ide_unit unit )
 }
 
 fuse_host_operation_result
-fuse_host_copy_mass_storage_info( periph_type controller, libspectrum_ide_unit unit, fuse_mass_storage_info **info )
+fuse_host_copy_mass_storage_info( periph_type controller,
+                                  libspectrum_ide_unit unit,
+                                  fuse_mass_storage_info **info )
 {
   fuse_mass_storage_info *copy;
   const char *name;
@@ -189,7 +195,9 @@ fuse_host_copy_mass_storage_info( periph_type controller, libspectrum_ide_unit u
   if( result != FUSE_HOST_OPERATION_OK ) return result;
   if( !info || !mass_storage_target( controller, unit ) )
     return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
-  name = mass_storage_attached( controller, unit ) ? mass_storage_name( controller, unit ) : NULL;
+  name = mass_storage_attached( controller,
+                                unit ) ? mass_storage_name( controller,
+                                                            unit ) : NULL;
   copy = libspectrum_new( fuse_mass_storage_info, 1 );
   copy->controller = controller;
   copy->unit = unit;
@@ -208,7 +216,8 @@ fuse_mass_storage_info_free( fuse_mass_storage_info *info )
 }
 
 static fuse_host_operation_result
-change_mass_storage( periph_type controller, libspectrum_ide_unit unit, const char *filename )
+change_mass_storage( periph_type controller, libspectrum_ide_unit unit,
+                     const char *filename )
 {
   int error = 0;
   fuse_host_operation_result result = fuse_engine_check_operation();
@@ -222,35 +231,42 @@ change_mass_storage( periph_type controller, libspectrum_ide_unit unit, const ch
   /* Check eject separately: legacy insert masks a refused eject as success. */
   if( !filename || mass_storage_name( controller, unit ) )
     error = mass_storage_eject( controller, unit );
-  if( !error && filename ) error = mass_storage_insert( controller, unit, filename );
+  if( !error && filename ) error = mass_storage_insert( controller, unit,
+                                                        filename );
   fuse_emulation_unpause();
   fuse_engine_end_operation();
   return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
 }
 
 fuse_host_operation_result
-fuse_host_eject_mass_storage( periph_type controller, libspectrum_ide_unit unit )
+fuse_host_eject_mass_storage( periph_type controller,
+                              libspectrum_ide_unit unit )
 {
   return change_mass_storage( controller, unit, NULL );
 }
 
 fuse_host_operation_result
-fuse_host_insert_mass_storage( periph_type controller, libspectrum_ide_unit unit, const char *filename )
+fuse_host_insert_mass_storage( periph_type controller,
+                               libspectrum_ide_unit unit, const char *filename )
 {
   if( !filename ) {
     fuse_host_operation_result result = fuse_engine_check_operation();
-    return result == FUSE_HOST_OPERATION_OK ? FUSE_HOST_OPERATION_INVALID_ARGUMENT : result;
+    return result ==
+           FUSE_HOST_OPERATION_OK ? FUSE_HOST_OPERATION_INVALID_ARGUMENT :
+           result;
   }
   return change_mass_storage( controller, unit, filename );
 }
 
 fuse_host_operation_result
-fuse_host_commit_mass_storage( periph_type controller, libspectrum_ide_unit unit )
+fuse_host_commit_mass_storage( periph_type controller,
+                               libspectrum_ide_unit unit )
 {
   int error = 0;
   fuse_host_operation_result result = fuse_engine_check_operation();
   if( result != FUSE_HOST_OPERATION_OK ) return result;
-  if( !mass_storage_target( controller, unit ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( !mass_storage_target( controller,
+                            unit ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
   if( !periph_is_active( controller ) ||
       !mass_storage_attached( controller, unit ) )
     return FUSE_HOST_OPERATION_MEDIA_ERROR;
@@ -410,9 +426,11 @@ fuse_host_keyboard_event( input_key key, int pressed )
   fuse_host_operation_result result = fuse_engine_check_operation();
   if( result != FUSE_HOST_OPERATION_OK ) return result;
   if( ( pressed != 0 && pressed != 1 ) ||
-      !( key == INPUT_KEY_Tab || key == INPUT_KEY_Return || key == INPUT_KEY_Escape ||
+      !( key == INPUT_KEY_Tab || key == INPUT_KEY_Return ||
+         key == INPUT_KEY_Escape ||
          ( key >= INPUT_KEY_space && key <= INPUT_KEY_BackSpace ) ||
-         key == INPUT_KEY_KP_Enter || ( key >= INPUT_KEY_Up && key <= INPUT_KEY_F12 ) ||
+         key == INPUT_KEY_KP_Enter ||
+         ( key >= INPUT_KEY_Up && key <= INPUT_KEY_F12 ) ||
          ( key >= INPUT_KEY_Shift_L && key <= INPUT_KEY_Mode_switch ) ) )
     return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
   if( pressed ) input_keypress_emulation( key );
@@ -426,7 +444,8 @@ fuse_host_spectrum_key_event( fuse_host_key key, int pressed )
   keyboard_key_name target;
   fuse_host_operation_result result = fuse_engine_check_operation();
   if( result != FUSE_HOST_OPERATION_OK ) return result;
-  if( pressed != 0 && pressed != 1 ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( pressed != 0 &&
+      pressed != 1 ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
   if( key == FUSE_HOST_KEY_ENTER ) target = KEYBOARD_Enter;
   else if( key == FUSE_HOST_KEY_CAPS ) target = KEYBOARD_Caps;
   else if( key == FUSE_HOST_KEY_SYMBOL ) target = KEYBOARD_Symbol;
@@ -441,7 +460,7 @@ fuse_host_spectrum_key_event( fuse_host_key key, int pressed )
 
 fuse_host_operation_result
 fuse_host_joystick_event( fuse_host_joystick joystick,
-  fuse_host_joystick_button button, int pressed )
+                          fuse_host_joystick_button button, int pressed )
 {
   static const joystick_button buttons[] = {
     JOYSTICK_BUTTON_LEFT, JOYSTICK_BUTTON_RIGHT, JOYSTICK_BUTTON_UP,
@@ -449,11 +468,14 @@ fuse_host_joystick_event( fuse_host_joystick joystick,
   };
   fuse_host_operation_result result = fuse_engine_check_operation();
   if( result != FUSE_HOST_OPERATION_OK ) return result;
-  if( joystick < FUSE_HOST_JOYSTICK_1 || joystick > FUSE_HOST_JOYSTICK_KEYBOARD ||
+  if( joystick < FUSE_HOST_JOYSTICK_1 ||
+      joystick > FUSE_HOST_JOYSTICK_KEYBOARD ||
       button < FUSE_HOST_JOYSTICK_LEFT || button > FUSE_HOST_JOYSTICK_FIRE ||
-      ( pressed != 0 && pressed != 1 ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+      ( pressed != 0 &&
+        pressed != 1 ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
   joystick_press( joystick == FUSE_HOST_JOYSTICK_KEYBOARD ? JOYSTICK_KEYBOARD :
-                  joystick == FUSE_HOST_JOYSTICK_1 ? 0 : 1, buttons[button], pressed );
+                  joystick == FUSE_HOST_JOYSTICK_1 ? 0 : 1, buttons[button],
+                  pressed );
   return FUSE_HOST_OPERATION_OK;
 }
 
@@ -473,9 +495,10 @@ fuse_host_mouse_event( fuse_host_mouse_button button, int pressed )
   fuse_host_operation_result result = fuse_engine_check_operation();
   if( result != FUSE_HOST_OPERATION_OK ) return result;
   if( ( button != FUSE_HOST_MOUSE_LEFT && button != FUSE_HOST_MOUSE_RIGHT ) ||
-      ( pressed != 0 && pressed != 1 ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+      ( pressed != 0 &&
+        pressed != 1 ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
   input_mouse_button_event( button == FUSE_HOST_MOUSE_LEFT ? INPUT_MOUSE_LEFT :
-                           INPUT_MOUSE_RIGHT, pressed );
+                            INPUT_MOUSE_RIGHT, pressed );
   return FUSE_HOST_OPERATION_OK;
 }
 

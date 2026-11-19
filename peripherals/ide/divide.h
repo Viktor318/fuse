@@ -43,6 +43,7 @@ void divide_register_startup( void );
 int divide_insert( const char *filename, libspectrum_ide_unit unit );
 int divide_commit( libspectrum_ide_unit unit );
 int divide_eject( libspectrum_ide_unit unit );
+int divide_backing_attached( libspectrum_ide_unit unit );
 
 int divide_unittest( void );
 

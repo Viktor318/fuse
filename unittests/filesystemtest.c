@@ -34,6 +34,7 @@
 #include "settings.h"
 #include "tape.h"
 #include "ui/scaler/scaler.h"
+#include "ui/ui.h"
 #include "z80/z80.h"
 #include "../hacking/memory-filesystem.h"
 #undef NDEBUG
@@ -67,6 +68,17 @@ file_bytes( const char *name, unsigned char **data, size_t *length )
 }
 
 static memory_filesystem filesystem;
+static fuse_mass_storage_info *retained_drive;
+extern ui_confirm_save_t (*ui_null_confirm_save_test_hook)( const char * );
+static int cancel_count;
+
+static ui_confirm_save_t
+cancel_dirty_drive( const char *message )
+{
+  assert( strstr( message, "modified" ) );
+  cancel_count++;
+  return UI_CONFIRM_SAVE_CANCEL;
+}
 
 void
 filesystem_prepare( void )
@@ -211,10 +223,45 @@ filesystem_tests( void )
 #endif
   {
     unsigned char hdf[128 + 512] = { 'R','S','-','I','D','E',0x1a,0x11,0,128,0 };
+    hdf[24] = 1; hdf[28] = 1; hdf[34] = 1;
     seed( "media/drive.hdf", hdf, sizeof(hdf) );
     assert( fuse_host_open_file( "media/drive.hdf" ) == OK );
     assert( filesystem.opens == filesystem.closes + 1 );
-    assert( !zxcf_eject() && filesystem.opens == filesystem.closes );
+    assert( fuse_host_copy_mass_storage_info( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER, &retained_drive ) == OK );
+    assert( retained_drive->active && !strcmp( retained_drive->backing_name, "media/drive.hdf" ) );
+    /* Write one ATA sector through the emulated ZXCF ports. */
+    writeport_internal( 0x02b4, 1 );
+    writeport_internal( 0x03b4, 0 );
+    writeport_internal( 0x04b4, 0 );
+    writeport_internal( 0x05b4, 0 );
+    writeport_internal( 0x06b4, 0xe0 );
+    writeport_internal( 0x07b4, 0x30 );
+    for( int i = 0; i < 512; i++ ) writeport_internal( 0x00b4, 0x5a );
+    {
+      fuse_mass_storage_info *still_mounted;
+      size_t opened = filesystem.opens, closed_before = filesystem.closes;
+      ui_null_confirm_save_test_hook = cancel_dirty_drive;
+      assert( fuse_host_insert_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER, "media/missing.hdf" ) == ERROR );
+      assert( fuse_host_eject_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER ) == ERROR );
+      ui_null_confirm_save_test_hook = NULL;
+      assert( cancel_count == 2 && filesystem.opens == opened && filesystem.closes == closed_before );
+      assert( fuse_host_copy_mass_storage_info( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER, &still_mounted ) == OK );
+      assert( still_mounted->backing_name && !strcmp( still_mounted->backing_name, "media/drive.hdf" ) );
+      fuse_mass_storage_info_free( still_mounted );
+    }
+    assert( fuse_host_insert_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER, "media/missing.hdf" ) == ERROR );
+    assert( filesystem.opens == filesystem.closes );
+    {
+      fuse_mass_storage_info *empty;
+      assert( fuse_host_copy_mass_storage_info( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER, &empty ) == OK );
+      assert( !empty->backing_name );
+      fuse_mass_storage_info_free( empty );
+    }
+    assert( fuse_host_insert_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER, "media/drive.hdf" ) == OK );
+    assert( fuse_host_commit_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER ) == OK );
+    assert( fuse_host_eject_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER ) == OK );
+    assert( fuse_host_commit_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER ) == ERROR );
+    assert( filesystem.opens == filesystem.closes );
     /* MMC shares the HDF backing; declare 32 cylinders, 1 head, 32 sectors. */
     hdf[24] = 32; hdf[28] = 1; hdf[34] = 32;
     seed( "media/card.hdf", hdf, sizeof(hdf) );
@@ -223,6 +270,82 @@ filesystem_tests( void )
     assert( filesystem.opens == filesystem.closes + 1 );
     libspectrum_mmc_eject( card );
     libspectrum_mmc_free( card );
+    assert( filesystem.opens == filesystem.closes );
+    settings_current.divmmc_enabled = 1;
+    periph_update();
+    assert( fuse_host_insert_mass_storage( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER, "media/card.hdf" ) == OK );
+    assert( filesystem.opens == filesystem.closes + 1 );
+    /* Select card zero, initialize SDHC, then issue CMD24 for block zero. */
+    static const unsigned char commands[][6] = {
+      { 0x48, 0, 0, 1, 0xaa, 0x87 }, /* CMD8 */
+      { 0x77, 0, 0, 0, 0, 1 },      /* CMD55 */
+      { 0x69, 0x40, 0, 0, 0, 1 },   /* ACMD41 with HCS */
+      { 0x58, 0, 0, 0, 0, 1 },      /* CMD24 */
+    };
+    writeport_internal( 0xe7, 2 );
+    for( size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); i++ )
+      for( size_t j = 0; j < sizeof(commands[0]); j++ )
+        writeport_internal( 0xeb, commands[i][j] );
+    writeport_internal( 0xeb, 0xfe );
+    for( int i = 0; i < 512; i++ ) writeport_internal( 0xeb, 0xa5 );
+    writeport_internal( 0xeb, 0 );
+    writeport_internal( 0xeb, 0 );
+    writeport_internal( 0xe7, 3 );
+    {
+      fuse_mass_storage_info *mounted;
+      size_t opened = filesystem.opens, closed_before = filesystem.closes;
+      cancel_count = 0;
+      ui_null_confirm_save_test_hook = cancel_dirty_drive;
+      assert( fuse_host_insert_mass_storage( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER, "media/missing.hdf" ) == ERROR );
+      assert( fuse_host_eject_mass_storage( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER ) == ERROR );
+      ui_null_confirm_save_test_hook = NULL;
+      assert( cancel_count == 2 && filesystem.opens == opened && filesystem.closes == closed_before );
+      assert( fuse_host_copy_mass_storage_info( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER, &mounted ) == OK );
+      assert( mounted->backing_name && !strcmp( mounted->backing_name, "media/card.hdf" ) );
+      fuse_mass_storage_info_free( mounted );
+    }
+    assert( fuse_host_commit_mass_storage( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER ) == OK );
+    file = memory_find( "media/card.hdf" );
+    assert( file && file->length == sizeof(hdf) && file->data[128] == 0xa5 );
+    assert( fuse_host_eject_mass_storage( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER ) == OK );
+    settings_current.divmmc_enabled = 0;
+    settings_current.zxmmc_enabled = 1;
+    assert( fuse_host_select_machine( "plus3" ) == OK );
+    assert( fuse_host_insert_mass_storage( PERIPH_TYPE_ZXMMC, LIBSPECTRUM_IDE_SLAVE,
+                                          "media/card.hdf" ) == FUSE_HOST_OPERATION_INVALID_ARGUMENT );
+    assert( fuse_host_insert_mass_storage( PERIPH_TYPE_ZXMMC, LIBSPECTRUM_IDE_MASTER, "media/card.hdf" ) == OK );
+    assert( fuse_host_commit_mass_storage( PERIPH_TYPE_ZXMMC, LIBSPECTRUM_IDE_MASTER ) == OK );
+    assert( fuse_host_eject_mass_storage( PERIPH_TYPE_ZXMMC, LIBSPECTRUM_IDE_MASTER ) == OK );
+    settings_current.zxmmc_enabled = 0;
+    assert( fuse_host_select_machine( "48" ) == OK );
+    {
+      const periph_type controllers[] = { PERIPH_TYPE_SIMPLEIDE, PERIPH_TYPE_ZXATASP, PERIPH_TYPE_DIVIDE };
+      for( size_t i = 0; i < sizeof(controllers) / sizeof(controllers[0]); i++ ) {
+        periph_type controller = controllers[i];
+        fuse_mass_storage_info *master, *slave;
+        settings_current.simpleide_active = controller == PERIPH_TYPE_SIMPLEIDE;
+        settings_current.zxatasp_active = controller == PERIPH_TYPE_ZXATASP;
+        settings_current.divide_enabled = controller == PERIPH_TYPE_DIVIDE;
+        periph_update();
+        assert( fuse_host_insert_mass_storage( controller, LIBSPECTRUM_IDE_MASTER, "media/drive.hdf" ) == OK );
+        assert( fuse_host_insert_mass_storage( controller, LIBSPECTRUM_IDE_SLAVE, "media/card.hdf" ) == OK );
+        assert( filesystem.opens == filesystem.closes + 2 );
+        assert( fuse_host_insert_mass_storage( controller, LIBSPECTRUM_IDE_SLAVE, "media/missing.hdf" ) == ERROR );
+        assert( filesystem.opens == filesystem.closes + 1 );
+        assert( fuse_host_copy_mass_storage_info( controller, LIBSPECTRUM_IDE_MASTER, &master ) == OK );
+        assert( fuse_host_copy_mass_storage_info( controller, LIBSPECTRUM_IDE_SLAVE, &slave ) == OK );
+        assert( master->backing_name && !strcmp( master->backing_name, "media/drive.hdf" ) );
+        assert( !slave->backing_name );
+        fuse_mass_storage_info_free( master );
+        fuse_mass_storage_info_free( slave );
+        assert( fuse_host_commit_mass_storage( controller, LIBSPECTRUM_IDE_MASTER ) == OK );
+        assert( fuse_host_eject_mass_storage( controller, LIBSPECTRUM_IDE_MASTER ) == OK );
+        assert( fuse_host_eject_mass_storage( controller, LIBSPECTRUM_IDE_SLAVE ) == OK );
+        assert( filesystem.opens == filesystem.closes );
+      }
+      settings_current.divide_enabled = 0;
+      periph_update();
+    }
     assert( filesystem.opens == filesystem.closes );
   }
 #ifdef USE_LIBPNG
@@ -273,6 +396,8 @@ filesystem_tests( void )
 void
 filesystem_finish( void )
 {
+  assert( retained_drive && !strcmp( retained_drive->backing_name, "media/drive.hdf" ) );
+  fuse_mass_storage_info_free( retained_drive );
   assert( filesystem.opens == filesystem.closes );
   memory_filesystem_free( &filesystem );
 }

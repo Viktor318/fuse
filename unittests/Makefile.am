@@ -391,7 +391,7 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    'host: shutdown; frame turns=2; budget turns=0; ROM requests=1; releases=1' > expected-record; \
 	  printf '%s\n' 'host: prepared 48' 'host: saved snapshot; reset and reopened' \
 	    'host: shutdown; frame turns=3; budget turns=0; ROM requests=3; releases=3' > expected-snapshot; \
-	  printf '%s\n' 'host: prepared 48' 'host: effective filesystem; tape/snapshot roundtrip; handles balanced' \
+	  printf '%s\n' 'host: prepared 48' 'host: effective filesystem; tape/snapshot roundtrip; ZXCF lifecycle; handles balanced' \
 	    'host: shutdown; frame turns=3; budget turns=0; ROM requests=3; releases=3' > expected-filesystem; \
 	  printf '%s\n' 'host: prepared plus3' 'host: saved disk through plus3 drive 0' \
 	    'host: shutdown; frame turns=0; budget turns=0; ROM requests=4; releases=4' > expected-disk; \
@@ -420,6 +420,13 @@ check-null-host: unittests/nullhostlink unittests/nullhostsource unittests/legac
 	    rm tape-life.tzx tape-roundtrip.tap; \
 	    "$$program" only48 --filesystem sample.tap > "$$consumer-filesystem.out" 2> "$$consumer-filesystem.err"; \
 	    cmp expected-filesystem "$$consumer-filesystem.out"; \
+	    { printf 'RS-IDE\032\021\000\200\000'; printf '\000%.0s' 1 2 3 4 5 6 7 8 9 10 11 12 13; \
+	      printf '\040\000\000\000\001\000\000\000\000\000\040'; \
+	      dd if=/dev/zero bs=1 count=93 2>/dev/null; dd if=/dev/zero bs=512 count=1024 2>/dev/null; } > divmmc.hdf; \
+	    "$$program" only48 --divmmc divmmc.hdf > "$$consumer-divmmc.out" 2> "$$consumer-divmmc.err"; \
+	    printf '%s\n' 'host: prepared 48' 'host: DivMMC lifecycle; handles balanced' \
+	      'host: shutdown; frame turns=0; budget turns=0; ROM requests=1; releases=1' > expected-divmmc; \
+	    cmp expected-divmmc "$$consumer-divmmc.out"; rm divmmc.hdf expected-divmmc; \
 	    if "$$program" only48 --filesystem missing.tap > "$$consumer-filesystem-fail.out" 2> "$$consumer-filesystem-fail.err"; \
 	    then exit 1; else result=$$?; test "$$result" -eq 1; fi; \
 	    test -s "$$consumer-filesystem-fail.err"; \

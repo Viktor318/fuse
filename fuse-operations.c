@@ -28,6 +28,12 @@
 #include "input.h"
 #include "keyboard.h"
 #include "machine.h"
+#include "peripherals/ide/divmmc.h"
+#include "peripherals/ide/simpleide.h"
+#include "peripherals/ide/zxatasp.h"
+#include "peripherals/ide/divide.h"
+#include "peripherals/ide/zxmmc.h"
+#include "peripherals/ide/zxcf.h"
 #include "peripherals/joystick.h"
 #include "peripherals/kempmouse.h"
 #include "settings.h"
@@ -84,6 +90,174 @@ fuse_host_open_file( const char *filename )
   fuse_engine_begin_operation();
   error = utils_open_file( filename, tape_can_autoload(), NULL );
   display_refresh_all(); /* Same post-operation refresh as menu_file_open. */
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+static int
+mass_storage_target( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: case PERIPH_TYPE_ZXATASP: case PERIPH_TYPE_DIVIDE:
+    return unit == LIBSPECTRUM_IDE_MASTER || unit == LIBSPECTRUM_IDE_SLAVE;
+  case PERIPH_TYPE_ZXCF: case PERIPH_TYPE_DIVMMC: case PERIPH_TYPE_ZXMMC:
+    return unit == LIBSPECTRUM_IDE_MASTER;
+  default: return 0;
+  }
+}
+
+static const char *
+mass_storage_name( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return unit == LIBSPECTRUM_IDE_MASTER ? settings_current.simpleide_master_file :
+           settings_current.simpleide_slave_file;
+  case PERIPH_TYPE_ZXATASP: return unit == LIBSPECTRUM_IDE_MASTER ? settings_current.zxatasp_master_file :
+           settings_current.zxatasp_slave_file;
+  case PERIPH_TYPE_DIVIDE: return unit == LIBSPECTRUM_IDE_MASTER ? settings_current.divide_master_file :
+           settings_current.divide_slave_file;
+  case PERIPH_TYPE_ZXCF: return settings_current.zxcf_pri_file;
+  case PERIPH_TYPE_DIVMMC: return settings_current.divmmc_file;
+  case PERIPH_TYPE_ZXMMC: return settings_current.zxmmc_file;
+  default: return NULL;
+  }
+}
+
+static int
+mass_storage_attached( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return simpleide_backing_attached( unit );
+  case PERIPH_TYPE_ZXATASP: return zxatasp_backing_attached( unit );
+  case PERIPH_TYPE_DIVIDE: return divide_backing_attached( unit );
+  case PERIPH_TYPE_ZXCF: return zxcf_backing_attached();
+  case PERIPH_TYPE_DIVMMC: return divmmc_backing_attached();
+  case PERIPH_TYPE_ZXMMC: return zxmmc_backing_attached();
+  default: return 0;
+  }
+}
+
+static int
+mass_storage_eject( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return simpleide_eject( unit );
+  case PERIPH_TYPE_ZXATASP: return zxatasp_eject( unit );
+  case PERIPH_TYPE_DIVIDE: return divide_eject( unit );
+  case PERIPH_TYPE_ZXCF: return zxcf_eject();
+  case PERIPH_TYPE_DIVMMC: return divmmc_eject();
+  case PERIPH_TYPE_ZXMMC: return zxmmc_eject();
+  default: return 1;
+  }
+}
+
+static int
+mass_storage_insert( periph_type controller, libspectrum_ide_unit unit, const char *filename )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return simpleide_insert( filename, unit );
+  case PERIPH_TYPE_ZXATASP: return zxatasp_insert( filename, unit );
+  case PERIPH_TYPE_DIVIDE: return divide_insert( filename, unit );
+  case PERIPH_TYPE_ZXCF: return zxcf_insert( filename );
+  case PERIPH_TYPE_DIVMMC: return divmmc_insert( filename );
+  case PERIPH_TYPE_ZXMMC: return zxmmc_insert( filename );
+  default: return 1;
+  }
+}
+
+static int
+mass_storage_commit( periph_type controller, libspectrum_ide_unit unit )
+{
+  switch( controller ) {
+  case PERIPH_TYPE_SIMPLEIDE: return simpleide_commit( unit );
+  case PERIPH_TYPE_ZXATASP: return zxatasp_commit( unit );
+  case PERIPH_TYPE_DIVIDE: return divide_commit( unit );
+  case PERIPH_TYPE_ZXCF: return zxcf_commit();
+  case PERIPH_TYPE_DIVMMC: divmmc_commit(); return 0;
+  case PERIPH_TYPE_ZXMMC: zxmmc_commit(); return 0;
+  default: return 1;
+  }
+}
+
+fuse_host_operation_result
+fuse_host_copy_mass_storage_info( periph_type controller, libspectrum_ide_unit unit, fuse_mass_storage_info **info )
+{
+  fuse_mass_storage_info *copy;
+  const char *name;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( info ) *info = NULL;
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !info || !mass_storage_target( controller, unit ) )
+    return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  name = mass_storage_attached( controller, unit ) ? mass_storage_name( controller, unit ) : NULL;
+  copy = libspectrum_new( fuse_mass_storage_info, 1 );
+  copy->controller = controller;
+  copy->unit = unit;
+  copy->active = periph_is_active( controller );
+  copy->backing_name = name ? utils_safe_strdup( name ) : NULL;
+  *info = copy;
+  return FUSE_HOST_OPERATION_OK;
+}
+
+void
+fuse_mass_storage_info_free( fuse_mass_storage_info *info )
+{
+  if( !info ) return;
+  libspectrum_free( info->backing_name );
+  libspectrum_free( info );
+}
+
+static fuse_host_operation_result
+change_mass_storage( periph_type controller, libspectrum_ide_unit unit, const char *filename )
+{
+  int error = 0;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !mass_storage_target( controller, unit ) || ( filename && !*filename ) )
+    return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( !periph_is_active( controller ) ) return FUSE_HOST_OPERATION_MEDIA_ERROR;
+
+  fuse_engine_begin_operation();
+  fuse_emulation_pause();
+  /* Check eject separately: legacy insert masks a refused eject as success. */
+  if( !filename || mass_storage_name( controller, unit ) )
+    error = mass_storage_eject( controller, unit );
+  if( !error && filename ) error = mass_storage_insert( controller, unit, filename );
+  fuse_emulation_unpause();
+  fuse_engine_end_operation();
+  return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
+}
+
+fuse_host_operation_result
+fuse_host_eject_mass_storage( periph_type controller, libspectrum_ide_unit unit )
+{
+  return change_mass_storage( controller, unit, NULL );
+}
+
+fuse_host_operation_result
+fuse_host_insert_mass_storage( periph_type controller, libspectrum_ide_unit unit, const char *filename )
+{
+  if( !filename ) {
+    fuse_host_operation_result result = fuse_engine_check_operation();
+    return result == FUSE_HOST_OPERATION_OK ? FUSE_HOST_OPERATION_INVALID_ARGUMENT : result;
+  }
+  return change_mass_storage( controller, unit, filename );
+}
+
+fuse_host_operation_result
+fuse_host_commit_mass_storage( periph_type controller, libspectrum_ide_unit unit )
+{
+  int error = 0;
+  fuse_host_operation_result result = fuse_engine_check_operation();
+  if( result != FUSE_HOST_OPERATION_OK ) return result;
+  if( !mass_storage_target( controller, unit ) ) return FUSE_HOST_OPERATION_INVALID_ARGUMENT;
+  if( !periph_is_active( controller ) ||
+      !mass_storage_attached( controller, unit ) )
+    return FUSE_HOST_OPERATION_MEDIA_ERROR;
+  fuse_engine_begin_operation();
+  fuse_emulation_pause();
+  error = mass_storage_commit( controller, unit );
+  fuse_emulation_unpause();
   fuse_engine_end_operation();
   return error ? FUSE_HOST_OPERATION_MEDIA_ERROR : FUSE_HOST_OPERATION_OK;
 }

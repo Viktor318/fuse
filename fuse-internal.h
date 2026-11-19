@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include "input.h"
 #include "fuse-disk.h"
+#include "periph.h"
 #include "fuse-tape.h"
 #include "fuse-filesystem.h"
 #include "fuse-joystick.h"
@@ -57,6 +58,8 @@ int fuse_host_config_set_auto_load( fuse_host_config *config, int enabled );
 /* Existing ROM tape-trap setting (default retained). Disable for explicit
    pulse recording; enabled SAVE traps append decoded blocks automatically. */
 int fuse_host_config_set_tape_traps( fuse_host_config *config, int enabled );
+/* Set DivMMC enablement at preparation; not a runtime toggle. */
+int fuse_host_config_set_divmmc( fuse_host_config *config, int enabled );
 
 /* A synchronous ROM result, not a filesystem path. Provider context remains
    borrowed through shutdown, including failed-startup cleanup. On every acquire,
@@ -143,6 +146,24 @@ fuse_host_operation_result fuse_host_nmi( void );
    unchanged-state or safe-continuation promise on error; legacy fatal paths
    remain. This is not strict ID selection or the tape-only insertion intent. */
 fuse_host_operation_result fuse_host_open_file( const char *filename );
+
+/* Single-drive controllers use MASTER. The backing name is an owned copy,
+   NULL when no backing is attached. */
+typedef struct fuse_mass_storage_info {
+  periph_type controller;
+  libspectrum_ide_unit unit;
+  int active;
+  char *backing_name;
+} fuse_mass_storage_info;
+
+fuse_host_operation_result fuse_host_copy_mass_storage_info(
+  periph_type controller, libspectrum_ide_unit unit, fuse_mass_storage_info **info );
+void fuse_mass_storage_info_free( fuse_mass_storage_info *info );
+fuse_host_operation_result fuse_host_eject_mass_storage( periph_type controller, libspectrum_ide_unit unit );
+/* Commit uses the controller's existing reporting; success is not durability. */
+fuse_host_operation_result fuse_host_commit_mass_storage( periph_type controller, libspectrum_ide_unit unit );
+fuse_host_operation_result fuse_host_insert_mass_storage(
+  periph_type controller, libspectrum_ide_unit unit, const char *filename );
 
 /* Chosen-target Save Snapshot, not File Open or an owned checkpoint/buffer API.
    Borrows a nonempty path through return; engine infers format from the filename

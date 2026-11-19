@@ -43,6 +43,7 @@ void divmmc_register_startup( void );
 int divmmc_insert( const char *filename );
 void divmmc_commit( void );
 int divmmc_eject( void );
+int divmmc_backing_attached( void );
 
 int divmmc_unittest( void );
 

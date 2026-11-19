@@ -74,9 +74,13 @@ ui_breakpoints_updated( void )
   /* Do nothing */
 }
 
+/* Null-only test hook; normal null hosts discard as before. */
+ui_confirm_save_t (*ui_null_confirm_save_test_hook)( const char *message );
+
 ui_confirm_save_t
 ui_confirm_save_specific( const char *message )
 {
+  if( ui_null_confirm_save_test_hook ) return ui_null_confirm_save_test_hook( message );
   return UI_CONFIRM_SAVE_DONTSAVE;
 }
 

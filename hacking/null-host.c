@@ -150,25 +150,26 @@ main( int argc, char **argv )
   int tape_record = argc == 4 && !strcmp( argv[2], "--record-tape" );
   int snapshot_save = argc == 4 && !strcmp( argv[2], "--save-snapshot" );
   int filesystem = argc == 4 && !strcmp( argv[2], "--filesystem" );
+  int divmmc = argc == 4 && !strcmp( argv[2], "--divmmc" );
   int filesystem_installed = 0;
   memory_filesystem memory = { 0 };
   int disk_save = argc == 5 && !strcmp( argv[2], "--save-disk" );
   int tape_lifecycle = argc == 5 && !strcmp( argv[2], "--tape-lifecycle" );
 
   if( ( argc != 2 && argc != 3 && argc != 4 && argc != 5 ) ||
-      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle && !tape_record && !snapshot_save && !filesystem ) ||
+      ( argc == 4 && strcmp( argv[2], "--open" ) && !disk_lifecycle && !tape_record && !snapshot_save && !filesystem && !divmmc ) ||
       ( argc == 5 && !disk_save && !tape_lifecycle ) ||
       ( argc == 3 && ( !strcmp( argv[2], "--open" ) || !strcmp( argv[2], "--save-disk" ) ||
                       !strcmp( argv[2], "--disk-lifecycle" ) || !strcmp( argv[2], "--tape-lifecycle" ) ||
-                      !strcmp( argv[2], "--record-tape" ) || !strcmp( argv[2], "--save-snapshot" ) || !strcmp( argv[2], "--filesystem" ) ) ) ) {
-    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT | --tape-lifecycle INPUT OUTPUT | --record-tape OUTPUT | --save-snapshot OUTPUT | --filesystem TAPE_FILE]\n", argv[0] );
+                      !strcmp( argv[2], "--record-tape" ) || !strcmp( argv[2], "--save-snapshot" ) || !strcmp( argv[2], "--filesystem" ) || !strcmp( argv[2], "--divmmc" ) ) ) ) {
+    fprintf( stderr, "Usage: %s ROM_DIRECTORY [TAPE_FILE | --open FILE | --save-disk INPUT OUTPUT | --disk-lifecycle OUTPUT | --tape-lifecycle INPUT OUTPUT | --record-tape OUTPUT | --save-snapshot OUTPUT | --filesystem TAPE_FILE | --divmmc CARD_FILE]\n", argv[0] );
     return EXIT_FAILURE;
   }
-  if( filesystem ) {
+  if( filesystem || divmmc ) {
     memory.chunk = 7; /* Exercise successful short transfers at the boundary. */
     if( memory_filesystem_install( &memory ) ) goto cleanup;
     filesystem_installed = 1;
-    if( import_file( argv[3], "media/input.tap" ) ) {
+    if( import_file( argv[3], divmmc ? "media/card.hdf" : "media/input.tap" ) ) {
       fputs( "host: filesystem input import failed\n", stderr ); goto cleanup;
     }
   }
@@ -178,6 +179,7 @@ main( int argc, char **argv )
       fuse_host_config_set_sound( config, 0 ) ||
       ( tape_record && fuse_host_config_set_tape_traps( config, 0 ) ) ||
       ( filesystem && fuse_host_config_set_auto_load( config, 0 ) ) ||
+      ( divmmc && fuse_host_config_set_divmmc( config, 1 ) ) ||
       fuse_host_config_set_joystick( config, FUSE_HOST_JOYSTICK_1,
                                     JOYSTICK_TYPE_KEMPSTON ) ) {
     fprintf( stderr, "host: configuration rejected\n" );
@@ -192,6 +194,22 @@ main( int argc, char **argv )
   }
   prepared = 1;
   puts( disk_save || disk_lifecycle ? "host: prepared plus3" : "host: prepared 48" );
+  if( divmmc ) {
+    fuse_mass_storage_info *drive = NULL;
+    int mounted;
+    if( operation( "insert DivMMC", fuse_host_insert_mass_storage( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER, "media/card.hdf" ) ) ||
+        operation( "observe DivMMC", fuse_host_copy_mass_storage_info( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER, &drive ) ) ) goto cleanup;
+    mounted = drive->active && drive->backing_name && !strcmp( drive->backing_name, "media/card.hdf" );
+    if( !mounted || operation( "commit DivMMC", fuse_host_commit_mass_storage( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER ) ) ||
+        operation( "eject DivMMC", fuse_host_eject_mass_storage( PERIPH_TYPE_DIVMMC, LIBSPECTRUM_IDE_MASTER ) ) ) {
+      fuse_mass_storage_info_free( drive );
+      goto cleanup;
+    }
+    fuse_mass_storage_info_free( drive );
+    puts( "host: DivMMC lifecycle; handles balanced" );
+    status = EXIT_SUCCESS;
+    goto cleanup;
+  }
   if( filesystem ) {
     if( operation( "filesystem Tape Open", fuse_host_open_file( "media/input.tap" ) ) ||
         operation( "filesystem tape save", fuse_host_save_tape_file( "media/copy.pzx" ) ) ||
@@ -202,7 +220,26 @@ main( int argc, char **argv )
         operation( "reset", fuse_host_reset( FUSE_HOST_RESET_HARD ) ) ||
         operation( "filesystem snapshot reopen", fuse_host_open_file( "media/state.szx" ) ) ||
         frames( 1, &frame_turns ) ) goto cleanup;
-    puts( "host: effective filesystem; tape/snapshot roundtrip; handles balanced" );
+    {
+      unsigned char hdf[640] = { 'R','S','-','I','D','E',0x1a,0x11,0,128,0 };
+      fuse_mass_storage_info *drive = NULL;
+      int ok, error;
+      compat_fd backing;
+      hdf[24] = hdf[28] = hdf[34] = 1;
+      backing = compat_file_open( "media/drive.hdf", COMPAT_FILE_WRITE );
+      if( !backing ) goto cleanup;
+      error = compat_file_write( backing, hdf, sizeof(hdf) );
+      if( compat_file_close( backing ) ) error = 1;
+      if( error ||
+          operation( "open ZXCF", fuse_host_open_file( "media/drive.hdf" ) ) ||
+          operation( "observe ZXCF", fuse_host_copy_mass_storage_info( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER, &drive ) ) )
+        goto cleanup;
+      ok = drive->active && drive->backing_name && !strcmp( drive->backing_name, "media/drive.hdf" );
+      fuse_mass_storage_info_free( drive );
+      if( !ok || operation( "commit ZXCF", fuse_host_commit_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER ) ) ||
+          operation( "eject ZXCF", fuse_host_eject_mass_storage( PERIPH_TYPE_ZXCF, LIBSPECTRUM_IDE_MASTER ) ) ) goto cleanup;
+    }
+    puts( "host: effective filesystem; tape/snapshot roundtrip; ZXCF lifecycle; handles balanced" );
     status = EXIT_SUCCESS;
     goto cleanup;
   }

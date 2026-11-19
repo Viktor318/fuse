@@ -106,6 +106,24 @@ static const ui_menu_item eject_menu_item = UI_MENU_ITEM_MEDIA_IDE_DIVMMC_EJECT;
 
 /* Housekeeping functions */
 
+/* A configured filename can survive a failed insert. Track the outcome of
+   the backing operation, not the presence of that preference. */
+static int backing_attached;
+
+static int
+insert_backing( const char *filename )
+{
+  int error = libspectrum_mmc_insert( card, filename );
+  backing_attached = !error && filename != NULL;
+  return error;
+}
+
+int
+divmmc_backing_attached( void )
+{
+  return backing_attached;
+}
+
 static int
 divmmc_init( void *context )
 {
@@ -116,8 +134,7 @@ divmmc_init( void *context )
   if( settings_current.divmmc_file ) {
     int error;
 
-    error =
-      libspectrum_mmc_insert( card, settings_current.divmmc_file );
+    error = insert_backing( settings_current.divmmc_file );
     if( error ) return error;
 
     error = ui_menu_activate( eject_menu_item, 1 );
@@ -144,6 +161,7 @@ divmmc_end( void )
 {
   divxxx_free( divmmc_state );
   libspectrum_mmc_free( card );
+  backing_attached = 0;
 }
 
 void
@@ -184,6 +202,7 @@ static libspectrum_error
 eject_fn_wrapper( void *context )
 {
   libspectrum_mmc_eject( (libspectrum_mmc_card*)context );
+  backing_attached = 0;
   return LIBSPECTRUM_ERROR_NONE;
 }
 
@@ -210,7 +229,7 @@ divmmc_insert( const char *filename )
 
   settings_set_string( &settings_current.divmmc_file, filename );
 
-  error = libspectrum_mmc_insert( card, filename );
+  error = insert_backing( filename );
   if( error ) return error;
   return ui_menu_activate( eject_menu_item, 1 );
 }

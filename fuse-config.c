@@ -28,6 +28,7 @@ struct fuse_host_config {
   int sound;
   int auto_load;
   int tape_traps;
+  int divmmc_enabled;
   joystick_type_t joystick_output[3];
   int mouse_swap_buttons;
 };
@@ -42,6 +43,7 @@ fuse_host_config_alloc( void )
   config->sound = defaults.sound;
   config->auto_load = defaults.auto_load;
   config->tape_traps = defaults.tape_traps;
+  config->divmmc_enabled = defaults.divmmc_enabled;
   config->joystick_output[0] = defaults.joystick_1_output;
   config->joystick_output[1] = defaults.joystick_2_output;
   config->joystick_output[2] = defaults.joystick_keyboard_output;
@@ -91,6 +93,14 @@ fuse_host_config_set_tape_traps( fuse_host_config *config, int enabled )
 }
 
 int
+fuse_host_config_set_divmmc( fuse_host_config *config, int enabled )
+{
+  if( !config || ( enabled != 0 && enabled != 1 ) ) return 1;
+  config->divmmc_enabled = enabled;
+  return 0;
+}
+
+int
 fuse_host_config_set_joystick( fuse_host_config *config,
   fuse_host_joystick slot, joystick_type_t output )
 {
@@ -116,6 +126,7 @@ fuse_engine_apply_config( const fuse_host_config *config )
   settings_current.sound = config->sound;
   settings_current.auto_load = config->auto_load;
   settings_current.tape_traps = config->tape_traps;
+  settings_current.divmmc_enabled = config->divmmc_enabled;
   settings_current.joystick_1_output = config->joystick_output[0];
   settings_current.joystick_2_output = config->joystick_output[1];
   settings_current.joystick_keyboard_output = config->joystick_output[2];

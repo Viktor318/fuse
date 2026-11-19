@@ -109,6 +109,14 @@ static int page_event, unpage_event;
 
 /* Housekeeping functions */
 
+static int backing_attached;
+
+int
+zxcf_backing_attached( void )
+{
+  return backing_attached;
+}
+
 static int
 zxcf_init( void *context )
 {
@@ -124,6 +132,7 @@ zxcf_init( void *context )
     error = libspectrum_ide_insert( zxcf_idechn, LIBSPECTRUM_IDE_MASTER,
 				    settings_current.zxcf_pri_file );
     if( error ) return error;
+    backing_attached = 1;
     ui_menu_activate( UI_MENU_ITEM_MEDIA_IDE_ZXCF_EJECT, 1 );
   }
 
@@ -144,6 +153,7 @@ static void
 zxcf_end( void )
 {
   libspectrum_ide_free( zxcf_idechn );
+  backing_attached = 0;
 }
 
 void
@@ -179,7 +189,7 @@ zxcf_insert( const char *filename )
 {
   return ide_insert( filename, zxcf_idechn, LIBSPECTRUM_IDE_MASTER,
 		     &settings_current.zxcf_pri_file,
-		     UI_MENU_ITEM_MEDIA_IDE_ZXCF_EJECT );
+		     UI_MENU_ITEM_MEDIA_IDE_ZXCF_EJECT, &backing_attached );
 }
 
 int
@@ -197,7 +207,7 @@ zxcf_eject( void )
 {
   return ide_eject( zxcf_idechn, LIBSPECTRUM_IDE_MASTER,
 		    &settings_current.zxcf_pri_file,
-		    UI_MENU_ITEM_MEDIA_IDE_ZXCF_EJECT );
+		    UI_MENU_ITEM_MEDIA_IDE_ZXCF_EJECT, &backing_attached );
 }
 
 static void

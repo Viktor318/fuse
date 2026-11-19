@@ -91,7 +91,12 @@ simpleide_init( void *context )
 		    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_MASTER_EJECT,
 		    settings_current.simpleide_slave_file,
 		    UI_MENU_ITEM_MEDIA_IDE_SIMPLE8BIT_SLAVE_EJECT, attached );
-  if( error ) return error;
+  if( error ) {
+    libspectrum_ide_free( simpleide_idechn );
+    simpleide_idechn = NULL;
+    attached[0] = attached[1] = 0;
+    return error;
+  }
 
   module_register( &simpleide_module_info );
   periph_register( PERIPH_TYPE_SIMPLEIDE, &simpleide_periph );

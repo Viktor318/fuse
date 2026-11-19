@@ -135,10 +135,13 @@ divmmc_init( void *context )
     int error;
 
     error = insert_backing( settings_current.divmmc_file );
-    if( error ) return error;
-
-    error = ui_menu_activate( eject_menu_item, 1 );
-    if( error ) return error;
+    if( !error ) error = ui_menu_activate( eject_menu_item, 1 );
+    if( error ) {
+      libspectrum_mmc_free( card );
+      card = NULL;
+      backing_attached = 0;
+      return error;
+    }
   }
 
   module_register( &divmmc_module_info );

@@ -188,7 +188,13 @@ zxatasp_init( void *context )
                     UI_MENU_ITEM_MEDIA_IDE_ZXATASP_MASTER_EJECT,
                     settings_current.zxatasp_slave_file,
                     UI_MENU_ITEM_MEDIA_IDE_ZXATASP_SLAVE_EJECT, attached );
-  if( error ) return error;
+  if( error ) {
+    libspectrum_ide_free( zxatasp_idechn0 );
+    libspectrum_ide_free( zxatasp_idechn1 );
+    zxatasp_idechn0 = zxatasp_idechn1 = NULL;
+    attached[0] = attached[1] = 0;
+    return error;
+  }
 
   module_register( &zxatasp_module_info );
 

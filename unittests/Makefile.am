@@ -617,6 +617,8 @@ check-startup-ownership: unittests/startupownershiptest
 	  tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' 0 1 2 3 15; \
 	  cd "$$tmp"; export HOME=. XDG_CONFIG_HOME=. USERPROFILE=. WINDIR=. APPDATA=.; \
 	  "$$program" storage; "$$program" no-save; \
+	  "$$program" ide-unwind --no-sound --no-autosave-settings \
+	    --simpleide-masterfile master.hdf --simpleide-slavefile missing.hdf; \
 	  test -z "$$(find . -type f -print)"; \
 	  "$$program" save; test -n "$$(find . -type f -print)"; \
 	  before=$$(find . -type f -exec cksum {} \;); \

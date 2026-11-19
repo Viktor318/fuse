@@ -116,11 +116,11 @@ ownership/sharing. Compute sector byte positions using checked 64-bit arithmetic
 before seek; current code uses `long` and narrower multiplication. Failed insert
 consumes its new handle; eject/teardown consumes the retained handle once.
 
-**Separate repair:** Fuse tracks false-success/missing commit error reporting as
-`fuse-isy`. Routing IO is not permission to redesign cache/commit/eject policy or
-bundle that repair silently. Preserve/document existing conventions unless it is
-explicitly undertaken separately; do not claim durable/reliable commit merely
-because the callback interface can report errors.
+**Separate repair:** Failed cached writes are not reliably reported to Fuse.
+Filesystem routing does not change cache, commit, or eject policy.
+Preserve/document existing conventions unless it is explicitly undertaken
+separately; do not claim durable/reliable commit merely because the callback
+interface can report errors.
 
 ### `wav_pcm.c`, `wav.c`, `wav_internals.h`
 

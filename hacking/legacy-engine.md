@@ -393,6 +393,28 @@ empty. The value and strings survive replacement, eject and shutdown; release
 with `fuse_disk_drive_info_free`, which needs no live engine. Copies are observations,
 not command tokens: operations still resolve current controller/slot state.
 
+## IDE and MMC operations
+
+The owner-thread host calls insert, commit, eject and copy drive information
+using a `periph_type` and `libspectrum_ide_unit`. SimpleIDE, ZXATASP and DivIDE
+accept master and slave. ZXCF, DivMMC and ZXMMC accept master only. Explicit
+operations require an active controller and do not change general File Open's
+controller selection. `fuse_host_config_set_divmmc` enables DivMMC at preparation.
+
+Insert and eject retain the existing synchronous dirty-media decision. If eject
+is refused, replacement does not open the new backing; the host receives
+`MEDIA_ERROR` rather than legacy insert's no-op success. A failed insert after
+successful eject can leave the drive empty. Commit retains legacy reporting
+and does not guarantee that cached writes reached storage.
+
+`fuse_host_copy_mass_storage_info` returns an independent value; release it with
+`fuse_mass_storage_info_free`. A NULL backing name means no backing is attached,
+even if a failed insert left a filename in settings. Controller activity and
+attachment are separate. The copy survives replacement, eject and shutdown.
+
+The null host exercises ZXCF in `--filesystem TAPE_FILE` and DivMMC separately
+in `--divmmc CARD_FILE`, using the same RAM filesystem for both workflows.
+
 ## Direct null-backed example
 
 [null-host.c](null-host.c) has its own `main` and uses `fuse-internal.h` directly.

@@ -169,7 +169,7 @@ filesystem_tests( void )
 
   seed( "media/input.tap", tap, sizeof(tap) );
   /* Namespace/lookup test, not numeric parser repair: its existing sscanf
-     assumption needs a terminator (tracked separately as fuse-c6t). */
+     assumption needs a terminator. */
   seed( "media/input.pok", "unreadable", 10 );
   seed( "media/input.POK", pok, sizeof(pok) );
   filesystem.unreadable_name = "media/input.pok";
